@@ -1,0 +1,10 @@
+
+using io : "eokas.io";
+
+val main = func(args: array<string>): i32 {
+    io.print(12);
+    io.print(12.99);
+    io.print(true);
+    io.print(false);
+    io.print("hello eokas.");
+}

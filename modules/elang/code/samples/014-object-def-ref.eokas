@@ -1,0 +1,23 @@
+
+using io : "eokas.io";
+
+struct A {
+    var name: string;
+}
+
+val main = func(args: array<string>): i32 {
+    struct B {
+        var name: string;
+    }
+
+    var a = make A{
+        name = "A"
+    }
+
+    var b = make B{
+        name = "B"
+    }
+
+    io.print(a.name);
+    io.print(b.name);
+}

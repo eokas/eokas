@@ -1,0 +1,35 @@
+# visual studio
+.vs
+.vscode
+*.user
+
+# idea
+.idea
+
+#cmake
+cmake-build-debug
+cmake-build-release
+cmake-install
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Fortran module files
+*.mod
+*.smod
+
+
+# Executables
+*.exe
+*.out
+*.app
