@@ -149,7 +149,7 @@ static void eokas_main(coder_t& coder, const String& file, const String& cmd) {
 }
 
 static void about(void) {
-    printf("eokas %s\n", _EOKAS_VERSION);
+    printf("eokas %s\n", _ELANG_VERSION);
 }
 
 static void help(void) {

@@ -1,4 +1,4 @@
-#include "../utils.h"
+#include "../dialogs.h"
 
 #if _WIN32
 #include <windows.h>
@@ -21,7 +21,7 @@ namespace eokas {
         return false;
     }
     
-    bool OpenFileDialog(String& selectedPath, const std::map<String, String>& filters) {
+    bool Dialogs::OpenFileDialog(String& selectedPath, const std::map<String, String>& filters) {
         ComPtr<IFileDialog> pFileDialog = NULL;
         if(FAILED(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFileDialog)))) {
             return false;
@@ -57,7 +57,7 @@ namespace eokas {
         return GetStringFromShellItem(selectedPath, pItem);
     }
     
-    bool OpenFolderDialog(String& selectedPath, const String& defaultPath) {
+    bool Dialogs::OpenFolderDialog(String& selectedPath, const String& defaultPath) {
         ComPtr<IFileOpenDialog> pFileDialog = nullptr;
         if(FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFileDialog)))) {
             return false;

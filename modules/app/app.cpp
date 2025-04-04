@@ -1,5 +1,5 @@
 #include "app/app.h"
-#include "native/utils.h"
+#include "native/dialogs.h"
 
 namespace eokas {
     bool App::init() {

@@ -1,7 +1,7 @@
 #ifndef _EOKAS_PARSER_H_
 #define _EOKAS_PARSER_H_
 
-#include <eokas-base/main.h>
+#include <base/main.h>
 #include "scanner.h"
 #include "../ast/ast.h"
 

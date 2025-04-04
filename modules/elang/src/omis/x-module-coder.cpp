@@ -557,10 +557,10 @@ namespace eokas {
 
                 args.push_back(argV);
             }
-
-            auto retval = this->call(func, args);
-
-            return retval;
         }
+        
+        auto retval = this->call(func, args);
+        
+        return retval;
     }
 }

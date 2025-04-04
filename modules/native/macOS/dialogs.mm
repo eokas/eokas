@@ -1,12 +1,13 @@
-#include "../utils.h"
+#include "../dialogs.h"
 
 #include <iostream>
 #include <string>
 #include <CoreFoundation/CoreFoundation.h>
 #include <Cocoa/Cocoa.h>
 
-namespace eokas {
-    bool OpenFileDialog(String& selectedPath, const std::map<String, String>& filters) {
+namespace eokas
+{
+    bool Dialogs::OpenFileDialog(String& selectedPath, const std::map<String, String>& filters) {
         @autoreleasepool {
             NSOpenPanel *panel = [NSOpenPanel openPanel];
             panel.message = @"Open";
@@ -33,7 +34,7 @@ namespace eokas {
         return false;
     }
     
-    bool OpenFolderDialog(String& selectedPath, const String& defaultPath) {
+    bool Dialogs::OpenFolderDialog(String& selectedPath, const String& defaultPath) {
         @autoreleasepool {
             NSOpenPanel *panel = [NSOpenPanel openPanel];
             panel.message = @"Open";
