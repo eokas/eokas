@@ -5,6 +5,7 @@ SamplerState gMainSampler : register(s0);
 
 struct Vertex {
 	float4 position: POSITION;
+	float4 normal: NORMAL;
 	float4 color: COLOR;
 	float2 uv: TEXCOORD;
 };

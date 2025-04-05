@@ -52,13 +52,16 @@ namespace eokas::gpu {
             mViewport.front = 0.01f;
             mViewport.back = 100.0f;
             
-            auto vs = this->compileShader("../shaders/002-texture.hlsl", ProgramType::Vertex, ProgramTarget::SM_5_0, "VSMain");
-            auto ps = this->compileShader("../shaders/002-texture.hlsl", ProgramType::Fragment, ProgramTarget::SM_5_0, "PSMain");
+            // const char* hlsl = "../shaders/002-texture.hlsl";
+            const char* hlsl = "../shaders/003-diffuse.hlsl";
+            auto vs = this->compileShader(hlsl, ProgramType::Vertex, ProgramTarget::SM_5_0, "VSMain");
+            auto ps = this->compileShader(hlsl, ProgramType::Fragment, ProgramTarget::SM_5_0, "PSMain");
             
             std::vector<VertexElement> vElements;
             vElements.push_back({"POSITION", 0, 0, Format::R32G32B32_FLOAT});
-            vElements.push_back({"COLOR", 0, 12, Format::R32G32B32A32_FLOAT});
-            vElements.push_back({"TEXCOORD", 0, 28, Format::R32G32_FLOAT});
+            vElements.push_back({"NORMAL", 0, 12, Format::R32G32B32_FLOAT});
+            vElements.push_back({"COLOR", 0, 24, Format::R32G32B32A32_FLOAT});
+            vElements.push_back({"TEXCOORD", 0, 40, Format::R32G32_FLOAT});
             
             TextureOptions options;
             options.width = 256;
@@ -77,34 +80,28 @@ namespace eokas::gpu {
             
             mCommandBuffer = mDevice->createCommandBuffer(mPipelineState);
             
-            // Create Vertex Buffer
+            MeshInfo mesh;
+            //MeshFactory::createQuad(mesh, 1.0f, 1.0f);
+            //MeshFactory::createBox(mesh, 1.0f, 1.0f, 1.0f);
+            MeshFactory::createSphere(mesh, 0.5f, 30, 30);
+            // vb
             {
-                float aspect = windowWidth / (windowHeight + 0.0f);
-                Vertex vData[] = {{{-0.9f, +0.9f, 0.0f}, {1.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-                                  {{+0.9f, +0.9f, 0.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-                                  {{+0.9f, -0.9f, 0.0f}, {0.0f, 0.0f, 1.0f, 1.0f}, {1.0f, 0.0f}},
-                                  {{-0.9f, -0.9f, 0.0f}, {1.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 0.0f}}};
-                vDataLength = sizeof(vData);
                 vDataStride = sizeof(Vertex);
-                
+                vDataLength = vDataStride * mesh.vertices.size();
                 mVertexBuffer = mDevice->createDynamicBuffer(vDataLength, 0);
                 void* ptr = mVertexBuffer->map();
-                memcpy(ptr, vData, vDataLength);
+                memcpy(ptr, mesh.vertices.data(), vDataLength);
                 mVertexBuffer->unmap();
             }
-            
-            // Create Index Buffer
+            // ib
             {
-                const uint32_t iData[] = {0, 1, 2, 2, 3, 0};
-                iDataLength = sizeof(iData);
+                iDataLength = mesh.indices.size() * sizeof(uint32_t);
                 iDataFormat = Format::R32_UINT;
-                
                 mIndexBuffer = mDevice->createDynamicBuffer(iDataLength, 0);
                 void* ptr = mIndexBuffer->map();
-                memcpy(ptr, iData, iDataLength);
+                memcpy(ptr, mesh.indices.data(), iDataLength);
                 mIndexBuffer->unmap();
             }
-            
             // Texture
             {
                 auto& options = mTexture->getOptions();
@@ -142,7 +139,7 @@ namespace eokas::gpu {
                 mCommandBuffer->setTopology(Topology::TriangleList);
                 mCommandBuffer->setVertexBuffer(mVertexBuffer, vDataLength, vDataStride);
                 mCommandBuffer->setIndexBuffer(mIndexBuffer, iDataLength, iDataFormat);
-                mCommandBuffer->drawIndexedInstanced(6, 1, 0, 0, 0);
+                mCommandBuffer->drawIndexedInstanced(iDataLength / 4, 1, 0, 0, 0);
                 
                 Barrier end;
                 end.resource = renderTarget;

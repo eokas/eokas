@@ -257,12 +257,24 @@ namespace eokas
             else if (options.target == ProgramTarget::SM_6_8) target += "_6_8";
         }
         
-        _ThrowIfFailed(D3DCompile(options.source.c_str(), options.source.size(), options.name.c_str(), nullptr, nullptr, options.entry.c_str(), target.c_str(), compileFlags, 0, &mCode, &mError));
+        HRESULT hr = D3DCompile(
+            options.source.c_str(),
+            options.source.size(),
+            options.name.c_str(),
+            nullptr, nullptr,
+            options.entry.c_str(),
+            target.c_str(),
+            compileFlags, 0,
+            &mCode, &mError);
         
         if (mError != nullptr)
         {
             std::string str((const char*) mError->GetBufferPointer(), mError->GetBufferSize());
             throw std::runtime_error(str.c_str());
+        }
+        else
+        {
+            _ThrowIfFailed(hr);
         }
     }
     

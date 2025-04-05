@@ -1,0 +1,272 @@
+#include "./Utilities.h"
+
+#define M_PI 3.141592653f
+
+void MeshFactory::createQuad(MeshInfo& mesh, float width, float height)
+{
+    mesh.vertices.clear();
+    mesh.indices.clear();
+    
+    // Half dimensions for centered quad
+    float halfW = width * 0.5f;
+    float halfH = height * 0.5f;
+    
+    // Define vertex positions (facing -Z)
+    Vector3 positions[4] = {
+        {-halfW,  halfH, 0.0f},
+        { halfW,  halfH, 0.0f},
+        { halfW, -halfH, 0.0f},
+        {-halfW, -halfH, 0.0f}
+    };
+    
+    // Normal facing -Z (towards screen)
+    Vector3 normal = {0.0f, 0.0f, -1.0f};
+    
+    // UV coordinates
+    Vector2 uvs[4] = {
+        {0.0f, 0.0f}, // bottom-left
+        {1.0f, 0.0f}, // bottom-right
+        {1.0f, 1.0f}, // top-right
+        {0.0f, 1.0f}  // top-left
+    };
+    
+    // Default color (white)
+    Vector4 color = {1.0f, 1.0f, 1.0f, 1.0f};
+    
+    // Create vertices
+    for (int i = 0; i < 4; ++i) {
+        Vertex vertex;
+        vertex.position = positions[i];
+        vertex.normal = normal;
+        vertex.color = color;
+        vertex.uv = uvs[i];
+        mesh.vertices.push_back(vertex);
+    }
+    
+    // Create indices for two triangles (CCW winding)
+    mesh.indices = {
+        0, 1, 2,
+        0, 2, 3
+    };
+}
+
+void MeshFactory::createBox(MeshInfo& mesh, float width, float height, float depth)
+{
+    // Clear any existing data
+    mesh.vertices.clear();
+    mesh.indices.clear();
+    
+    // Half dimensions for easier calculations
+    float hw = width * 0.5f;
+    float hh = height * 0.5f;
+    float hd = depth * 0.5f;
+    
+    // Define the 8 vertices of the box
+    Vector3 positions[8] = {{-hw, -hh, -hd},
+                            {hw,  -hh, -hd},
+                            {hw,  hh,  -hd},
+                            {-hw, hh,  -hd},
+                            
+                            {-hw, -hh, hd},
+                            {hw,  -hh, hd},
+                            {hw,  hh,  hd},
+                            {-hw, hh,  hd}};
+    
+    // Define normals for each face
+    Vector3 normals[6] = {{0,  0,  -1},  // back
+                          {0,  0,  1},   // front
+                          {0,  1,  0},   // top
+                          {0,  -1, 0},  // bottom
+                          {-1, 0,  0},  // left
+                          {1,  0,  0}    // right
+    };
+    
+    // UV coordinates (same for all faces)
+    Vector2 uvs[4] = {{0, 0},
+                      {1, 0},
+                      {1, 1},
+                      {0, 1}};
+    
+    // Color (white by default)
+    Vector4 color = {1, 1, 1, 1};
+    
+    // For each face (6 faces total)
+    for (int face = 0; face < 6; face++)
+    {
+        // Determine which vertices belong to this face
+        int v0, v1, v2, v3;
+        Vector3 normal = normals[face];
+        
+        switch (face)
+        {
+            case 0: // back face
+                v0 = 0; v1 = 1; v2 = 2; v3 = 3;
+                break;
+            case 1: // front face
+                v0 = 5; v1 = 4; v2 = 7; v3 = 6;
+                break;
+            case 2: // top face
+                v0 = 3; v1 = 2; v2 = 6; v3 = 7;
+                break;
+            case 3: // bottom face
+                v0 = 4; v1 = 5; v2 = 1; v3 = 0;
+                break;
+            case 4: // left face
+                v0 = 0; v1 = 3; v2 = 7; v3 = 4;
+                break;
+            case 5: // right face
+                v0 = 1; v1 = 5; v2 = 6; v3 = 2;
+                break;
+        }
+        
+        // Create vertices for this face (4 vertices per face)
+        uint32_t baseIndex = mesh.vertices.size();
+        mesh.vertices.push_back({positions[v0], normal, color, uvs[0]});
+        mesh.vertices.push_back({positions[v1], normal, color, uvs[1]});
+        mesh.vertices.push_back({positions[v2], normal, color, uvs[2]});
+        mesh.vertices.push_back({positions[v3], normal, color, uvs[3]});
+        
+        // Add indices for two triangles (CCW winding)
+        mesh.indices.push_back(baseIndex + 0);
+        mesh.indices.push_back(baseIndex + 1);
+        mesh.indices.push_back(baseIndex + 2);
+        
+        mesh.indices.push_back(baseIndex + 0);
+        mesh.indices.push_back(baseIndex + 2);
+        mesh.indices.push_back(baseIndex + 3);
+    }
+}
+
+void MeshFactory::createSphere(MeshInfo& mesh, float radius, int longitudeSegments, int latitudeSegments)
+{
+    mesh.vertices.clear();
+    mesh.indices.clear();
+
+    // Ensure reasonable parameters
+    longitudeSegments = std::max(3, longitudeSegments);
+    latitudeSegments = std::max(2, latitudeSegments);
+    
+    // Generate vertices
+    for (int lat = 0; lat <= latitudeSegments; ++lat)
+    {
+        float theta = float(lat) * (M_PI / float(latitudeSegments));
+        float sinTheta = sinf(theta);
+        float cosTheta = cosf(theta);
+        
+        for (int lon = 0; lon <= longitudeSegments; ++lon)
+        {
+            float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+            float sinPhi = sinf(phi);
+            float cosPhi = cosf(phi);
+            
+            Vertex vertex;
+            
+            // Position (normalized then scaled by radius)
+            vertex.position.x = radius * cosPhi * sinTheta;
+            vertex.position.y = radius * cosTheta;
+            vertex.position.z = radius * sinPhi * sinTheta;
+            
+            // Normal (same as position but normalized)
+            float revRadius = 1.0f / radius;
+            vertex.normal.x = vertex.position.x * revRadius;
+            vertex.normal.y = vertex.position.y * revRadius;
+            vertex.normal.z = vertex.position.z * revRadius;
+            
+            // Color (white by default)
+            vertex.color.x = 1.0f;
+            vertex.color.y = 1.0f;
+            vertex.color.z = 1.0f;
+            vertex.color.w = 1.0f;
+            
+            // UV coordinates
+            vertex.uv.x = float(lon) / float(longitudeSegments);
+            vertex.uv.y = float(lat) / float(latitudeSegments);
+            
+            mesh.vertices.push_back(vertex);
+        }
+    }
+    
+    // Generate indices (clockwise winding)
+    for (int lat = 0; lat < latitudeSegments; ++lat)
+    {
+        for (int lon = 0; lon < longitudeSegments; ++lon)
+        {
+            int row0 = (longitudeSegments + 1) * lat + lon;
+            int row1 = (longitudeSegments + 1) * (lat + 1) + lon;
+            
+            if (lat > 0)
+            {
+                mesh.indices.push_back(row0);
+                mesh.indices.push_back(row1);
+                mesh.indices.push_back(row0 + 1);
+            }
+            
+            if (lat < latitudeSegments - 1)
+            {
+                mesh.indices.push_back(row0 + 1);
+                mesh.indices.push_back(row1);
+                mesh.indices.push_back(row1 + 1);
+            }
+        }
+    }
+}
+
+void Utilities::createImage(std::vector<uint8_t>& image, uint32_t textureWidth, uint32_t textureHeight)
+{
+    const uint32_t rowPitch = textureWidth * 4;
+    const uint32_t cellPitch = rowPitch >> 4; // The width of a cell in the checkboard texture.
+    const uint32_t cellHeight = textureWidth >> 4; // The height of a cell in the checkerboard texture.
+    const uint32_t textureSize = rowPitch * textureHeight;
+    
+    image.resize(textureSize);
+    
+    uint8_t* pData = (uint8_t*)image.data();
+    for (uint32_t n = 0; n < textureSize; n += 4)
+    {
+        uint32_t x = n % rowPitch;
+        uint32_t y = n / rowPitch;
+        uint32_t i = x / cellPitch;
+        uint32_t j = y / cellHeight;
+        
+        if (i % 2 == j % 2)
+        {
+            pData[n + 0] = 0x00;    // R
+            pData[n + 1] = 0x00;    // G
+            pData[n + 2] = 0x00;    // B
+            pData[n + 3] = 0xff;    // A
+        }
+        else
+        {
+            pData[n + 0] = 0xff;    // R
+            pData[n + 1] = 0xff;    // G
+            pData[n + 2] = 0xff;    // B
+            pData[n + 3] = 0xff;    // A
+        }
+    }
+}
+
+std::string Utilities::readTextFile(const std::string& fileName)
+{
+    const size_t maxFileSize = 4096;
+    
+    char buffer[maxFileSize] = { 0 };
+    memset(buffer, 0, maxFileSize);
+    
+    FILE* fd = NULL;
+    fopen_s(&fd, fileName.c_str(), "rb");
+    if (fd == NULL) {
+        throw std::exception("Open shader file failed.");
+    }
+    
+    fseek(fd, 0, SEEK_END);
+    size_t size = ftell(fd);
+    if (size > maxFileSize) {
+        throw std::exception("The shader file is too large.");
+    }
+    
+    fseek(fd, 0, SEEK_SET);
+    fread(buffer, size, 1, fd);
+    fclose(fd);
+    
+    return buffer;
+}

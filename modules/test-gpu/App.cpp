@@ -11,7 +11,7 @@
 // 全局变量:
 const char* windowTitle = "001-HelloWorld";
 const char* windowClass = "001-HelloWorld";
-const int windowWidth = 800;
+const int windowWidth = 600;
 const int windowHeight = 600;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
