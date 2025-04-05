@@ -25,6 +25,28 @@ namespace eokas
         static D3D12_PRIMITIVE_TOPOLOGY transferTopology(Topology topology);
     };
     
+    struct DX12DescriptorHeap
+    {
+        enum class Usage
+        {
+            RTV,
+            SRV,
+            UAV
+        };
+        
+        const DX12Device& mDevice;
+        D3D12_DESCRIPTOR_HEAP_DESC mDesc;
+        
+        std::vector<ComPtr<ID3D12DescriptorHeap>> mHeaps = {};
+        u32_t mDescriptorStride = 0;
+        u32_t mDescriptorCount = 0;
+        
+        DX12DescriptorHeap(const DX12Device& device, Usage usage, u32_t numDescriptorsPerHeap);
+        virtual ~DX12DescriptorHeap();
+        
+        D3D12_CPU_DESCRIPTOR_HANDLE acquire();
+    };
+    
     struct DX12RenderTarget : public RenderTarget
     {
         ComPtr <ID3D12Resource> mResource;
@@ -76,8 +98,7 @@ namespace eokas
         std::map<ProgramType, DX12Program::Ref> mPrograms;
         std::map<uint32_t, DX12Texture::Ref> mTextures;
         
-        ComPtr <ID3D12DescriptorHeap> mSRVHeap;
-        UINT mSRVHeapStride = 0;
+        std::shared_ptr<DX12DescriptorHeap> mSRVHeap;
         
         D3D12_FILL_MODE mFillMode = D3D12_FILL_MODE_SOLID;
         D3D12_CULL_MODE mCullMode = D3D12_CULL_MODE_BACK;
@@ -129,8 +150,7 @@ namespace eokas
         ComPtr <IDXGISwapChain3> mSwapChain;
         uint32_t mFrameBufferIndex;
         
-        ComPtr <ID3D12DescriptorHeap> mRTVHeap;
-        UINT mRTVHeapStride = 0;
+        std::shared_ptr<DX12DescriptorHeap> mRTVHeap;
         DX12RenderTarget::Ref mRenderTargets[kFrameBufferCount];
         ComPtr <ID3D12CommandAllocator> mCommandAllocators[kFrameBufferCount];
         

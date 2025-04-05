@@ -86,6 +86,67 @@ namespace eokas
         return D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     }
     
+    DX12DescriptorHeap::DX12DescriptorHeap(const DX12Device& device, Usage usage, u32_t numDescriptorsPerHeap)
+        : mDevice(device)
+        , mDesc()
+    {
+        auto& dxDevice = device.mDevice;
+        
+        if(usage == Usage::RTV)
+        {
+            mDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            mDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        }
+        else if(usage == Usage::SRV || usage == Usage::UAV)
+        {
+            mDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            mDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        }
+        mDesc.NumDescriptors = numDescriptorsPerHeap;
+        
+        mHeaps.clear();
+        mDescriptorStride = dxDevice->GetDescriptorHandleIncrementSize(mDesc.Type);
+        mDescriptorCount = 0;
+    }
+    
+    DX12DescriptorHeap::~DX12DescriptorHeap()
+    {
+        for(const auto& heap : mHeaps)
+        {
+            if(heap != nullptr)
+            {
+                heap->Release();
+            }
+        }
+        mHeaps.clear();
+    }
+    
+    D3D12_CPU_DESCRIPTOR_HANDLE DX12DescriptorHeap::acquire()
+    {
+        auto& dxDevice = mDevice.mDevice;
+        
+        u32_t heapIndex = mDescriptorCount / mDesc.NumDescriptors;
+        u32_t heapOffset = mDescriptorCount % mDesc.NumDescriptors;
+        
+        ComPtr<ID3D12DescriptorHeap> heap;
+        if(heapIndex < mHeaps.size())
+        {
+            heap = mHeaps[heapIndex];
+        }
+        else
+        {
+            _ThrowIfFailed(dxDevice->CreateDescriptorHeap(&mDesc, IID_PPV_ARGS(&heap)));
+            mHeaps.push_back(heap);
+        }
+        
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = heap->GetCPUDescriptorHandleForHeapStart();
+        handle.ptr += mDescriptorStride * heapOffset;
+        
+        mDescriptorCount += 1;
+        
+        return handle;
+    }
+    
     void* DX12RenderTarget::getNativeResource() const
     {
         return mResource.Get();
@@ -140,8 +201,7 @@ namespace eokas
     DX12Texture::DX12Texture(const DX12Device& device, const TextureOptions& options)
         : mOptions(options)
     {
-        
-        auto& mDevice = device.mDevice;
+        auto& dxDevice = device.mDevice;
         
         // 1. 准备纹理数据和描述符
         D3D12_RESOURCE_DESC textureDesc = {};
@@ -160,7 +220,7 @@ namespace eokas
         // 2. 创建纹理资源
         D3D12_HEAP_PROPERTIES textureHeapProps = {};
         textureHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-        _ThrowIfFailed(mDevice->CreateCommittedResource(&textureHeapProps, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mResource)));
+        _ThrowIfFailed(dxDevice->CreateCommittedResource(&textureHeapProps, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mResource)));
     }
     
     void* DX12Texture::getNativeResource() const
@@ -381,13 +441,10 @@ namespace eokas
         
         // Create SRV Heap
         {
-            uint32_t textureCount = (uint32_t) mTextures.size();
-            D3D12_DESCRIPTOR_HEAP_DESC srvHeapDesc = {};
-            srvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-            srvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-            srvHeapDesc.NumDescriptors = textureCount;
-            _ThrowIfFailed(dxDevice->CreateDescriptorHeap(&srvHeapDesc, IID_PPV_ARGS(&mSRVHeap)));
-            mSRVHeapStride = dxDevice->GetDescriptorHandleIncrementSize(srvHeapDesc.Type);
+            mSRVHeap = std::make_shared<DX12DescriptorHeap>(
+                mDevice,
+                DX12DescriptorHeap::Usage::SRV,
+                mTextures.size());
             
             for (auto& node: mTextures)
             {
@@ -396,8 +453,7 @@ namespace eokas
                 auto dxResource = dynamic_cast<DX12Texture*>(texture.get())->mResource;
                 
                 // 确定 SRV 描述符堆的偏移量
-                D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mSRVHeap->GetCPUDescriptorHandleForHeapStart();
-                srvHandle.ptr += mSRVHeapStride * index;
+                D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mSRVHeap->acquire();
                 
                 // 创建 SRV 描述符并将其绑定到纹理资源
                 D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -426,7 +482,7 @@ namespace eokas
     void DX12CommandBuffer::reset(PipelineState::Ref pso)
     {
         auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameBufferIndex];
-        DX12PipelineState* pipelineState = dynamic_cast<DX12PipelineState*>(pso.get());
+        auto* pipelineState = dynamic_cast<DX12PipelineState*>(pso.get());
         
         auto& dxPipelineState = pipelineState->mPipelineState;
         _ThrowIfFailed(dxCommandAllocator->Reset());
@@ -435,10 +491,16 @@ namespace eokas
         auto& dxRootSignature = pipelineState->mRootSignature;
         mCommandList->SetGraphicsRootSignature(dxRootSignature.Get());
         
-        auto& dxSRVHeap = pipelineState->mSRVHeap;
-        ID3D12DescriptorHeap* srvHeapList[] = {dxSRVHeap.Get()};
-        mCommandList->SetDescriptorHeaps(_countof(srvHeapList), srvHeapList);
-        mCommandList->SetGraphicsRootDescriptorTable(0, dxSRVHeap->GetGPUDescriptorHandleForHeapStart());
+        std::vector<ID3D12DescriptorHeap*> dxSRVHeapList(pipelineState->mSRVHeap->mHeaps.size());
+        for(size_t i = 0; i < dxSRVHeapList.size(); i++)
+        {
+            dxSRVHeapList[i] = pipelineState->mSRVHeap->mHeaps[i].Get();
+        }
+        mCommandList->SetDescriptorHeaps(dxSRVHeapList.size(), dxSRVHeapList.data());
+        for(size_t i = 0; i < dxSRVHeapList.size(); i++)
+        {
+            mCommandList->SetGraphicsRootDescriptorTable(i, dxSRVHeapList[i]->GetGPUDescriptorHandleForHeapStart());
+        }
     }
     
     void DX12CommandBuffer::setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets)
@@ -684,22 +746,16 @@ namespace eokas
         mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
         
         // Create RTV Heap
-        D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-        rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-        rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-        rtvHeapDesc.NumDescriptors = kFrameBufferCount;
-        _ThrowIfFailed(mDevice->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&mRTVHeap)));
-        mRTVHeapStride = mDevice->GetDescriptorHandleIncrementSize(rtvHeapDesc.Type);
+        u32_t numHandlePerHeap = max(kFrameBufferCount, 8);
+        mRTVHeap = std::make_shared<DX12DescriptorHeap>(*this, DX12DescriptorHeap::Usage::RTV, numHandlePerHeap);
         
         // Get RenderTarget and Create RTV
-        D3D12_CPU_DESCRIPTOR_HANDLE rtvHandleStart = mRTVHeap->GetCPUDescriptorHandleForHeapStart();
         for (UINT i = 0; i < kFrameBufferCount; i++)
         {
             mRenderTargets[i] = std::make_shared<DX12RenderTarget>();
             DX12RenderTarget* dxRT = dynamic_cast<DX12RenderTarget*>(mRenderTargets[i].get());
             _ThrowIfFailed(mSwapChain->GetBuffer(i, IID_PPV_ARGS(&dxRT->mResource)));
-            dxRT->mView = rtvHandleStart;
-            dxRT->mView.ptr += mRTVHeapStride * i;
+            dxRT->mView = mRTVHeap->acquire();
             mDevice->CreateRenderTargetView(dxRT->mResource.Get(), nullptr, dxRT->mView);
         }
         
