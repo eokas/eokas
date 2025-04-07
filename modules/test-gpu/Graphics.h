@@ -83,7 +83,8 @@ namespace eokas::gpu {
             MeshInfo mesh;
             //MeshFactory::createQuad(mesh, 1.0f, 1.0f);
             //MeshFactory::createBox(mesh, 1.0f, 1.0f, 1.0f);
-            MeshFactory::createSphere(mesh, 0.5f, 30, 30);
+            //MeshFactory::createSphere(mesh, 0.5f, 30, 30);
+            MeshFactory::createCylinder(mesh, 0.5f, 1.0f, 30, 3);
             // vb
             {
                 vDataStride = sizeof(Vertex);

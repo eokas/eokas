@@ -25,6 +25,7 @@ struct MeshFactory
     static void createQuad(MeshInfo& mesh, float width, float height);
     static void createBox(MeshInfo& mesh, float width, float height, float depth);
     static void createSphere(MeshInfo& mesh, float radius, int longitudeSegments, int latitudeSegments);
+    static void createCylinder(MeshInfo& mesh, float radius, float height, int longitudeSegments, int latitudeSegments);
 };
 
 struct Utilities

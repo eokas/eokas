@@ -211,6 +211,125 @@ void MeshFactory::createSphere(MeshInfo& mesh, float radius, int longitudeSegmen
     }
 }
 
+void MeshFactory::createCylinder(MeshInfo& mesh, float radius, float height, int longitudeSegments, int latitudeSegments)
+{
+    mesh.vertices.clear();
+    mesh.indices.clear();
+    
+    // Ensure reasonable parameters
+    longitudeSegments = std::max(3, longitudeSegments);
+    latitudeSegments = std::max(1, latitudeSegments);
+    
+    float halfHeight = height * 0.5f;
+    
+    // Generate side vertices
+    for (int lat = 0; lat <= latitudeSegments; ++lat)
+    {
+        float y = halfHeight - (height * lat) / latitudeSegments;
+        
+        for (int lon = 0; lon <= longitudeSegments; ++lon)
+        {
+            float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+            float sinPhi = sinf(phi);
+            float cosPhi = cosf(phi);
+            
+            Vertex vertex;
+            
+            // Position
+            vertex.position.x = radius * cosPhi;
+            vertex.position.y = y;
+            vertex.position.z = radius * sinPhi;
+            
+            // Normal (side faces point outward)
+            vertex.normal = {cosPhi, 0.0f, sinPhi};
+            
+            // Color (white by default)
+            vertex.color = {1.0f, 1.0f, 1.0f, 1.0f};
+            
+            // UV coordinates
+            vertex.uv.x = float(lon) / float(longitudeSegments);
+            vertex.uv.y = float(lat) / float(latitudeSegments);
+            
+            mesh.vertices.push_back(vertex);
+        }
+    }
+    
+    // Generate indices for side faces
+    for (int lat = 0; lat < latitudeSegments; ++lat)
+    {
+        for (int lon = 0; lon < longitudeSegments; ++lon)
+        {
+            int current = lat * (longitudeSegments + 1) + lon;
+            int next = current + longitudeSegments + 1;
+            
+            mesh.indices.push_back(current);
+            mesh.indices.push_back(next + 1);
+            mesh.indices.push_back(current + 1);
+            
+            mesh.indices.push_back(current);
+            mesh.indices.push_back(next);
+            mesh.indices.push_back(next + 1);
+        }
+    }
+    
+    // Generate top and bottom caps
+    int baseIndex = mesh.vertices.size();
+    
+    // Bottom cap center
+    mesh.vertices.push_back({
+        {0.0f, -halfHeight, 0.0f},  // position
+        {0.0f, -1.0f, 0.0f},       // normal
+        {1.0f, 1.0f, 1.0f, 1.0f},  // color
+        {0.5f, 0.5f}               // uv
+    });
+    
+    // Top cap center
+    mesh.vertices.push_back({
+        {0.0f, halfHeight, 0.0f},  // position
+        {0.0f, 1.0f, 0.0f},        // normal
+        {1.0f, 1.0f, 1.0f, 1.0f},  // color
+        {0.5f, 0.5f}               // uv
+    });
+    
+    // Generate cap vertices
+    for (int lon = 0; lon <= longitudeSegments; ++lon)
+    {
+        float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+        float sinPhi = sinf(phi);
+        float cosPhi = cosf(phi);
+        
+        // Bottom cap vertex
+        mesh.vertices.push_back({
+            {radius * cosPhi, -halfHeight, radius * sinPhi}, // position
+            {0.0f, -1.0f, 0.0f},                            // normal
+            {1.0f, 1.0f, 1.0f, 1.0f},                       // color
+            {0.5f + 0.5f * cosPhi, 0.5f + 0.5f * sinPhi}    // uv
+        });
+        
+        // Top cap vertex
+        mesh.vertices.push_back({
+            {radius * cosPhi, halfHeight, radius * sinPhi},  // position
+            {0.0f, 1.0f, 0.0f},                             // normal
+            {1.0f, 1.0f, 1.0f, 1.0f},                       // color
+            {0.5f + 0.5f * cosPhi, 0.5f + 0.5f * sinPhi}    // uv
+        });
+    }
+    
+    // Generate cap indices
+    for (int lon = 0; lon < longitudeSegments; ++lon)
+    {
+        // Bottom cap
+        mesh.indices.push_back(baseIndex); // center
+        mesh.indices.push_back(baseIndex + 2 + lon * 2 + 2);
+        mesh.indices.push_back(baseIndex + 2 + lon * 2);
+        
+        // Top cap
+        mesh.indices.push_back(baseIndex + 1); // center
+        mesh.indices.push_back(baseIndex + 2 + lon * 2 + 1);
+        mesh.indices.push_back(baseIndex + 2 + lon * 2 + 3);
+    }
+}
+
 void Utilities::createImage(std::vector<uint8_t>& image, uint32_t textureWidth, uint32_t textureHeight)
 {
     const uint32_t rowPitch = textureWidth * 4;
