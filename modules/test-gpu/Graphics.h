@@ -24,6 +24,7 @@ using namespace Microsoft::WRL;
 
 // libgpu
 #include "gpu/main.h"
+#include "mesh/GeoMesh.h"
 #include "./Utilities.h"
 
 namespace eokas::gpu {
@@ -80,7 +81,7 @@ namespace eokas::gpu {
             
             mCommandBuffer = mDevice->createCommandBuffer(mPipelineState);
             
-            MeshInfo mesh;
+            GeoMesh mesh;
             //MeshFactory::createQuad(mesh, 1.0f, 1.0f);
             //MeshFactory::createBox(mesh, 1.0f, 1.0f, 1.0f);
             //MeshFactory::createSphere(mesh, 0.5f, 30, 30);
