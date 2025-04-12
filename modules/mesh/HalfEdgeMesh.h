@@ -7,22 +7,38 @@ namespace eokas
 {
     struct HalfEdgeMesh
     {
+        struct Vertex;
+        struct Edge;
+        struct Polygon;
+        
         struct Vertex
         {
-            Vector3 position;
-            struct HalfEdge* edge;
+            Vector3 pos;
+            Edge* edge;
+            std::vector<Edge*> adjacentEdges;
         };
         
-        struct HalfEdge
+        struct Edge
         {
-            Vertex* v0;
-            Vertex* v1;
-            HalfEdge* twin;
-            HalfEdge* prev;
-            HalfEdge* next;
+            Polygon* polygon;
+            Vertex* vertex;
+            Edge* twin;
+            Edge* prev;
+            Edge* next;
         };
         
-        std::vector<HalfEdge> edges;
+        struct Polygon
+        {
+            Edge* edge;
+        };
+        
+        std::vector<Vertex> vertices;
+        std::vector<Edge> edges;
+        std::vector<Polygon> polygons;
+        
+        Vertex* addVertex(const Vector3& p);
+        Polygon* addTriangle(Vertex* v0, Vertex* v1, Vertex* v2);
+        Polygon* addPolygon(const std::vector<Vertex*>& vertexList);
     };
 }
 
