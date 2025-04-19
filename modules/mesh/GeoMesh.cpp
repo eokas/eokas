@@ -4,7 +4,7 @@ namespace eokas
 {
 #define M_PI 3.141592653f
     
-    void MeshFactory::createQuad(GeoMesh& mesh, float width, float height)
+    void GeoMeshFactory::createQuad(GeoMesh& mesh, float width, float height)
     {
         mesh.vertices.clear();
         mesh.indices.clear();
@@ -52,7 +52,7 @@ namespace eokas
         };
     }
     
-    void MeshFactory::createBox(GeoMesh& mesh, float width, float height, float depth)
+    void GeoMeshFactory::createBox(GeoMesh& mesh, float width, float height, float depth)
     {
         // Clear any existing data
         mesh.vertices.clear();
@@ -139,7 +139,7 @@ namespace eokas
         }
     }
     
-    void MeshFactory::createSphere(GeoMesh& mesh, float radius, int longitudeSegments, int latitudeSegments)
+    void GeoMeshFactory::createSphere(GeoMesh& mesh, float radius, int longitudeSegments, int latitudeSegments)
     {
         mesh.vertices.clear();
         mesh.indices.clear();
@@ -213,7 +213,7 @@ namespace eokas
         }
     }
     
-    void MeshFactory::createCylinder(GeoMesh& mesh, float radius, float height, int longitudeSegments, int latitudeSegments)
+    void GeoMeshFactory::createCylinder(GeoMesh& mesh, float radius, float height, int longitudeSegments, int latitudeSegments)
     {
         mesh.vertices.clear();
         mesh.indices.clear();

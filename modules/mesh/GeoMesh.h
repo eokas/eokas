@@ -19,7 +19,7 @@ namespace eokas
         std::vector<uint32_t> indices;
     };
     
-    struct MeshFactory
+    struct GeoMeshFactory
     {
         static void createQuad(GeoMesh& mesh, float width, float height);
         static void createBox(GeoMesh& mesh, float width, float height, float depth);
