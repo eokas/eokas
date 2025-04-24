@@ -21,14 +21,14 @@ namespace eokas
             return mValue;
         }
         
-        operator bool() const
-        {
-            return mValue != -1;
-        }
-        
         bool operator==(const ElementID& rhs) const
         {
             return mValue == rhs.mValue;
+        }
+        
+        bool operator==(size_t rhs) const
+        {
+            return mValue == rhs;
         }
         
         bool operator!=(const ElementID& rhs) const
@@ -36,9 +36,59 @@ namespace eokas
             return mValue != rhs.mValue;
         }
         
+        bool operator!=(size_t rhs) const
+        {
+            return mValue != rhs;
+        }
+        
+        bool operator<(const ElementID& rhs) const
+        {
+            return mValue < rhs.mValue;
+        }
+        
+        bool operator<(size_t rhs) const
+        {
+            return mValue < rhs;
+        }
+        
+        bool operator<=(const ElementID& rhs) const
+        {
+            return mValue <= rhs.mValue;
+        }
+        
+        bool operator<=(size_t rhs) const
+        {
+            return mValue <= rhs;
+        }
+        
+        bool operator>(const ElementID& rhs) const
+        {
+            return mValue > rhs.mValue;
+        }
+        
+        bool operator>(size_t rhs) const
+        {
+            return mValue > rhs;
+        }
+        
+        bool operator>=(const ElementID& rhs) const
+        {
+            return mValue >= rhs.mValue;
+        }
+        
+        bool operator>=(size_t rhs) const
+        {
+            return mValue >= rhs;
+        }
+        
         u32_t value() const
         {
             return mValue;
+        }
+        
+        bool isValid() const
+        {
+            return mValue != -1;
         }
         
     private:

@@ -127,6 +127,12 @@ namespace eokas
             }
         };
         
+        enum class NormalMode
+        {
+            Flat,
+            Smooth,
+        };
+        
         void clear();
         
         VertexID addVertex(const Vertex& vertex);
@@ -134,6 +140,7 @@ namespace eokas
         void setVertex(const VertexID& vertexId, const Vertex& vertex);
         u32_t getVertexCount() const;
         const Vertex& getVertex(const VertexID& vertexId) const;
+        const Vertex& getVertex(const CornerID& cornerId) const;
         
         CornerID addCorner(const VertexID& v);
         std::vector<CornerID> addCorners(const std::vector<VertexID>& vertexList);
@@ -162,6 +169,8 @@ namespace eokas
         const std::vector<TriangleID>& getSectionTriangles(const SectionID& sectionId) const;
         void clearSectionTriangles(const SectionID& sectionId);
         void delSection(const SectionID& sectionId);
+        
+        void computeNormals(NormalMode normalMode);
         
     private:
         std::vector<Vertex> vertices;

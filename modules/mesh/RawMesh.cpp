@@ -31,9 +31,9 @@ namespace eokas
     
     void RawMesh::setVertex(const VertexID& vertexId, const Vertex& vertex)
     {
-        if(vertexId.value() < this->vertices.size())
+        if(vertexId < this->vertices.size())
         {
-            this->vertices.at(vertexId.value()) = vertex;
+            this->vertices.at(vertexId) = vertex;
         }
     }
     
@@ -44,7 +44,13 @@ namespace eokas
     
     const RawMesh::Vertex& RawMesh::getVertex(const VertexID& vertexId) const
     {
-        return this->vertices.at(vertexId.value());
+        return this->vertices.at(vertexId);
+    }
+    
+    const RawMesh::Vertex& RawMesh::getVertex(const CornerID& cornerId) const
+    {
+        const Corner& corner = this->corners.at(cornerId);
+        return this->vertices.at(corner.vertexId);
     }
     
     CornerID RawMesh::addCorner(const VertexID& v)
@@ -92,7 +98,7 @@ namespace eokas
     
     RawMesh::Attribute& RawMesh::getAttribute(const AttributeID& attributeId)
     {
-        return this->attributes.at(attributeId.value());
+        return this->attributes.at(attributeId);
     }
     
     TriangleID RawMesh::addTriangle(const Triangle& tri)
@@ -132,7 +138,7 @@ namespace eokas
     
     void RawMesh::delTriangle(const TriangleID& triangleId)
     {
-        if(triangleId.value() < this->triangles.size())
+        if(triangleId < this->triangles.size())
         {
             this->triangles.erase(this->triangles.begin() + triangleId.value());
         }
@@ -145,7 +151,7 @@ namespace eokas
     
     const RawMesh::Triangle& RawMesh::getTriangle(const TriangleID& triangleId) const
     {
-        return this->triangles.at(triangleId.value());
+        return this->triangles.at(triangleId);
     }
     
     SectionID RawMesh::addSection()
@@ -161,7 +167,7 @@ namespace eokas
             section.remove(triangleId);
         }
         
-        this->sections.at(sectionId.value()).triangles.push_back(triangleId);
+        this->sections.at(sectionId).triangles.push_back(triangleId);
     }
     
     void RawMesh::addSectionTriangles(const SectionID& sectionId, const std::vector<TriangleID>& triangleList)
@@ -183,22 +189,115 @@ namespace eokas
     
     void RawMesh::delSectionTriangle(const SectionID& sectionId, const TriangleID& triangleId)
     {
-        Section& section = this->sections.at(sectionId.value());
+        Section& section = this->sections.at(sectionId);
         section.remove(triangleId);
     }
     
     const std::vector<TriangleID>& RawMesh::getSectionTriangles(const SectionID& sectionId) const
     {
-        return this->sections.at(sectionId.value()).triangles;
+        return this->sections.at(sectionId).triangles;
     }
     
     void RawMesh::clearSectionTriangles(const SectionID& sectionId)
     {
-        this->sections.at(sectionId.value()).triangles.clear();
+        this->sections.at(sectionId).triangles.clear();
     }
     
     void RawMesh::delSection(const SectionID& sectionId)
     {
         this->sections.erase(this->sections.begin() + sectionId.value());
+    }
+    
+    void RawMesh::computeNormals(NormalMode normalMode)
+    {
+        if (this->vertices.empty() || this->triangles.empty())
+        {
+            return;
+        }
+        
+        // Find or Add normal attribute
+        AttributeID normalAttrId = this->findAttribute(AttributeType::Normal);
+        if (!normalAttrId.isValid())
+        {
+            normalAttrId = this->addAttribute(AttributeType::Normal, sizeof(Vector3));
+        }
+        Attribute& normalAttr = this->getAttribute(normalAttrId);
+        
+        // Ensure normals' space
+        normalAttr.ensure(this->corners.size());
+        
+        if(normalMode == NormalMode::Flat)
+        {
+            // Compute face normal for each triangle.
+            for (const Triangle& tri: triangles)
+            {
+                const Vertex& v0 = this->getVertex(tri.c0);
+                const Vertex& v1 = this->getVertex(tri.c1);
+                const Vertex& v2 = this->getVertex(tri.c2);
+                
+                Vector3 edge1 = v1.pos - v0.pos;
+                Vector3 edge2 = v2.pos - v0.pos;
+                Vector3 faceNormal = Vector3::cross(edge1, edge2);
+                Vector3 normal = faceNormal.sqrmagnitude() > 0.0f ? faceNormal.normalized() : Vector3(0, 0, 1);
+                
+                normalAttr.set(tri.c0, normal);
+                normalAttr.set(tri.c1, normal);
+                normalAttr.set(tri.c2, normal);
+            }
+        }
+        else if(normalMode == NormalMode::Smooth)
+        {
+            std::vector<Vector3> vertexNormals(vertices.size(), Vector3(0, 0, 1));
+            std::vector<float> vertexWeights(vertices.size(), 0.0f);
+            
+            // Compute face normal for each triangle.
+            for (const Triangle& tri: triangles)
+            {
+                const Vertex& v0 = this->getVertex(tri.c0);
+                const Vertex& v1 = this->getVertex(tri.c1);
+                const Vertex& v2 = this->getVertex(tri.c2);
+                
+                Vector3 edge1 = v1.pos - v0.pos;
+                Vector3 edge2 = v2.pos - v0.pos;
+                Vector3 faceNormal = Vector3::cross(edge1, edge2);
+                
+                // Triangle Area for weight.
+                float area = faceNormal.magnitude();
+                if (area > 0.0f)
+                {
+                    faceNormal *= (1.0f / area); // Normalize
+                    area *= 0.5f; // Actual area is 0.5 * cross-product.
+                    
+                    // Add normal by area-weight
+                    VertexID vid0 = corners[tri.c0].vertexId;
+                    VertexID vid1 = corners[tri.c1].vertexId;
+                    VertexID vid2 = corners[tri.c2].vertexId;
+                    
+                    vertexNormals[vid0] += faceNormal * area;
+                    vertexNormals[vid1] += faceNormal * area;
+                    vertexNormals[vid2] += faceNormal * area;
+                    
+                    vertexWeights[vid0] += area;
+                    vertexWeights[vid1] += area;
+                    vertexWeights[vid2] += area;
+                }
+            }
+            
+            // Normalized normal and set it to attribute
+            for (size_t i = 0; i < corners.size(); ++i)
+            {
+                const Corner& corner = corners[i];
+                VertexID vid = corner.vertexId;
+                
+                Vector3 normal(0, 0, 1);
+                if (vertexWeights[vid] > 0.0f)
+                {
+                    normal = vertexNormals[vid];
+                    normal.normalize();
+                }
+                
+                normalAttr.set(CornerID(static_cast<u32_t>(i)), normal);
+            }
+        }
     }
 }
