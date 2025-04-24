@@ -57,10 +57,14 @@ namespace eokas
     {
         Corner& corner = this->corners.emplace_back();
         corner.vertexId = v;
-
-        for(Attribute& attr : this->attributes)
+        
+        auto visitor = [size = this->corners.size()](auto& attribute)
         {
-            attr.ensure(this->corners.size());
+            attribute.ensure(size);
+        };
+        for(AttributeVariant& attributeVariant : this->attributes)
+        {
+            std::visit(visitor, attributeVariant);
         }
         
         return this->corners.size() - 1;
@@ -77,28 +81,22 @@ namespace eokas
         return result;
     }
     
-    AttributeID RawMesh::addAttribute(const AttributeType& type, u32_t stride)
+    AttributeID RawMesh::findAttribute(const AttributeUsage& usage)
     {
-        Attribute& attr = this->attributes.emplace_back();
-        attr.type = type;
-        attr.stride = stride;
-        attr.ensure(this->corners.size());
-        return this->attributes.size() - 1;
-    }
-    
-    AttributeID RawMesh::findAttribute(const AttributeType& type)
-    {
-        for (size_t i = 0; i < attributes.size(); ++i) {
-            if (attributes[i].type == type) {
-                return i;
+        for (size_t id = 0; id < attributes.size(); ++id)
+        {
+            bool match = std::visit([&usage](auto&& arg) -> bool
+            {
+                return arg.usage() == usage;
+            }, attributes[id]);
+            
+            if (match)
+            {
+                return id;
             }
         }
+        
         return {};
-    }
-    
-    RawMesh::Attribute& RawMesh::getAttribute(const AttributeID& attributeId)
-    {
-        return this->attributes.at(attributeId);
     }
     
     TriangleID RawMesh::addTriangle(const Triangle& tri)
@@ -216,12 +214,12 @@ namespace eokas
         }
         
         // Find or Add normal attribute
-        AttributeID normalAttrId = this->findAttribute(AttributeType::Normal);
+        AttributeID normalAttrId = this->findAttribute(AttributeUsage::Normal);
         if (!normalAttrId.isValid())
         {
-            normalAttrId = this->addAttribute(AttributeType::Normal, sizeof(Vector3));
+            normalAttrId = this->addAttribute<Vector3>(AttributeUsage::Normal);
         }
-        Attribute& normalAttr = this->getAttribute(normalAttrId);
+        Attribute<Vector3>& normalAttr = this->getAttribute<Vector3>(normalAttrId);
         
         // Ensure normals' space
         normalAttr.ensure(this->corners.size());

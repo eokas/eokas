@@ -2,6 +2,7 @@
 #define _EOKAS_MESH_RAWMESH_H_
 
 #include "./header.h"
+#include <variant>
 
 namespace eokas
 {
@@ -18,83 +19,66 @@ namespace eokas
             VertexID vertexId;
         };
         
-        enum class AttributeType
+        enum class AttributeUsage
         {
             Color, UV, Normal, Tangent, Binormal,
         };
         
+        template<typename T>
         struct Attribute
         {
-            AttributeType type;
-            u32_t stride;
-            std::vector<u8_t> buffer;
+            Attribute(const AttributeUsage& usage)
+                : mUsage(usage)
+                , mBuffer()
+            { }
             
-            u32_t corners() const
+            const AttributeUsage& usage() const
             {
-                return u32_t(this->buffer.size() / this->stride);
-            }
-            
-            void ensure(size_t count)
-            {
-                if(this->corners() < count)
-                {
-                    this->buffer.resize(this->stride * this->corners());
-                }
-            }
-            
-            template<typename T>
-            void get(const CornerID& id, T& val)
-            {
-                if(this->stride != sizeof(T))
-                    return;
-                const size_t count = this->buffer.size() / this->stride;
-                if(id.value() >= count)
-                    return;
-                
-                u8_t* ptr = this->buffer.data() + id.value() * stride;
-                memcpy(&val, ptr, sizeof(val));
-            }
-            
-            template<typename T>
-            void set(const CornerID& id, const T& val)
-            {
-                if(this->stride != sizeof(T))
-                    return;
-                const size_t count = this->buffer.size() / this->stride;
-                if (id.value() >= count)
-                    return;
-                u8_t* ptr = this->buffer.data() + id.value() * stride;
-                memcpy(&ptr, &val, sizeof(val));
-            }
-        };
-        
-        template<typename T>
-        struct AttributeRef
-        {
-            Attribute& attribute;
-            
-            AttributeRef(Attribute& attr) : attribute(attr) {}
-            
-            AttributeType& type() const
-            {
-                return this->attribute.type;
+                return mUsage;
             }
             
             u32_t stride() const
             {
-                return this->attribute.stride;
+                return mStride;
+            }
+            
+            u32_t corners() const
+            {
+                return u32_t(mBuffer.size());
+            }
+            
+            void ensure(size_t count)
+            {
+                if(mBuffer.size() < count)
+                {
+                    mBuffer.resize(count);
+                }
             }
             
             void get(const CornerID& id, T& val)
             {
-                return this->attribute.get(id, val);
+                if(id.value() >= mBuffer.size())
+                    return;
+                val = mBuffer.at(id.value());
             }
             
             void set(const CornerID& id, const T& val)
             {
-                this->attribute.set(id, val);
+                if (id.value() >= mBuffer.size())
+                    return;
+                mBuffer[id.value()] = val;
             }
+            
+        private:
+            AttributeUsage mUsage;
+            std::vector<T> mBuffer;
         };
+        
+        using AttributeVariant = std::variant<
+            Attribute<f32_t>,
+            Attribute<Vector2>,
+            Attribute<Vector3>,
+            Attribute<Vector4>>;
         
         struct Triangle
         {
@@ -145,14 +129,22 @@ namespace eokas
         CornerID addCorner(const VertexID& v);
         std::vector<CornerID> addCorners(const std::vector<VertexID>& vertexList);
         
-        AttributeID addAttribute(const AttributeType& type, u32_t stride);
-        AttributeID findAttribute(const AttributeType& type);
-        Attribute& getAttribute(const AttributeID& attributeId);
+        template<typename T>
+        AttributeID addAttribute(const AttributeUsage& usage)
+        {
+            AttributeVariant& attributeVariant = this->attributes.emplace_back(Attribute<T>(usage));
+            Attribute<T>& attr = std::get<Attribute<T>>(attributeVariant);
+            attr.ensure(this->corners.size());
+            return this->attributes.size() - 1;
+        }
+        
+        AttributeID findAttribute(const AttributeUsage& usage);
         
         template<typename T>
-        AttributeRef<T> getAttribute(const AttributeID& attributeId)
+        Attribute<T>& getAttribute(const AttributeID& attributeId)
         {
-            return this->getAttribute(attributeId);
+            auto attribute = this->attributes.at(attributeId);
+            return std::get<Attribute<T>>(attribute);
         }
         
         TriangleID addTriangle(const Triangle& triangle);
@@ -175,7 +167,7 @@ namespace eokas
     private:
         std::vector<Vertex> vertices;
         std::vector<Corner> corners;
-        std::vector<Attribute> attributes;
+        std::vector<AttributeVariant> attributes;
         std::vector<Triangle> triangles;
         std::vector<Section> sections;
     };
