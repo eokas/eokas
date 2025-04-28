@@ -107,6 +107,7 @@ namespace eokas
     DefineElementID(TriangleID);
     DefineElementID(PolygonID);
     DefineElementID(SectionID);
+    DefineElementID(BoneID);
 }
 
 #endif//_EOKAS_MESH_HEADER_H_

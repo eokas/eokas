@@ -1,7 +1,7 @@
 #ifndef _EOKAS_MESH_RAWMESH_H_
 #define _EOKAS_MESH_RAWMESH_H_
 
-#include "./header.h"
+#include "./Header.h"
 #include <variant>
 
 namespace eokas
@@ -9,6 +9,8 @@ namespace eokas
     class RawMesh
     {
     public:
+        static const u32_t VERTEX_BONE_WEIGHT_COUNT = 4;
+        
         struct Vertex
         {
             Vector3 pos;
@@ -39,7 +41,7 @@ namespace eokas
             
             u32_t stride() const
             {
-                return mStride;
+                return sizeof(T);
             }
             
             u32_t corners() const
@@ -57,16 +59,16 @@ namespace eokas
             
             void get(const CornerID& id, T& val)
             {
-                if(id.value() >= mBuffer.size())
+                if(id >= mBuffer.size())
                     return;
-                val = mBuffer.at(id.value());
+                val = mBuffer.at(id);
             }
             
             void set(const CornerID& id, const T& val)
             {
-                if (id.value() >= mBuffer.size())
+                if (id >= mBuffer.size())
                     return;
-                mBuffer[id.value()] = val;
+                mBuffer[id] = val;
             }
             
         private:
@@ -117,6 +119,28 @@ namespace eokas
             Smooth,
         };
         
+        struct Weight
+        {
+            BoneID bones[VERTEX_BONE_WEIGHT_COUNT]{};
+            float weights[VERTEX_BONE_WEIGHT_COUNT]{};
+            
+            void normalize()
+            {
+                float sum = 0;
+                for(float weight : weights)
+                {
+                    sum += weight;
+                }
+                if(sum > 0)
+                {
+                    for(float& weight : weights)
+                    {
+                        weight /= sum;
+                    }
+                }
+            }
+        };
+        
         void clear();
         
         VertexID addVertex(const Vertex& vertex);
@@ -125,6 +149,10 @@ namespace eokas
         u32_t getVertexCount() const;
         const Vertex& getVertex(const VertexID& vertexId) const;
         const Vertex& getVertex(const CornerID& cornerId) const;
+        
+        void setWeight(const VertexID& vertexId, const Weight& weight);
+        void setWeights(const std::vector<Weight>& weightList);
+        const Weight& getWeight(const VertexID& vertexId);
         
         CornerID addCorner(const VertexID& v);
         std::vector<CornerID> addCorners(const std::vector<VertexID>& vertexList);
@@ -166,10 +194,54 @@ namespace eokas
         
     private:
         std::vector<Vertex> vertices;
+        std::vector<Weight> weights;
+        
         std::vector<Corner> corners;
         std::vector<AttributeVariant> attributes;
         std::vector<Triangle> triangles;
         std::vector<Section> sections;
+    };
+    
+    class Skeleton
+    {
+    public:
+        struct Bone
+        {
+            String name;
+            BoneID parent;
+            Vector3 localPosition;
+            Quaternion localRotation;
+            Vector3 localScale;
+        };
+        
+        struct Transform
+        {
+            BoneID bone;
+            Vector3 localPosition;
+            Quaternion localRotation;
+            Vector3 localScale;
+        };
+        
+        struct Pose
+        {
+            std::vector<Transform> transforms;
+        };
+        
+        BoneID addBone(const String& name, const BoneID& parent);
+        BoneID addBone(const Bone& bone);
+        std::vector<BoneID> addBones(const std::vector<Bone>& boneList);
+        void setBone(const BoneID& boneId, const Bone& bone);
+        u32_t getBoneCount() const;
+        BoneID findBone(const String& boneName) const;
+        const Bone& getBone(const BoneID& boneId) const;
+        
+        Pose pose() const;
+        Pose add(const Pose& a, const Pose& b);
+        Pose blend(const Pose& a, const Pose& b, float t);
+        void skin(RawMesh& mesh);
+    
+    private:
+        std::vector<Bone> bones;
     };
 }
 
