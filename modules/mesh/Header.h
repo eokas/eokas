@@ -90,11 +90,11 @@ namespace eokas
         {
             return mValue != -1;
         }
-        
+    
     private:
         u32_t mValue;
     };
-    
+
 #define DefineElementID(type) \
     struct type : public ElementID \
     { \
@@ -108,6 +108,9 @@ namespace eokas
     DefineElementID(PolygonID);
     DefineElementID(SectionID);
     DefineElementID(BoneID);
+    
+    class RawMesh;
+    class Skeleton;
 }
 
 #endif//_EOKAS_MESH_HEADER_H_

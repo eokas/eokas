@@ -7,7 +7,10 @@ namespace eokas
 {
     struct MeshFactory
     {
+        static void createQuad(RawMesh& mesh, float width, float height);
         static void createBox(RawMesh& mesh, float width, float height, float depth);
+        static void createSphere(RawMesh& mesh, float radius, int longitudeSegments, int latitudeSegments);
+        static void createCylinder(RawMesh& mesh, float radius, float height, int longitudeSegments, int latitudeSegments);
     };
 }
 
