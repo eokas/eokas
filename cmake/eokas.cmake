@@ -1,4 +1,12 @@
 
+message("========================================================================")
+message("== EOKAS BUILD SETTINGS")
+message("========================================================================")
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ")
+
+
 cmake_host_system_information(RESULT EOKAS_OS_NAME QUERY OS_NAME)
 message("EOKAS_OS_NNAME = " ${EOKAS_OS_NAME})
 
@@ -13,8 +21,17 @@ message("EOKAS_MODULES_DIR = ${EOKAS_MODULES_DIR}")
 message("EOKAS_BINARY_DIR = ${EOKAS_BINARY_DIR}")
 
 
+macro(eokas_module MODULE_NAME)
+    message("========================================================================")
+    message("== EOKAS MODULE: ${MODULE_NAME}")
+    message("========================================================================")
+    include("${EOKAS_MODULES_DIR}/${MODULE_NAME}/module-build.cmake")
+endmacro()
+
+
 function(eokas_test_setup TEST_LIB_NAME)
-    message("Test> Build ${TEST_LIB_NAME} Start...")
+    message("------------------------------------------------------------------------")
+    message("Test> Build Test Set '${TEST_LIB_NAME}' Start...")
     include(CTest)
 
     if(${BUILD_TESTING})
@@ -35,5 +52,5 @@ function(eokas_test_setup TEST_LIB_NAME)
         endforeach ()
     endif()
 
-    message("Test> Build ${TEST_LIB_NAME} Done.")
+    message("Test> Build Test Set '${TEST_LIB_NAME}' Done.")
 endfunction()

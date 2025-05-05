@@ -2,7 +2,6 @@
 set(EOKAS_TARGET_NAME "imapp")
 set(EOKAS_TARGET_DIR "${EOKAS_MODULES_DIR}/imapp")
 
-message("============================================================================")
 message("EOKAS_TARGET_NAME = ${EOKAS_TARGET_NAME}")
 message("EOKAS_TARGET_DIR = ${EOKAS_TARGET_DIR}")
 
