@@ -156,6 +156,7 @@ namespace eokas
         
         CornerID addCorner(const VertexID& v);
         std::vector<CornerID> addCorners(const std::vector<VertexID>& vertexList);
+        const Corner& getCorner(const CornerID& cornerId) const;
         
         template<typename T>
         AttributeID addAttribute(const AttributeUsage& usage)

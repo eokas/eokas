@@ -115,6 +115,11 @@ namespace eokas
         return result;
     }
     
+    const RawMesh::Corner& RawMesh::getCorner(const CornerID& cornerId) const
+    {
+        return this->corners.at(cornerId);
+    }
+    
     AttributeID RawMesh::findAttribute(const AttributeUsage& usage)
     {
         for (size_t id = 0; id < attributes.size(); ++id)
