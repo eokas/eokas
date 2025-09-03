@@ -2,7 +2,7 @@
 
 namespace eokas
 {
-    static const float M_PI = 3.141592653f;
+    static const float PI = 3.141592653f;
     
     void MeshFactory::createQuad(RawMesh& mesh, float width, float height)
     {
@@ -216,8 +216,8 @@ namespace eokas
         mesh.clear();
         
         // Ensure reasonable parameters
-        longitudeSegments = max(3, longitudeSegments);
-        latitudeSegments = max(2, latitudeSegments);
+        longitudeSegments = std::max(3, longitudeSegments);
+        latitudeSegments = std::max(2, latitudeSegments);
         
         // Add attributes for normals, UVs, and colors
         AttributeID normalAttrId = mesh.addAttribute<Vector3>(RawMesh::AttributeUsage::Normal);
@@ -238,13 +238,13 @@ namespace eokas
         
         for (int lat = 0; lat <= latitudeSegments; ++lat)
         {
-            float theta = float(lat) * (M_PI / float(latitudeSegments));
+            float theta = float(lat) * (PI / float(latitudeSegments));
             float sinTheta = sinf(theta);
             float cosTheta = cosf(theta);
             
             for (int lon = 0; lon <= longitudeSegments; ++lon)
             {
-                float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+                float phi = float(lon) * (2 * PI / float(longitudeSegments));
                 float sinPhi = sinf(phi);
                 float cosPhi = cosf(phi);
                 
@@ -314,8 +314,8 @@ namespace eokas
         mesh.clear();
         
         // Ensure reasonable parameters
-        longitudeSegments = max(3, longitudeSegments);
-        latitudeSegments = max(1, latitudeSegments);
+        longitudeSegments = std::max(3, longitudeSegments);
+        latitudeSegments = std::max(1, latitudeSegments);
         
         float halfHeight = height * 0.5f;
         
@@ -342,7 +342,7 @@ namespace eokas
             
             for (int lon = 0; lon <= longitudeSegments; ++lon)
             {
-                float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+                float phi = float(lon) * (2 * PI / float(longitudeSegments));
                 float sinPhi = sinf(phi);
                 float cosPhi = cosf(phi);
                 
@@ -426,7 +426,7 @@ namespace eokas
         
         for (int lon = 0; lon <= longitudeSegments; ++lon)
         {
-            float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+            float phi = float(lon) * (2 * PI / float(longitudeSegments));
             float sinPhi = sinf(phi);
             float cosPhi = cosf(phi);
             

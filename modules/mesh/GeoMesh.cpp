@@ -145,8 +145,8 @@ namespace eokas
         mesh.indices.clear();
         
         // Ensure reasonable parameters
-        longitudeSegments = max(3, longitudeSegments);
-        latitudeSegments = max(2, latitudeSegments);
+        longitudeSegments = std::max(3, longitudeSegments);
+        latitudeSegments = std::max(2, latitudeSegments);
         
         // Generate vertices
         for (int lat = 0; lat <= latitudeSegments; ++lat)
@@ -219,8 +219,8 @@ namespace eokas
         mesh.indices.clear();
         
         // Ensure reasonable parameters
-        longitudeSegments = max(3, longitudeSegments);
-        latitudeSegments = max(1, latitudeSegments);
+        longitudeSegments = std::max(3, longitudeSegments);
+        latitudeSegments = std::max(1, latitudeSegments);
         
         float halfHeight = height * 0.5f;
         
