@@ -1,8 +1,10 @@
 #include "./GeoMesh.h"
 
+#include <cmath>
+
 namespace eokas
 {
-#define M_PI 3.141592653f
+    static const float PI = 3.141592653f;
     
     void GeoMeshFactory::createQuad(GeoMesh& mesh, float width, float height)
     {
@@ -151,13 +153,13 @@ namespace eokas
         // Generate vertices
         for (int lat = 0; lat <= latitudeSegments; ++lat)
         {
-            float theta = float(lat) * (M_PI / float(latitudeSegments));
+            float theta = float(lat) * (PI / float(latitudeSegments));
             float sinTheta = sinf(theta);
             float cosTheta = cosf(theta);
             
             for (int lon = 0; lon <= longitudeSegments; ++lon)
             {
-                float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+                float phi = float(lon) * (2 * PI / float(longitudeSegments));
                 float sinPhi = sinf(phi);
                 float cosPhi = cosf(phi);
                 
@@ -231,7 +233,7 @@ namespace eokas
             
             for (int lon = 0; lon <= longitudeSegments; ++lon)
             {
-                float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+                float phi = float(lon) * (2 * PI / float(longitudeSegments));
                 float sinPhi = sinf(phi);
                 float cosPhi = cosf(phi);
                 
@@ -296,7 +298,7 @@ namespace eokas
         // Generate cap vertices
         for (int lon = 0; lon <= longitudeSegments; ++lon)
         {
-            float phi = float(lon) * (2 * M_PI / float(longitudeSegments));
+            float phi = float(lon) * (2 * PI / float(longitudeSegments));
             float sinPhi = sinf(phi);
             float cosPhi = cosf(phi);
             
