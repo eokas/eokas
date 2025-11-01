@@ -1,17 +1,24 @@
-#ifndef _DX12_H_
-#define _DX12_H_
+#pragma once
 
 #include "gpu/header.h"
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 
 #include <comdef.h>
 #include <wrl.h>
 using namespace Microsoft;
 using namespace Microsoft::WRL;
 
-#include <dxgi1_6.h>
 #include <d3d12.h>
+#include <d3d12sdklayers.h>
+#include <dxgi1_6.h>
+
 #include <d3d12shader.h>
 #include <d3dcompiler.h>
+
+#include <dxgidebug.h>
 
 namespace eokas
 {
@@ -174,4 +181,3 @@ namespace eokas
     };
 }
 
-#endif

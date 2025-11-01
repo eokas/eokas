@@ -1,7 +1,5 @@
 #include "./GeoMesh.h"
 
-#include <cmath>
-
 namespace eokas
 {
     static const float PI = 3.141592653f;
@@ -147,8 +145,8 @@ namespace eokas
         mesh.indices.clear();
         
         // Ensure reasonable parameters
-        longitudeSegments = std::max(3, longitudeSegments);
-        latitudeSegments = std::max(2, latitudeSegments);
+        longitudeSegments = Math::max_s(3, longitudeSegments);
+        latitudeSegments = Math::max_s(2, latitudeSegments);
         
         // Generate vertices
         for (int lat = 0; lat <= latitudeSegments; ++lat)
@@ -221,8 +219,8 @@ namespace eokas
         mesh.indices.clear();
         
         // Ensure reasonable parameters
-        longitudeSegments = std::max(3, longitudeSegments);
-        latitudeSegments = std::max(1, latitudeSegments);
+        longitudeSegments = Math::max_s(3, longitudeSegments);
+        latitudeSegments = Math::max_s(1, latitudeSegments);
         
         float halfHeight = height * 0.5f;
         

@@ -3,10 +3,9 @@
 
 #include <strsafe.h>
 
-#include <stdlib.h>
+#include <cstdlib>
 #include <malloc.h>
 #include <memory.h>
-#include <tchar.h>
 #include <string>
 #include <exception>
 #include <vector>
@@ -111,13 +110,6 @@ namespace eokas
     
     DX12DescriptorHeap::~DX12DescriptorHeap()
     {
-        for(const auto& heap : mHeaps)
-        {
-            if(heap != nullptr)
-            {
-                heap->Release();
-            }
-        }
         mHeaps.clear();
     }
     

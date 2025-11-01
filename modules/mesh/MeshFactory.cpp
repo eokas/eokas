@@ -218,8 +218,8 @@ namespace eokas
         mesh.clear();
         
         // Ensure reasonable parameters
-        longitudeSegments = std::max(3, longitudeSegments);
-        latitudeSegments = std::max(2, latitudeSegments);
+        longitudeSegments = Math::max_s(3, longitudeSegments);
+        latitudeSegments = Math::max_s(2, latitudeSegments);
         
         // Add attributes for normals, UVs, and colors
         AttributeID normalAttrId = mesh.addAttribute<Vector3>(RawMesh::AttributeUsage::Normal);
@@ -316,8 +316,8 @@ namespace eokas
         mesh.clear();
         
         // Ensure reasonable parameters
-        longitudeSegments = std::max(3, longitudeSegments);
-        latitudeSegments = std::max(1, latitudeSegments);
+        longitudeSegments = Math::max_s(3, longitudeSegments);
+        latitudeSegments = Math::max_s(1, latitudeSegments);
         
         float halfHeight = height * 0.5f;
         

@@ -1,6 +1,8 @@
 #pragma once
 
 // Windows 头文件
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
 #include <Windows.h>
 #include <strsafe.h>
 #include <comdef.h>
@@ -85,7 +87,7 @@ namespace eokas::gpu {
             //MeshFactory::createQuad(mesh, 1.0f, 1.0f);
             //MeshFactory::createBox(mesh, 1.0f, 1.0f, 1.0f);
             //MeshFactory::createSphere(mesh, 0.5f, 30, 30);
-            MeshFactory::createCylinder(mesh, 0.5f, 1.0f, 30, 3);
+            GeoMeshFactory::createCylinder(mesh, 0.5f, 1.0f, 30, 3);
             // vb
             {
                 vDataStride = sizeof(Vertex);

@@ -46,13 +46,22 @@ namespace eokas
     struct Resource
     {
         using Ref = std::shared_ptr<Resource>;
-        
+
+        virtual ~Resource() = default;
         virtual void* getNativeResource() const = 0;
     };
     
     struct RenderTarget : public Resource
     {
         using Ref = std::shared_ptr<RenderTarget>;
+    };
+
+    enum class BufferUsage
+    {
+        VertexBuffer,
+        IndexBuffer,
+        UniformBuffer,
+        UnorderedAccess
     };
     
     struct DynamicBuffer : public Resource
@@ -69,6 +78,22 @@ namespace eokas
         uint32_t depth = 0;
         Format format = Format::Unknown;
         uint32_t mipCount = 1;
+    };
+
+    enum class SamplerFilterMode { Point, Linear, Anisotropic };
+
+    enum class SamplerAddressMode { Clamp, Border, Repeat, Mirror };
+
+    struct SamplerState
+    {
+        using Ref = std::shared_ptr<SamplerState>;
+
+        SamplerFilterMode minFilter = SamplerFilterMode::Linear;
+        SamplerFilterMode magFilter = SamplerFilterMode::Linear;
+        SamplerFilterMode mipFilter = SamplerFilterMode::Linear;
+        SamplerAddressMode addressU = SamplerAddressMode::Clamp;
+        SamplerAddressMode addressV = SamplerAddressMode::Clamp;
+        SamplerAddressMode addressW = SamplerAddressMode::Clamp;
     };
     
     struct Texture : public Resource
@@ -108,6 +133,8 @@ namespace eokas
     struct Program
     {
         using Ref = std::shared_ptr<Program>;
+
+        virtual ~Program() = default;
         
         virtual const ProgramOptions& getOptions() const = 0;
         virtual uint32_t getTextureCount() const = 0;
@@ -122,11 +149,47 @@ namespace eokas
     {
         None, Front, Back
     };
+
+    enum class CompareOp
+    {
+         Always, Never, Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual
+    };
+
+    enum class StencilOp {
+        Keep, Zero, Replace, IncrementClamp, DecrementClamp, Invert,
+        IncrementWrap, DecrementWrap
+    };
+
+    struct DepthStencilState
+    {
+        bool depthTest = true;
+        bool depthWrite = true;
+        CompareOp depthFunc = CompareOp::Always;
+        StencilOp stencilOp = StencilOp::Keep;
+    };
+
+    enum class BlendFactor
+    {
+        Zero, One, Color, Alpha, OneMinusColor, OneMinusAlpha,
+    };
+
+    enum class BlendOp {
+        Add, Subtract, ReverseSubtract, Min, Max
+    };
+
+    struct BlendState
+    {
+        bool enabled = false;
+        BlendFactor source = BlendFactor::One;
+        BlendFactor destination = BlendFactor::Zero;
+    };
     
     struct PipelineState
     {
         using Ref = std::shared_ptr<PipelineState>;
-        
+
+        virtual ~PipelineState() = default;
+
         virtual void begin() = 0;
         virtual void setVertexElements(std::vector<VertexElement>& vElements) = 0;
         virtual void setProgram(ProgramType type, Program::Ref program) = 0;
@@ -157,6 +220,8 @@ namespace eokas
     struct CommandBuffer
     {
         using Ref = std::shared_ptr<CommandBuffer>;
+
+        virtual ~CommandBuffer() = default;
         
         virtual void reset(PipelineState::Ref pso) = 0;
         virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets) = 0;
