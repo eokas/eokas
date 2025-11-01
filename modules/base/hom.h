@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_HOM_H_
-#define  _EOKAS_BASE_HOM_H_
-
+#pragma once
 /**
  * HOM: Hierarchical Object Model.
  * It is similar with DOM (Document Object Model)
@@ -84,5 +81,3 @@ namespace eokas {
     };
     
 }
-
-#endif//_EOKAS_BASE_HOM_H_

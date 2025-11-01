@@ -1,6 +1,4 @@
-
-#ifndef _EOKAS_BASE_MAIN_H_
-#define _EOKAS_BASE_MAIN_H_
+#pragma once
 
 #include "./header.h"
 #include "./math.h"
@@ -27,5 +25,3 @@
 #include "./memory.h"
 #include "./os.h"
 #include "./dll.h"
-
-#endif //_EOKAS_BASE_MAIN_H_

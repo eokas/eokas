@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_FILE_H_
-#define  _EOKAS_BASE_FILE_H_
-
+#pragma once
 #include "./header.h"
 #include "./stream.h"
 
@@ -110,5 +107,3 @@ namespace eokas {
         static String workingPath();
     };
 }
-
-#endif//_EOKAS_BASE_FILE_H_

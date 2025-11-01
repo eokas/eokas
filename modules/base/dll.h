@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_ASSEMBLY_H_
-#define  _EOKAS_BASE_ASSEMBLY_H_
-
+#pragma once
 #include "./header.h"
 #include "./string.h"
 
@@ -34,5 +31,3 @@ namespace eokas {
     };
     
 }
-
-#endif//_EOKAS_BASE_ASSEMBLY_H_

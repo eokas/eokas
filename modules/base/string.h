@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_STRING_H_
-#define  _EOKAS_BASE_STRING_H_
-
+#pragma once
 #include "./header.h"
 #include <sstream>
 #include <cstdarg>
@@ -316,5 +313,3 @@ using StringValueVector = std::vector<StringValue>;
 using StringValueMap = std::map<String, StringValue>;
 
 }
-
-#endif//_EOKAS_BASE_STRING_H_

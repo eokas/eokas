@@ -1,6 +1,4 @@
-
-#ifndef  _EOKAS_BASE_HEADER_H_
-#define  _EOKAS_BASE_HEADER_H_
+#pragma once
 
 /*
 =================================================================
@@ -266,31 +264,44 @@ namespace eokas {
     
     using String = class String;
     
-    class Interface {
+    class Interface
+    {
     public:
-        virtual ~Interface() {
-        }
+        virtual ~Interface() = default;
     };
     
-    class Object {
+    class Object
+    {
     public:
-        virtual ~Object() {
-        }
+        virtual ~Object() = default;
         
-        virtual const std::type_info& dataType() {
+        virtual const std::type_info& dataType()
+        {
             return typeid(*this);
         }
         
         template<typename T>
-        bool is() {
+        bool is()
+        {
             return typeid(T).before(this->dataType());
         }
         
         template<typename T>
-        T* as() {
+        T* as()
+        {
             return dynamic_cast<T*>(this);
         }
     };
-}
 
-#endif//_EOKAS_BASE_HEADER_H_
+    template<typename T, typename S>
+    std::shared_ptr<T> static_cast_ptr(const std::shared_ptr<S>& ptr)
+    {
+        return std::shared_ptr<T>(static_cast<T*>(*ptr));
+    }
+
+    template<typename T, typename S>
+    std::shared_ptr<T> dynamic_cast_ptr(const std::shared_ptr<S>& ptr)
+    {
+        return std::shared_ptr<T>(dynamic_cast<T*>(*ptr));
+    }
+}

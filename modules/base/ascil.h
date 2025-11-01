@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_ASCIL_H_
-#define  _EOKAS_BASE_ASCIL_H_
-
+#pragma once
 #include "./header.h"
 
 namespace eokas {
@@ -95,5 +92,3 @@ namespace eokas {
     };
     
 }
-
-#endif//_EOKAS_BASE_ASCIL_H_

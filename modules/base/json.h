@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_JSON_H_
-#define  _EOKAS_BASE_JSON_H_
-
+#pragma once
 #include "./hom.h"
 
 namespace eokas {
@@ -10,5 +7,3 @@ namespace eokas {
         static HomNode parse(const String& source);
     };
 }
-
-#endif//_EOKAS_BASE_JSON_H_

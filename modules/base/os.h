@@ -1,7 +1,4 @@
-
-#ifndef _EOKAS_BASE_OS_H_
-#define _EOKAS_BASE_OS_H_
-
+#pragma once
 #include "./header.h"
 
 namespace eokas {
@@ -25,5 +22,3 @@ namespace eokas {
         static String getMacAddress();
     };
 }
-
-#endif //_EOKAS_BASE_OS_H_

@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_RANDOM_H_
-#define  _EOKAS_BASE_RANDOM_H_
-
+#pragma once
 #include "./header.h"
 
 namespace eokas {
@@ -22,5 +19,3 @@ namespace eokas {
     using Random = Random_Fake;
     
 }
-
-#endif//_EOKAS_BASE_RANDOM_H_

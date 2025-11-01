@@ -1,7 +1,4 @@
-
-#ifndef _EOKAS_BASE_STREAM_H_
-#define _EOKAS_BASE_STREAM_H_
-
+#pragma once
 #include "header.h"
 #include "./string.h"
 
@@ -185,5 +182,3 @@ namespace eokas
     };
     
 }
-
-#endif//_EOKAS_BASE_STREAM_H_

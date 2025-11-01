@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_NETWORK_H_
-#define  _EOKAS_BASE_NETWORK_H_
-
+#pragma once
 #include "./header.h"
 #include "./socket.h"
 
@@ -58,5 +55,3 @@ namespace eokas {
     };
     
 }
-
-#endif//_EOKAS_BASE_NETWORK_H_

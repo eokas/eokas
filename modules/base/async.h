@@ -1,6 +1,4 @@
-#ifndef _EOKAS_BASE_ASYNC_H_
-#define _EOKAS_BASE_ASYNC_H_
-
+#pragma once
 #include "./header.h"
 
 #include <atomic>
@@ -106,5 +104,3 @@ namespace eokas {
     };
     
 }
-
-#endif//_EOKAS_BASE_ASYNC_H_

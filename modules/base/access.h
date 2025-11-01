@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_ACCESS_H_
-#define  _EOKAS_BASE_ACCESS_H_
-
+#pragma once
 #include "./header.h"
 
 namespace eokas {
@@ -113,5 +110,3 @@ namespace eokas {
         ModifyFunc mOnModify;
     };
 }
-
-#endif//_EOKAS_BASE_ACCESS_H_

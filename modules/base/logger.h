@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_LOGGER_H_
-#define  _EOKAS_BASE_LOGGER_H_
-
+#pragma once
 #include "./header.h"
 #include "./string.h"
 #include "./signal.h"
@@ -52,5 +49,3 @@ namespace eokas {
 #define _log_error_to(name, fmt, ...) Logger::log(name)->error(fmt, __VA_ARGS__)
 
 }
-
-#endif//_EOKAS_BASE_LOGGER_H_

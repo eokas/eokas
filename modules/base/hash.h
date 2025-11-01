@@ -1,7 +1,4 @@
-
-#ifndef _EOKAS_BASE_HASH_H_
-#define _EOKAS_BASE_HASH_H_
-
+#pragma once
 #include "./header.h"
 
 namespace eokas {
@@ -130,5 +127,3 @@ namespace eokas {
     
     String sha256(const String& input);
 }
-
-#endif //_EOKAS_BASE_HASH_H_

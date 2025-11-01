@@ -1,7 +1,5 @@
 
-#ifndef  _EOKAS_BASE_CLI_H_
-#define  _EOKAS_BASE_CLI_H_
-
+#pragma once
 #include "./header.h"
 #include "./string.h"
 #include <optional>
@@ -50,5 +48,3 @@ namespace eokas::cli {
     };
     
 }
-
-#endif//_EOKAS_BASE_CLI_H_

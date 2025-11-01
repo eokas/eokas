@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_MEMORY_H_
-#define  _EOKAS_BASE_MEMORY_H_
-
+#pragma once
 #include "./header.h"
 #include "./stream.h"
 
@@ -102,5 +99,3 @@ namespace eokas {
     };
     
 }
-
-#endif//_EOKAS_BASE_MEMORY_H_

@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_PIXELS_H_
-#define  _EOKAS_BASE_PIXELS_H_
-
+#pragma once
 #include "./header.h"
 
 namespace eokas {
@@ -176,5 +173,3 @@ namespace eokas {
     };
     
 }
-
-#endif//_EOKAS_BASE_PIXELS_H_

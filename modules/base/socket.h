@@ -1,7 +1,4 @@
-
-#ifndef  _EOKAS_BASE_SOCKET_H_
-#define  _EOKAS_BASE_SOCKET_H_
-
+#pragma once
 #include "./header.h"
 
 #if _EOKAS_OS == _EOKAS_OS_WIN64 || _EOKAS_OS == _EOKAS_OS_WIN32
@@ -161,5 +158,3 @@ namespace eokas {
         static const Option<IPPROTO_TCP, TCP_NODELAY, int> nodelay;
     };
 }
-
-#endif//_EOKAS_BASE_NETWORK_H_

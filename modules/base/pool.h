@@ -1,7 +1,4 @@
 
-#ifndef  _EOKAS_BASE_POOL_H_
-#define  _EOKAS_BASE_POOL_H_
-
 #include "./header.h"
 #include <functional>
 
@@ -121,5 +118,3 @@ namespace eokas {
     };
     
 }
-
-#endif//_EOKAS_BASE_ASCIL_H_
