@@ -1,12 +1,11 @@
-#ifndef _EOKAS_DATAPOT_SCHEMA_H_
-#define _EOKAS_DATAPOT_SCHEMA_H_
-
+#pragma once
 #include "./header.h"
 #include "./value.h"
 
-namespace eokas::datapot {
-
-    enum class SchemaType {
+namespace eokas::datapot
+{
+    enum class SchemaType
+    {
         None,
         Int,
         Float,
@@ -16,18 +15,22 @@ namespace eokas::datapot {
         Struct,
     };
 
-    class Schema {
+    class Schema
+    {
     public:
-        struct Member {
+        struct Member
+        {
             String name;
             Schema* schema;
         };
 
-        struct ListBody {
+        struct ListBody
+        {
             Schema* element = nullptr;
         };
 
-        struct StructBody {
+        struct StructBody
+        {
             std::vector<Member> members = {};
         };
         
@@ -55,13 +58,15 @@ namespace eokas::datapot {
     private:
         SchemaType mType;
         String mName;
-        union {
+        union
+        {
             ListBody* listBody;
             StructBody* structBody;
         } mBody;
     };
 
-    class SchemaHeap {
+    class SchemaHeap
+    {
     public:
         SchemaHeap();
         virtual ~SchemaHeap();
@@ -77,5 +82,3 @@ namespace eokas::datapot {
         std::vector<Schema*> mSchemas;
     };
 }
-
-#endif//_EOKAS_DATAPOT_SCHEMA_H_

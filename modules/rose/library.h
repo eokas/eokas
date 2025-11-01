@@ -1,13 +1,13 @@
-
-#ifndef _EOKAS_DATAPOT_LIBRARY_H_
-#define _EOKAS_DATAPOT_LIBRARY_H_
+#pragma once
 
 #include "./header.h"
 #include "./value.h"
 #include "./schema.h"
 
-namespace eokas::datapot {
-    class Library {
+namespace eokas::datapot
+{
+    class Library
+    {
     public:
         Library(const String& name);
         virtual ~Library();
@@ -113,5 +113,3 @@ namespace eokas::datapot {
         std::map<String, Value*> mRoot;
     };
 }
-
-#endif//_EOKAS_DATAPOT_LIBRARY_H_

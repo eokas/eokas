@@ -1,10 +1,12 @@
+/**
+ Rapid Object Storage Engine
+ */
 
-#ifndef _EOKAS_DATAPOT_HEADER_H_
-#define _EOKAS_DATAPOT_HEADER_H_
-
+#pragma once
 #include "base/main.h"
 
-namespace eokas::datapot {
+namespace eokas::datapot
+{
     class Library;
 
     class Schema;
@@ -12,5 +14,3 @@ namespace eokas::datapot {
 
     struct Value;
 }
-
-#endif //_EOKAS_DATAPOT_HEADER_H_

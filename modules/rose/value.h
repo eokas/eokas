@@ -1,60 +1,71 @@
-#ifndef _EOKAS_DATAPOT_VALUE_H_
-#define _EOKAS_DATAPOT_VALUE_H_
-
+#pragma once
 #include "./header.h"
 
 namespace eokas::datapot {
-    struct Value {
+    struct Value
+    {
         Schema* schema;
-        union {
+        union
+        {
             i64_t i64;
             u64_t u64;
             f64_t f64;
         } value;
         
-        void set(Schema* schema, i32_t val) {
+        void set(Schema* schema, i32_t val)
+        {
             this->schema = schema;
             this->value.i64 = val;
         }
         
-        void set(Schema* schema, u32_t val) {
+        void set(Schema* schema, u32_t val)
+        {
             this->schema = schema;
             this->value.u64 = val;
         }
         
-        void set(Schema* schema, i64_t val) {
+        void set(Schema* schema, i64_t val)
+        {
             this->schema = schema;
             this->value.i64 = val;
         }
         
-        void set(Schema* schema, u64_t val) {
+        void set(Schema* schema, u64_t val)
+        {
             this->schema = schema;
             this->value.u64 = val;
         }
 
-        void set(Schema* schema, f64_t val) {
+        void set(Schema* schema, f64_t val)
+        {
             this->schema = schema;
             this->value.f64 = val;
         }
     };
     
-    struct List {
+    struct List
+    {
         std::vector<Value> elements;
 
-        Value& get(u32_t index) {
+        Value& get(u32_t index)
+        {
             return elements.at(index);
         }
 
-        void set(u32_t index, const Value& value) {
+        void set(u32_t index, const Value& value)
+        {
             elements.at(index) = value;
         }
 
-        void push(const Value& value) {
+        void push(const Value& value)
+        {
             elements.push_back(value);
         }
 
-        bool pop(Value& value) {
-            if(elements.empty()) {
+        bool pop(Value& value)
+        {
+            if(elements.empty())
+            {
                 return false;
             }
             value = elements.back();
@@ -63,19 +74,23 @@ namespace eokas::datapot {
         }
     };
     
-    struct Object {
+    struct Object
+    {
         std::map<String, Value> members;
 
-        Value& get(const String& name) {
+        Value& get(const String& name)
+        {
             return members.at(name);
         }
 
-        void set(const String& name, const Value& value) {
+        void set(const String& name, const Value& value)
+        {
             members.at(name) = value;
         }
     };
     
-    class ValueHeap {
+    class ValueHeap
+    {
     public:
         ValueHeap(SchemaHeap& schemaHeap);
         virtual ~ValueHeap();
@@ -122,5 +137,3 @@ namespace eokas::datapot {
         SchemaHeap& mSchemaHeap;
     };
 }
-
-#endif//_EOKAS_DATAPOT_VALUE_H_
