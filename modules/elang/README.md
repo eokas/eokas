@@ -8,9 +8,9 @@ Eokas is an open source programming language that is similar to C++ but makes it
 * CMake 3.20.x or later.
 
 ### System Environment Variables
-|ENV                  |Comment                           |Reference                                                               |
-|---------------------|----------------------------------|------------------------------------------------------------------------|
-|LLVM_SDK_PATH        |LLVM root path                    |https://llvm.org                                                        |
+|ENV             |Comment            |Reference             |
+|----------------|-------------------|----------------------|
+|LLVM_SDK_PATH   |LLVM root path     |https://llvm.         |
 
 ### Build Steps
 * On Linux and macOS, please execute build.sh in terminal.
