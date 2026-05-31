@@ -12,7 +12,7 @@
 | **推论 / 规则** | 由公理、定义与操作导出的强制约束 |
 | **示例** | 说明性片段；附录示例不引入新定义 |
 
-章节依九部分、§1–§22 连续编号：
+章节依十部分、§1–§23 连续编号：
 
 | 部分 | 节号 | 标题 |
 |------|------|------|
@@ -24,7 +24,8 @@
 | 第六部分 | §15–§16 | 推论规则 |
 | 第七部分 | §17–§18 | 静态约束 |
 | 第八部分 | §19–§21 | 语言生态 |
-| 第九部分 | §22 | 附录 — 示例 |
+| 第九部分 | §22 | 编译器内核声明 |
+| 第十部分 | §23 | 附录 — 示例 |
 
 ### 编辑约定
 
@@ -42,9 +43,9 @@
 | 规范用词 | 写法 | 说明 |
 |---------|------|------|
 | 进程 | `Program` | 当前进程，堆空间唯一所有者 |
-| 堆句柄 | `heap<T>` | 元素类型为 `T` 的堆访问权限（§5） |
-| 槽位 | `slot<T>` | 元素类型为 `T` 的堆内位置标识（§5） |
-| 句柄 | — | 统称 `heap<T>` / `slot<T>` 变量 |
+| 堆句柄 | `Heap<T>` | 元素类型为 `T` 的堆访问权限（§5） |
+| 槽位 | `Slot<T>` | 元素类型为 `T` 的堆内位置标识（§5） |
+| 句柄 | — | 统称 `Heap<T>` / `Slot<T>` 变量 |
 | 无效 | 无效句柄/槽位 | `is_valid(x) == false`；与公理 A2「失效」等价 |
 
 **节内体例。** 语法构造按 **定义** → **签名**（内置函数）→ **语义规则** → **示例** 排列；无内容则省略。纯运算符/控制流节可在表前以一行 **语义规则** 总述。
@@ -61,7 +62,7 @@
 
 **内存模型定位。** 对比 C 语言，Eokas 核心目标仅为解决**悬垂指针（野指针）**问题，全程不引入垃圾回收（GC）、引用计数，不提供任何自动内存管理机制。
 
-**公理 A1（资源所有权）。** **Program**（当前进程）为堆内存空间唯一所有者；`heap<T>`、`slot<T>` 句柄为值类型，所有权归属所在作用域（§5）。`make` / `drop` 对 Program 操作；模块不改变堆所有者（§14）。
+**公理 A1（资源所有权）。** **Program**（当前进程）为堆内存空间唯一所有者；`Heap<T>`、`Slot<T>` 句柄为值类型，所有权归属所在作用域（§5）。`make` / `drop` 对 Program 操作；模块不改变堆所有者（§14）。
 
 **公理 A2（失效原则）。** 执行内存释放操作后，所有指向该内存的访问权限与位置标识均自动置为无效状态。
 
@@ -77,7 +78,7 @@
 
 | 类别 | 内容 |
 |------|------|
-| 关键字 | `break`, `case`, `continue`, `default`, `do`, `drop`, `else`, `enum`, `export`, `for`, `func`, `heap`, `if`, `import`, `make`, `meta`, `module`, `return`, `schema`, `self`, `slot`, `struct`, `switch`, `val`, `var`, `while` |
+| 关键字 | `break`, `case`, `continue`, `default`, `do`, `else`, `enum`, `export`, `for`, `func`, `if`, `import`, `meta`, `module`, `return`, `schema`, `self`, `struct`, `switch`, `val`, `var`, `while` |
 | 基础类型 | `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `bool`, `void`, `String`, `func` |
 | 字面量 | 整数、浮点、字符串、布尔（见下文） |
 | 注释 | 单行 `//`（至行尾）；多行 `/* */`（可跨行）；不参与编译 |
@@ -130,7 +131,7 @@
 
 ### 4. 字符串
 
-**定义。** `String` 为语言内部预定义类型，与 `heap` 无关。
+**定义。** `String` 为语言内部预定义类型，与堆内存无关。
 
 **语义说明**
 
@@ -154,76 +155,76 @@
 
 由 §1 内存公理，本节统一定义堆内存相关的类型与操作。操作语义受 §1 公理约束，推论见 §15。
 
-**元素类型。** `heap<T>`、`slot<T>` 中的 `T` 为**元素类型**，由使用处指定（如 `make heap<i32>(n)`）。此 `T` 非 §17 的类型形参。
+**元素类型。** `Heap<T>`、`Slot<T>` 中的 `T` 为**元素类型**，由使用处指定（如 `make<i32>(n)`）。此 `T` 非 §17 的类型形参。
 
 **所有权说明**（详述，公理 A1 摘要见 §1）
 
-- **堆内存空间**（`heap<T>` 所指向的存储）归 **Program** 所有；`make` 申请、`drop` 释放。
-- **句柄**（`heap<T>`、`slot<T>` 变量或字段）为访问凭证，所有权归属所在作用域；作用域结束时句柄变量销毁，**不自动**调用 `drop`。
+- **堆内存空间**（`Heap<T>` 所指向的存储）归 **Program** 所有；`make` 申请、`drop` 释放。
+- **句柄**（`Heap<T>`、`Slot<T>` 变量或字段）为访问凭证，所有权归属所在作用域；作用域结束时句柄变量销毁，**不自动**调用 `drop`。
 - 模块内 `make` / `drop` 操作 Program 名下堆内存；模块不改变堆所有者（见 §14）。
 
-**无效状态。** 无效 `heap<T>` / 无效 `slot<T>` 指 `is_valid(x) == false`（与公理 A2「失效」等价）。
+**无效状态。** 无效 `Heap<T>` / 无效 `Slot<T>` 指 `is_valid(x) == false`（与公理 A2「失效」等价）。
 
-#### 5.1 堆句柄 (`heap<T>`)
+#### 5.1 堆句柄 (`Heap<T>`)
 
-**定义。** `heap<T>` 为对 Program 名下、元素类型为 `T` 的堆内存的访问权限（句柄），值类型，具备失效特性。所有权见上文。
+**定义。** `Heap<T>` 为对 Program 名下、元素类型为 `T` 的堆内存的访问权限（句柄），值类型，具备失效特性。所有权见上文。
 
-语法：`heap<T>`
+语法：`Heap<T>`
 
-- 下标访问获取 `slot<T>`（§5.5）
-- 创建：`make heap<T>(count: u32)`（§5.3）
+- 下标访问获取 `Slot<T>`（§5.5）
+- 创建：`make<T>(count: u32)`（§5.3）
 - 释放：`drop`（§5.4）
 
-#### 5.2 槽位 (`slot<T>`)
+#### 5.2 槽位 (`Slot<T>`)
 
-**定义。** `slot<T>` 标识元素类型为 `T` 的堆容器内具体位置，值类型，具备失效特性。所有权见上文。
+**定义。** `Slot<T>` 标识元素类型为 `T` 的堆容器内具体位置，值类型，具备失效特性。所有权见上文。
 
-语法：`slot<T>`
+语法：`Slot<T>`
 
-- 位置遍历：`next` / `last`（§5.6），调用返回新 `slot<T>`，原槽位不变
+- 位置遍历：`next` / `last`（§5.6），调用返回新 `Slot<T>`，原槽位不变
 
-#### 5.3 make 表达式
+#### 5.3 make
 
-**定义。** `make` 为语言内置表达式，分配可容纳 `count` 个 `T` 类型元素的堆内存。
+**定义。** `make` 为 `Program` 的成员函数（§22.5），因 `global=true` 全局可见，分配可容纳 `count` 个 `T` 类型元素的堆内存。
 
 **签名**
 
 ```eok
-make heap<T>(count: u32) -> heap<T>
+make<T>(val count: u32) -> Heap<T>
 ```
 
 **语义规则**
 
 1. `count` 表示分配的 **`T` 类型元素数量**；
-2. 在 Program 名下分配堆内存，并返回可访问 `[0, count)` 的 `heap<T>` 句柄；句柄绑定于调用方作用域；
-3. `count` 为 `0` 时返回无效 `heap<T>`。
+2. 在 Program 名下分配堆内存，并返回可访问 `[0, count)` 的 `Heap<T>` 句柄；句柄绑定于调用方作用域；
+3. `count` 为 `0` 时返回无效 `Heap<T>`。
 
 **示例**
 
 ```eok
-val arr = make heap<i32>(1024);
-var buf = make heap<u8>(256);
+val arr = make<i32>(1024);
+var buf = make<u8>(256);
 ```
 
 #### 5.4 drop
 
-**定义。** `drop` 为语言内置函数，释放堆内存；`<T>` 由实参类型推导。
+**定义。** `drop` 为 `Program` 的成员函数（§22.5），因 `global=true` 全局可见，释放堆内存；`<T>` 由实参类型推导。
 
 **签名**
 
 ```eok
-drop<T>(val x: heap<T>) -> void
+drop<T>(val x: Heap<T>) -> void
 ```
 
 **语句形式**
 
 ```eok
-drop expr;
+drop(expr);
 ```
 
-等价于以 `expr` 为实参调用 `drop`；`expr` 类型必须为 `heap<T>`。仅接受 `heap<T>` 实参，传入 `slot<T>` 或其他类型为编译错误。
+等价于以 `expr` 为实参调用 `drop`；`expr` 类型必须为 `Heap<T>`。仅接受 `Heap<T>` 实参，传入 `Slot<T>` 或其他类型为编译错误。
 
-**语义规则。** 执行 `drop` 后，Program 释放对应堆内存，该堆上所有 `heap<T>` 句柄及关联 `slot<T>` 变为无效（§15 R5）。
+**语义规则。** 执行 `drop` 后，Program 释放对应堆内存，该堆上所有 `Heap<T>` 句柄及关联 `Slot<T>` 变为无效（§15 R5）。
 
 #### 5.5 下标访问
 
@@ -231,42 +232,42 @@ drop expr;
 expr[index]
 ```
 
-- `expr` 类型必须为 `heap<T>`；`index` 必须为整数类型；结果类型为 `slot<T>`
-- 下标必须在 `[0, count)` 内（`count` 见 §5.3）：在范围内返回有效 `slot<T>`；**越界返回无效 `slot<T>`**（非 UB，§15 R4）
-- `expr` 为无效 `heap<T>` 时，返回无效 `slot<T>`
+- `expr` 类型必须为 `Heap<T>`；`index` 必须为整数类型；结果类型为 `Slot<T>`
+- 下标必须在 `[0, count)` 内（`count` 见 §5.3）：在范围内返回有效 `Slot<T>`；**越界返回无效 `Slot<T>`**（非 UB，§15 R4）
+- `expr` 为无效 `Heap<T>` 时，返回无效 `Slot<T>`
 - 读写元素内容必须通过 §5.9 成员访问或 §5.7 赋值
 
 #### 5.6 槽位遍历
 
 **语义规则**
 
-1. `slot.next(offset: i32)` / `slot.last(offset: i32)`：`offset` 为相对偏移；分别向堆后方/前方移动，返回新 `slot<T>`，原槽位不变。
-2. 偏移后超出所属 `heap<T>` 索引范围，或原槽位已无效：返回无效 `slot<T>`（§15 R4）。
+1. `slot.next(offset: u32)` / `slot.last(offset: u32)`：`offset` 为相对偏移；分别向堆后方/前方移动，返回新 `Slot<T>`，原槽位不变。
+2. 偏移后超出所属 `Heap<T>` 索引范围，或原槽位已无效：返回无效 `Slot<T>`（§15 R4）。
 3. 对无效槽位调用时行为见 §5.8 语义规则 5。
 
 #### 5.7 赋值
 
-- 左操作数可为 `slot` 成员访问表达式（§5.9）
+- 左操作数可为 `Slot` 成员访问表达式（§5.9）
 - 左右两侧类型必须一致
 
 #### 5.8 有效性校验 (is_valid)
 
-**定义。** `is_valid` 为语言内置函数，用于查询 `heap<T>` 或 `slot<T>` 是否处于有效状态；`<T>` 由实参类型推导。
+**定义。** `is_valid` 为 `Program` 的成员函数（§22.5），因 `global=true` 全局可见，用于查询 `Heap<T>` 或 `Slot<T>` 是否处于有效状态；`<T>` 由实参类型推导。
 
 **签名**
 
 ```eok
-is_valid<T>(val x: heap<T>) -> bool
-is_valid<T>(val x: slot<T>) -> bool
+is_valid<T>(val x: Heap<T>) -> bool
+is_valid<T>(val x: Slot<T>) -> bool
 ```
 
 **语义规则**
 
 1. 返回 `true` 表示句柄/槽位有效，可安全执行 §5 规定的相关操作；返回 `false` 表示已失效。
-2. 仅接受 `heap<T>` 与 `slot<T>` 实参；传入其他类型为编译错误。
-3. 语言内置，全局可用，无需 `import`。
+2. 仅接受 `Heap<T>` 与 `Slot<T>` 实参；传入其他类型为编译错误。
+3. 因 `Program` 的 `global=true`，全局可用，无需 `import`。
 4. **宜**在不确定有效性时调用（公理 A3、§15 R1、R2）；编译器不强制、不产生警告。
-5. **未校验后果**：对无效 `heap<T>` 或 `slot<T>` 执行遍历、`drop`、字段读写等 §5 相关操作时，行为未定义（UB）；编译器不作运行时检测。另有明确规定的操作（如 §15 R4 下标越界、`next` / `last` 返回值）从其规定。
+5. **未校验后果**：对无效 `Heap<T>` 或 `Slot<T>` 执行遍历、`drop`、字段读写等 §5 相关操作时，行为未定义（UB）；编译器不作运行时检测。另有明确规定的操作（如 §15 R4 下标越界、`next` / `last` 返回值）从其规定。
 
 #### 5.9 槽位解引用（成员访问）
 
@@ -278,26 +279,26 @@ slot_expr.field
 
 **语义规则**
 
-1. `slot_expr` 类型必须为 `slot<T>`，且 `T` 为结构体类型。
+1. `slot_expr` 类型必须为 `Slot<T>`，且 `T` 为结构体类型。
 2. `field` 为 `T` 的已声明字段；结果类型为该字段类型。
-3. 作为右值时，读取该 `slot<T>` 所指位置处结构体实例的对应字段。
-4. 作为赋值左值时，写入该 `slot<T>` 所指位置处结构体实例的对应字段（见 §5.7、§10.9）。
-5. 对无效 `slot<T>` 读写字段的行为未定义（UB）；宜先调用 `is_valid`（§15 R1）。
+3. 作为右值时，读取该 `Slot<T>` 所指位置处结构体实例的对应字段。
+4. 作为赋值左值时，写入该 `Slot<T>` 所指位置处结构体实例的对应字段（见 §5.7、§10.9）。
+5. 对无效 `Slot<T>` 读写字段的行为未定义（UB）；宜先调用 `is_valid`（§15 R1）。
 
-#### 5.10 所属堆句柄 (heap_of)
+#### 5.10 所属堆句柄 (space_of)
 
-**定义。** `heap_of` 为语言内置函数，获取包含指定 `slot<T>` 的堆句柄；`<T>` 由实参类型推导。
+**定义。** `space_of` 为 `Program` 的成员函数（§22.5），因 `global=true` 全局可见，获取包含指定 `Slot<T>` 的堆句柄；`<T>` 由实参类型推导。
 
 **签名**
 
 ```eok
-heap_of<T>(val s: slot<T>) -> heap<T>
+space_of<T>(val s: Slot<T>) -> Heap<T>
 ```
 
 **语义规则**
 
-1. 返回 `s` 所属的那块 `heap<T>` 句柄。
-2. 对无效 `slot<T>` 调用时，返回无效 `heap<T>`；宜先调用 `is_valid`（§15 R1）。
+1. 返回 `s` 所属的那块 `Heap<T>` 句柄。
+2. 对无效 `Slot<T>` 调用时，返回无效 `Heap<T>`；宜先调用 `is_valid`（§15 R1）。
 
 ---
 
@@ -307,11 +308,23 @@ heap_of<T>(val s: slot<T>) -> heap<T>
 
 **定义。** 函数类型用于描述函数签名，即参数类型与返回值类型。
 
-语法：
+**非泛型函数类型**
 
 ```eok
 func(var param1: ParamType1, var param2: ParamType2, ...) -> ReturnType
 ```
+
+**泛型函数类型**
+
+```eok
+func<T>(var param1: T, var param2: T, ...) -> ReturnType
+func<T1, T2>(var a: T1, var b: T2) -> T1
+```
+
+**语义规则**
+
+1. 泛型函数类型在函数类型基础上增加类型形参列表（`<T>` / `<T1, T2>`），形参规则同 §17.1。
+2. 调用泛型函数类型的值时，必须在调用处显式指定类型实参（如 `make<i32>(10)`）。
 
 ### 7. 枚举
 
@@ -337,7 +350,7 @@ struct Vec3 {
 };
 ```
 
-结构体字段的类型必须为已定义类型（含 §6 函数类型、§5 `heap<T>` 与 `slot<T>`、§7 枚举等）。泛型定义见 §17；实现 Schema 约束见 §18.2。
+结构体字段的类型必须为已定义类型（含 §6 函数类型、§5 `Heap<T>` 与 `Slot<T>`、§7 枚举等）。泛型定义见 §17；实现 Schema 约束见 §18.2。
 
 ---
 
@@ -356,7 +369,7 @@ var identifier = expression; // 可变变量
 
 ### 10. 表达式与运算符
 
-本节定义通用表达式形式及其类型约束。`heap<T>` / `slot<T>` 相关操作见 §5。
+本节定义通用表达式形式及其类型约束。`Heap<T>` / `Slot<T>` 相关操作见 §5。
 
 #### 10.1 括号运算符
 
@@ -420,11 +433,11 @@ var identifier = expression; // 可变变量
 
 #### 10.8 成员访问运算符
 
-**语义规则。** `expr.field`：`expr` 必须为结构体、模块，或 `slot<T>`（`T` 为结构体，§5.9）；`field` 为目标内已声明字段或成员。
+**语义规则。** `expr.field`：`expr` 必须为结构体、模块，或 `Slot<T>`（`T` 为结构体，§5.9）；`field` 为目标内已声明字段或成员。
 
 #### 10.9 赋值运算符
 
-**语义规则。** `=` 将右侧值赋给左侧可变目标：左操作数必须为 `var` 变量、结构体可变字段，或 §5.7 规定的 `slot` 成员访问；两侧类型必须一致；`val` 不可作为赋值目标（编译错误）。
+**语义规则。** `=` 将右侧值赋给左侧可变目标：左操作数必须为 `var` 变量、结构体可变字段，或 §5.7 规定的 `Slot` 成员访问；两侧类型必须一致；`val` 不可作为赋值目标（编译错误）。
 
 #### 10.10 其他表达式形式
 
@@ -593,10 +606,7 @@ var p = Player {
 var v = Vec3<f32> {
     x: 1,
     y: 2,
-    z: 3,
-    distance = func(var a: slot<Vec3<f32>>, var b: slot<Vec3<f32>>) -> f32 {
-        return 0.0;
-    };
+    z: 3
 };
 ```
 
@@ -633,26 +643,26 @@ import eokas.core.math;
 
 以下规则由 §1 公理及 §5 堆内存模型导出。
 
-**R1：`slot<T>` 使用前宜检查**（由公理 A3、§5.8 推出）
+**R1：`Slot<T>` 使用前宜检查**（由公理 A3、§5.8 推出）
 
-对 `slot<T>` 取值或调用 `next` / `last` 前，宜调用 `is_valid(s)`；未校验后果见 §5.8 语义规则 5。
+对 `Slot<T>` 取值或调用 `next` / `last` 前，宜调用 `is_valid(s)`；未校验后果见 §5.8 语义规则 5。
 
-**R2：`heap<T>` 使用前宜检查**（由公理 A3、§5.8 推出）
+**R2：`Heap<T>` 使用前宜检查**（由公理 A3、§5.8 推出）
 
-对 `heap<T>` 索引、`drop` 前，宜调用 `is_valid(h)`；未校验后果见 §5.8 语义规则 5。
+对 `Heap<T>` 索引、`drop` 前，宜调用 `is_valid(h)`；未校验后果见 §5.8 语义规则 5。
 
 **R3：Schema 约束**（由 §18 推出）
 
 结构体实现 Schema 时，必须完整实现其中声明的全部字段与函数字段。
 
-**R4：`slot<T>` 边界安全**（由 §5.5、§5.6 推出）
+**R4：`Slot<T>` 边界安全**（由 §5.5、§5.6 推出）
 
-- `heap[index]` 越界：返回无效 `slot<T>`（非 UB）；
-- `next` / `last`：偏移超出所属 `heap<T>` 范围，或原槽位已无效，返回无效 `slot<T>`。
+- `heap[index]` 越界：返回无效 `Slot<T>`（非 UB）；
+- `next` / `last`：偏移超出所属 `Heap<T>` 范围，或原槽位已无效，返回无效 `Slot<T>`。
 
-**R5：`heap<T>` 释放时批量失效**（由公理 A2、§5.4 推出）
+**R5：`Heap<T>` 释放时批量失效**（由公理 A2、§5.4 推出）
 
-执行 `drop` 后：该 `heap<T>` 及其副本句柄失效；由其派生的所有 `slot<T>` 失效。
+执行 `drop` 后：该 `Heap<T>` 及其副本句柄失效；由其派生的所有 `Slot<T>` 失效。
 
 **R6：`break` / `continue` 作用域**（由 §11 推出）
 
@@ -667,15 +677,17 @@ import eokas.core.math;
 
 **推论。** 由 §12 推出：Eokas 不支持闭包；函数值不得隐式捕获外部局部变量，外部上下文必须通过参数显式传递。
 
+**适用范围。** 此规则同样适用于结构体中的函数字段：函数字段不得隐式访问所属结构体的其他字段，必须将所需数据通过参数传入。宜将操作定义为独立顶层函数（公理 A5）。
+
 ---
 
 ## 第七部分：静态约束
 
-本节定义编译期**泛型**（类型形参）及基于泛型的结构形态约束（Schema）。§5 中 `heap<T>` 的 `T` 为使用处指定的元素类型；本节 `T` 在 `struct` / `func` / `schema` **定义处**声明，实例化时替换（§17.4）。
+本节定义编译期**泛型**（类型形参）及基于泛型的结构形态约束（Schema）。§5 中 `Heap<T>` 的 `T` 为使用处指定的元素类型；本节 `T` 在 `struct` / `func` / `schema` **定义处**声明，实例化时替换（§17.4）。
 
 ### 17. 泛型
 
-**定义。** 泛型通过类型形参使结构体与函数在定义时保留类型占位，在实例化或调用时以具体类型替换形参。类型形参统一以 `T` 命名（多形参时用 `T1`、`T2` 等）；`heap<T>`、`slot<T>` 中的 `T` 为元素类型（§5），与形参同名但语义不同。
+**定义。** 泛型通过类型形参使结构体与函数在定义时保留类型占位，在实例化或调用时以具体类型替换形参。类型形参统一以 `T` 命名（多形参时用 `T1`、`T2` 等）；`Heap<T>`、`Slot<T>` 中的 `T` 为元素类型（§5），与形参同名但语义不同。
 
 #### 17.1 类型形参
 
@@ -734,13 +746,18 @@ var box = Box<i32> { value: 42 };
 
 **定义。** Schema 为纯编译期静态约束，规定结构体必须具备的字段与函数字段形态。形参规则同 §17.1。
 
+**字段可变性。** Schema 内字段可以 `val`（不可变）或 `var`（可变）声明：
+
+- `val` 字段：实现该 Schema 的结构体中对应字段必须为 `val`，初始化后不可再赋值；
+- `var` 字段：实现该 Schema 的结构体中对应字段必须为 `var`，可在生命周期内重新赋值。
+
 #### 18.1 Schema 定义
 
 **语法变体：无类型形参**
 
 ```eok
 schema Identifier {
-    var id: i32;
+    val id: i32;
 };
 ```
 
@@ -751,7 +768,6 @@ schema Position<T> {
     var x: T;
     var y: T;
     var z: T;
-    var distance: func() -> T;
 };
 ```
 
@@ -759,8 +775,8 @@ schema Position<T> {
 
 ```eok
 schema MathOps<T1, T2, T3> {
-    var add: func(var a: T1, var b: T2) -> T3;
-    var sub: func(var a: T1, var b: T2) -> T3;
+    val add: func(var a: T1, var b: T2) -> T3;
+    val sub: func(var a: T1, var b: T2) -> T3;
 };
 ```
 
@@ -772,7 +788,7 @@ schema MathOps<T1, T2, T3> {
 
 ```eok
 struct Player: Identifier {
-    var id: i32;
+    val id: i32;
 };
 ```
 
@@ -783,11 +799,13 @@ struct Vec3<T>: Position<T> {
     var x: T;
     var y: T;
     var z: T;
-    var distance = func() -> T { return 0; };
 };
 ```
 
-**语义规则。** 实现 Schema 的结构体必须完整提供 Schema 中声明的全部字段与函数字段；推论见 §15 R3。
+**语义规则**
+
+1. 实现 Schema 的结构体必须完整提供 Schema 中声明的全部字段与函数字段；推论见 §15 R3。
+2. 结构体字段的 `val`/`var` 限定符必须与 Schema 中对应字段的声明一致；不一致为编译错误。
 
 ---
 
@@ -818,7 +836,7 @@ meta MetaName {
 **定义规则**
 
 1. 字段必须以 `val` 声明；默认值可省略，省略表示该字段无默认值；
-2. 字段类型（`FieldType`）仅可为：**基础类型**（§3）、**`String`**（§4）、**枚举**（§7）、**结构体**（§8）；不得为 `heap`、`slot`、`func` 及其他类型；
+2. 字段类型（`FieldType`）仅可为：**基础类型**（§3）、**`String`**（§4）、**枚举**（§7）、**结构体**（§8）；不得为 `Heap`、`Slot`、`func` 及其他类型；
 3. 有默认值的字段在 `@MetaName(...)` 中可省略；无默认值的字段必须显式传入；
 4. `meta` 体内仅可含字段声明，不得含控制流；
 5. 在任意编译单元以 `meta` 声明即完成注册；同一编译单元内 `meta` 名不得重复。
@@ -959,18 +977,18 @@ module eokas.meta;
 
 ```eok
 export func get_program_hash() -> u64;
-export func load(var path: String) -> heap<MetaContext>;
-export func is_matched(var ctx: slot<MetaContext>) -> bool;
-export func get_type(var ctx: slot<MetaContext>, var name: String) -> slot<TypeInfo>;
-export func has_meta(var elem: slot<AnnotatedElement>, var name: String) -> bool;
-export func get_meta(var elem: slot<AnnotatedElement>, var name: String) -> slot<MetaInfo>;
+export func load(var path: String) -> Heap<MetaContext>;
+export func is_matched(var ctx: Slot<MetaContext>) -> bool;
+export func get_type(var ctx: Slot<MetaContext>, var name: String) -> Slot<TypeInfo>;
+export func has_meta(var elem: Slot<AnnotatedElement>, var name: String) -> bool;
+export func get_meta(var elem: Slot<AnnotatedElement>, var name: String) -> Slot<MetaInfo>;
 ```
 
 **数据结构**
 
 ```eok
 struct AnnotatedElement {
-    var metas: heap<MetaInfo>;
+    var metas: Heap<MetaInfo>;
 };
 
 struct MetaParam {
@@ -980,15 +998,15 @@ struct MetaParam {
 
 struct MetaInfo {
     var name: String;
-    var params: heap<MetaParam>;
+    var params: Heap<MetaParam>;
 };
 
 struct TypeInfo: AnnotatedElement {
     var name: String;
     var size: u64;
     var alignment: u64;
-    var fields: heap<FieldInfo>;
-    var functions: heap<FunctionInfo>;
+    var fields: Heap<FieldInfo>;
+    var functions: Heap<FunctionInfo>;
 };
 
 struct FieldInfo: AnnotatedElement {
@@ -1044,8 +1062,8 @@ module app.game {
     @RequireComponent(type="Transform")
     struct Player {
         var hp: i32;
-        var transform: slot<Transform>;
-        var rigidbody: slot<Rigidbody>;
+        var transform: Slot<Transform>;
+        var rigidbody: Slot<Rigidbody>;
     };
 };
 ```
@@ -1083,7 +1101,7 @@ module app.meta_demo {
 
 ### 20. 标准库
 
-初始规划四大一级模块；`eokas.meta` 见 §19.6。`make`、`drop`、`is_valid`、`heap_of` 等为语言内置（§5），不属于标准库。
+初始规划四大一级模块；`eokas.meta` 见 §19.6。`make`、`drop`、`is_valid`、`space_of` 等为 `Program` 的全局可见成员（§22.5），不属于标准库。
 
 #### 20.1 eokas.core
 
@@ -1162,13 +1180,308 @@ Eokas 包（Package）是多个模块的集合单元，通过项目根目录下�
 
 ---
 
-## 第九部分：附录 — 示例
+## 第九部分：编译器形式语法定义
+
+本节使用 Eokas 自身语法（schema + meta + func）形式化声明编译器内核的全部内置类型与操作。目标：语言规范从"文档描述"转变为"代码即规范"——编译器内核行为通过语言自身的语法构造完整表达，用户无需在语法之外阅读隐式规则。
+
+### 22. 编译器内核声明
+
+本节以 §17（泛型）、§18（Schema）、§19（Meta）定义的类型系统机制，尝试对核心语法进行形式化重述。前序章节中定义用户可见的语法与语义（规范性定义）；本节定义编译器如何以语言自身的类型声明体系表达这些内置概念。两者语义等价。
+
+#### 22.1 @Compiler 元定义
+
+**定义。** `Compiler` 为语言预定义的 `meta`（§19），用于标注编译器内核提供的 `schema`、`struct` 与 `func`。
+
+```eok
+meta Compiler {
+    val global: bool = false;
+}
+```
+
+**语义规则**
+
+1. `@Compiler` 可标注 `schema`、`struct` 与顶层 `func`。
+2. 标注于 `schema` 时：
+   - 该 schema 的所有字段（无论 `val` 或 `var`）均为**编译器管控只读**：用户代码可读取，不可赋值，不可在结构体初始化表达式中指定值；`val`/`var` 仅表达字段在生命周期内是否会由编译器变更（`val` = 不变，`var` = 可变）；
+   - 仅语言设计者可为该 schema 提供实现 `struct`；用户代码不得声明 `: SchemaName` 实现此类 schema；
+   - 同一声明域内的多个 `@Compiler schema` 可互相引用类型（无需前向声明）。
+3. 标注于 `struct` 时：
+   - 该 struct 由编译器内部实现，用户不可实例化，不可作为变量类型使用；
+   - 其成员字段由编译器提供实现，源码中仅声明签名；
+   - 编译器隐式提供该 struct 的唯一实例。
+4. 标注于 `func` 时：
+   - 该函数由编译器内部实现，源码中仅声明签名，无函数体；
+   - 用户不可定义同名同签名函数覆盖；
+   - 全局可用，无需 `import`。
+5. `@Compiler(global=true)` 仅可标注 `struct`。标注后：
+   - 该 struct 的所有成员在全局作用域隐式可见，运行时代码可直接以成员名调用，无需 `StructName.member` 前缀；
+   - 若隐式成员名与用户代码中的标识符冲突，用户定义优先（局部遮蔽全局）；
+   - 该 struct 由编译器隐式提供唯一实例，用户不可实例化、不可作为变量类型使用。
+6. `@Compiler` 标注的 schema、struct 与 func 构成语言的**内核声明层**；任何未在此层声明的内置行为，编译器不得隐式提供。
+
+#### 22.2 MemorySpace — 内存空间
+
+**定义。** `MemorySpace<T>` 描述一块可容纳多个 `T` 类型元素的内存空间的状态形态。
+
+```eok
+@Compiler
+schema MemorySpace<T> {
+    val count: u32;
+    var valid: bool;
+};
+```
+
+| 字段 | 类型 | 语义 |
+|------|------|------|
+| `count` | `u32` | 空间可容纳的 `T` 类型元素数量；分配后不变 |
+| `valid` | `bool` | 当前句柄是否有效；`drop` 后由编译器置 `false` |
+
+#### 22.3 MemorySlot — 内存槽位
+
+**定义。** `MemorySlot<T>` 描述内存空间内一个具体位置的状态形态。
+
+```eok
+@Compiler
+schema MemorySlot<T> {
+    val owner: MemorySpace<T>;
+    var valid: bool;
+    val next: func(val offset: u32) -> MemorySlot<T>;
+    val last: func(val offset: u32) -> MemorySlot<T>;
+};
+```
+
+| 字段 | 类型 | 语义 |
+|------|------|------|
+| `owner` | `MemorySpace<T>` | 所属内存空间；创建后不变 |
+| `valid` | `bool` | 当前槽位是否有效；越界、失效时由编译器置 `false` |
+| `next` | `func(val offset: u32) -> MemorySlot<T>` | 向后偏移 `offset` 个位置，返回新槽位；越界或原槽位无效时返回无效槽位；原槽位不变 |
+| `last` | `func(val offset: u32) -> MemorySlot<T>` | 向前偏移 `offset` 个位置；规则同 `next` |
+
+#### 22.4 Heap 与 Slot — 编译器提供的实现
+
+**定义。** `Heap<T>` 与 `Slot<T>` 为编译器提供的 `MemorySpace<T>` 与 `MemorySlot<T>` 的唯一实现。
+
+```eok
+struct Heap<T> : MemorySpace<T> {
+    val count: u32;
+    var valid: bool;
+};
+
+struct Slot<T> : MemorySlot<T> {
+    val owner: MemorySpace<T>;
+    var valid: bool;
+    val next: func(val offset: u32) -> MemorySlot<T>;
+    val last: func(val offset: u32) -> MemorySlot<T>;
+};
+```
+
+**语义规则**
+
+1. `Heap<T>` 与 `Slot<T>` 为值类型，所有权归属所在作用域；作用域结束时句柄销毁，不自动调用 `drop`。
+2. 结构体内重复声明字段为满足 §15 R3（Schema 完整实现）；字段值由编译器内部管理。
+3. 用户不得自行定义实现 `MemorySpace<T>` 或 `MemorySlot<T>` 的 struct（§22.1 语义规则 2）。
+
+#### 22.5 Program — 进程实体
+
+**定义。** `Program` 为编译器提供的全局唯一实体，代表当前进程（公理 A1），持有内存生命周期管理操作。
+
+```eok
+@Compiler(global=true)
+struct Program {
+    val make: func<T>(val count: u32) -> Heap<T>;
+    val drop: func<T>(val space: Heap<T>) -> void;
+    val is_valid: func<T>(val space: MemorySpace<T>) -> bool;
+    val is_valid: func<T>(val slot: MemorySlot<T>) -> bool;
+    val slot_at: func<T>(val space: MemorySpace<T>, val index: u32) -> Slot<T>;
+    val space_of: func<T>(val slot: MemorySlot<T>) -> MemorySpace<T>;
+    val get_value: func<T>(val slot: MemorySlot<T>) -> T;
+    val set_value: func<T>(val slot: MemorySlot<T>, val x: T) -> void;
+};
+```
+
+| 成员 | 语义 |
+|------|------|
+| `make<T>(n)` | 在 Program 名下分配可容纳 `n` 个 `T` 元素的内存空间，返回有效 `Heap<T>`；`n == 0` 时返回无效句柄（`valid == false`） |
+| `drop(h)` | 释放 `h` 对应的内存；`h` 及其所有副本句柄的 `valid` 置 `false`；由 `h` 派生的所有 `Slot<T>` 的 `valid` 置 `false` |
+| `is_valid(x)` | 等价于读取 `x.valid`；返回 `true` 表示有效，`false` 表示已失效 |
+| `slot_at(space, i)` | 索引在 `[0, space.count)` 内返回有效 `Slot<T>`；越界返回无效 `Slot<T>`（非 UB）；`space.valid == false` 时返回无效 `Slot<T>` |
+| `space_of(s)` | 等价于读取 `s.owner`；`s.valid == false` 时返回无效 `Heap<T>` |
+| `get_value(s)` | 读取 `s` 指向位置的 `T` 值；`s.valid == false` 时行为未定义（UB） |
+| `set_value(s, x)` | 将 `x` 写入 `s` 指向位置；`s.valid == false` 时 UB |
+
+**语义规则**
+
+1. 因 `global=true`（§22.1 语义规则 5），Program 的所有成员在运行时代码中可直接使用，无需 `Program.` 前缀。
+2. `Program` 不可被用户实例化、不可作为变量类型使用。
+3. `drop` 仅接受 `Heap<T>` 实参，传入 `Slot<T>` 或其他类型为编译错误。
+4. `is_valid` 仅接受 `MemorySpace<T>` 或 `MemorySlot<T>` 实参；传入其他类型为编译错误。
+
+**示例**
+
+```eok
+val arr = make<i32>(1024);   // 等价于 Program.make<i32>(1024)
+if (is_valid(arr)) {         // 等价于 Program.is_valid(arr)
+    drop(arr);               // 等价于 Program.drop(arr)
+}
+```
+
+#### 22.6 Comparable — 可比较约束
+
+**定义。** `Comparable` 描述类型实例之间可执行比较操作的形态约束。
+
+```eok
+@Compiler
+schema Comparable {
+    val compare: func(val x: Comparable, val y: Comparable) -> i32;
+};
+```
+
+| 字段 | 类型 | 语义 |
+|------|------|------|
+| `compare` | `func(val x: Comparable, val y: Comparable) -> i32` | 比较 `x` 与 `y`，返回比较结果 |
+
+**返回值约定**
+
+| 条件 | 返回值 |
+|------|--------|
+| `x < y` | `-1` |
+| `x == y` | `0` |
+| `x > y` | `1` |
+
+**语义规则**
+
+1. `Comparable` 为 `@Compiler` 标注的 schema，仅编译器可为类型提供实现（§22.1 语义规则 2）；用户代码不得声明 `: Comparable` 实现此 schema。
+2. 编译器为所有基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）及 `String` 内置实现 `Comparable`。
+3. `compare` 函数签名中的 `Comparable` 类型在具体实现中替换为实际类型；两个操作数必须为同一类型。
+4. `compare(x, y)` 返回值严格限定为 `-1`、`0`、`1` 之一。
+
+#### 22.7 Enumerable — 可枚举约束
+
+**定义。** `Enumerable<T>` 描述类型实例可沿序列方向移动（前进 / 后退）的形态约束，是范围循环 `for` 结构的必要前提。
+
+```eok
+@Compiler
+schema Enumerable<T> {
+    val has_next: func(val offset: u32) -> bool;
+    val has_last: func(val offset: u32) -> bool;
+    val next: func<T>(val offset: u32) -> T;
+    val last: func<T>(val offset: u32) -> T;
+};
+```
+
+| 字段 | 类型 | 语义 |
+|------|------|------|
+| `has_next` | `func(val offset: u32) -> bool` | 从当前位置向后偏移 `offset` 个位置后是否存在可达元素；`true` 表示可安全调用 `next(offset)` |
+| `has_last` | `func(val offset: u32) -> bool` | 从当前位置向前偏移 `offset` 个位置后是否存在可达元素；`true` 表示可安全调用 `last(offset)` |
+| `next` | `func<T>(val offset: u32) -> T` | 从当前位置向后偏移 `offset` 个位置，返回新的 `T` 实例；原实例不变 |
+| `last` | `func<T>(val offset: u32) -> T` | 从当前位置向前偏移 `offset` 个位置，返回新的 `T` 实例；原实例不变 |
+
+**语义规则**
+
+1. `Enumerable<T>` 为 `@Compiler` 标注的 schema，仅编译器可为类型提供实现（§22.1 语义规则 2）；用户代码不得声明 `: Enumerable` 实现此 schema。
+2. `MemorySlot<T>` 隐式实现 `Enumerable<MemorySlot<T>>`——其 `has_next` / `has_last` / `next` / `last` 方法（§22.3）满足 `Enumerable` 约束；`has_next` / `has_last` 等价于偏移后槽位的 `valid` 校验。
+3. 范围循环 `for` 结构的迭代变量类型**必须**实现 `Enumerable`；未实现为编译错误。
+
+**范围循环 `for`**
+
+范围循环 `for` 为依赖 `Enumerable` 的迭代结构，与 §11.5 三段式 `for` 不同，专用于对可枚举序列的遍历。
+
+**语法**
+
+```eok
+for (var cursor = init_expr; cursor.has_next(step); cursor = cursor.next(step)) {
+    statement_list
+}
+```
+
+**语义规则**
+
+1. `init_expr` 的类型必须实现 `Enumerable<T>`，否则为编译错误；
+2. 步进表达式中，迭代变量**必须**通过 `Enumerable` 提供的 `next` 或 `last` 方法推进；不得使用算术运算或其他方式修改迭代变量；
+3. 条件表达式**宜**使用 `Enumerable` 提供的 `has_next()` 或 `has_last()` 判断是否可继续迭代；也可使用其他 `bool` 表达式；
+4. `break` / `continue` 规则同 §11.6。
+
+**示例**
+
+```eok
+val h = make<i32>(100);
+for (var cur = slot_at(h, 0); cur.has_next(1); cur = cur.next(1)) {
+    set_value(cur, 0);
+}
+drop(h);
+```
+
+#### 22.8 公理对应关系
+
+| 公理 / 推论 | 内核声明中的体现 |
+|-------------|-----------------|
+| A1（资源所有权） | `make` 与 `drop` 为 `Program` 的成员操作（§22.5）— Program 通过此两函数管控堆生命周期 |
+| A2（失效原则） | `drop` 语义：编译器将相关所有 `valid` 字段置 `false` |
+| A3（使用前校验） | `is_valid` 函数与 `.valid` 字段 — 两种等价访问路径 |
+| A4（最小抽象） | `@Compiler` 限定仅编译器内核可定义此类抽象，用户不可扩展 |
+| A5（操作数据分离） | Schema 仅含状态字段，操作为独立函数 |
+| R4（边界安全） | `slot_at` 越界返回无效 `Slot<T>`（非 UB） |
+| R5（批量失效） | `drop` 语义中明确声明 |
+
+#### 22.9 Operator 语法糖预留
+
+本节内核声明为后续 operator 语法规范预留对接点：
+
+| 语法糖 | 映射目标 |
+|--------|----------|
+| `space[i]` | `slot_at(space, i)` |
+| `slot.field`（读） | 当 `T` 为 struct 时，对 `get_value(slot)` 返回值的字段访问 |
+| `slot.field = x`（写） | 当 `T` 为 struct 时，字段级写入操作 |
+
+Operator 规范将独立定义语法糖到函数调用的映射规则，不改变本节核心模型。
+
+#### 22.10 示例
+
+```eok
+val arr = make<i32>(1024);
+
+val s = slot_at(arr, 0);
+set_value(s, 42);
+val v = get_value(s);
+
+val s2 = s.next(1);
+set_value(s2, 100);
+
+val s_bad = slot_at(arr, 9999);
+// s_bad.valid == false
+
+if (arr.valid) {
+    val first = slot_at(arr, 0);
+    if (first.valid) {
+        set_value(first, 0);
+    }
+}
+
+drop(arr);
+// arr.valid == false, s.valid == false, s2.valid == false
+```
+
+**遍历模式**
+
+```eok
+val h = make<i32>(100);
+var cur = slot_at(h, 0);
+while (cur.valid) {
+    set_value(cur, 0);
+    cur = cur.next(1);
+}
+drop(h);
+```
+
+---
+
+## 第十部分：附录 — 示例
 
 以下示例说明前述各节概念的组合用法，**不引入新定义**，不展开 §5 所有权等已在前文定义的机制。各示例标注所涉规范节。
 
-### 22. 示例
+### 23. 示例
 
-#### 22.1 递归与 self
+#### 23.1 递归与 self
 
 *说明规范节：§12*
 
@@ -1190,7 +1503,7 @@ module app.fib {
 };
 ```
 
-#### 22.2 结构体与 Result
+#### 23.2 结构体与 Result
 
 *说明规范节：§8, §14, §20*
 
@@ -1225,53 +1538,55 @@ module app.calc {
 };
 ```
 
-#### 22.3 heap/slot 与 Schema
+#### 23.3 Heap/Slot 与 Schema
 
-*说明规范节：§5, §15, §18*
+*说明规范节：§5, §15, §16, §18*
 
 ```eok
 module app.list {
     struct Node {
         var value: i32;
-        var next: slot<Node>;
+        var next: Slot<Node>;
     };
 
-    schema List {
-        var head: slot<Node>;
-        var push: func(var v: i32) -> void;
-        var pop: func() -> i32;
+    schema ListData {
+        var head: Slot<Node>;
     };
 
-    struct IntList: List {
-        var head: slot<Node>;
-
-        var push = func(var v: i32) -> void {
-            val h = make heap<Node>(1);
-            if (is_valid(h)) {
-                h[0].value = v;
-                h[0].next = head;
-                head = h[0];
-            }
-        };
-
-        var pop = func() -> i32 {
-            if (!is_valid(head)) {
-                return 0;
-            }
-            val s = head;
-            val v = s.value;
-            head = s.next;
-            drop(heap_of(s));
-            return v;
-        };
+    struct IntList: ListData {
+        var head: Slot<Node>;
     };
+
+    func push(var list: Slot<IntList>, var v: i32) -> void {
+        val h = make<Node>(1);
+        if (is_valid(h)) {
+            h[0].value = v;
+            h[0].next = list.head;
+            list.head = h[0];
+        }
+    }
+
+    func pop(var list: Slot<IntList>) -> i32 {
+        if (!is_valid(list.head)) {
+            return 0;
+        }
+        val s = list.head;
+        val v = s.value;
+        list.head = s.next;
+        drop(space_of(s));
+        return v;
+    }
 
     func main() -> void {
-        var list = IntList {};
-        list.push(10);
-        list.push(20);
-        val a = list.pop();
-        val b = list.pop();
+        val lh = make<IntList>(1);
+        if (is_valid(lh)) {
+            val list = lh[0];
+            push(list, 10);
+            push(list, 20);
+            val a = pop(list);
+            val b = pop(list);
+            drop(lh);
+        }
     }
 };
 ```
