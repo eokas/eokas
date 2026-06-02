@@ -47,6 +47,9 @@
 | 槽位 | `Slot<T>` | 元素类型为 `T` 的堆内位置标识（§5） |
 | 句柄 | — | 统称 `Heap<T>` / `Slot<T>` 变量 |
 | 无效 | 无效句柄/槽位 | `is_valid(x) == false`；与公理 A2「失效」等价 |
+| Schema | `schema` | 编译期契约（trait），**非**运行时类型；见 §18 定位 |
+| 成员函数 | — | Schema 中以 `func` 声明的函数原型；实现于 struct 体内，编译期静态派发并绑定 `this`（§18） |
+| 函数值字段 | — | Schema 中以 `val name: func(...)` 声明的字段；约束实现 struct 须提供同名字段并计入其布局（§18） |
 
 **节内体例。** 语法构造按 **定义** → **签名**（内置函数）→ **语义规则** → **示例** 排列；无内容则省略。纯运算符/控制流节可在表前以一行 **语义规则** 总述。
 
@@ -70,7 +73,7 @@
 
 **公理 A4（最小抽象）。** 除上述内存相关公理外，不再额外增设内存管理相关抽象。
 
-**公理 A5（操作与数据分离）。** 宜将操作与数据分开组织：宜 `add(x, y)` 形式，不宜 `x.add(y)` 形式。
+**公理 A5（操作与数据分离）。** 宜将操作与数据分开组织：顶层自由函数宜 `add(x, y)` 形式；Schema **成员函数**（§18）调用时绑定 `this`，宜 `instance.method(args)` 形式。函数值字段（§18）按普通字段存取，调用时按 §10.10 规则求值。
 
 本节仅陈述公理级前提；堆内存相关类型与操作统一定义于 §5，由公理导出的推论见 §15。
 
@@ -78,11 +81,11 @@
 
 | 类别 | 内容 |
 |------|------|
-| 关键字 | `break`, `case`, `continue`, `default`, `do`, `else`, `enum`, `export`, `for`, `func`, `if`, `impl`, `import`, `meta`, `module`, `return`, `schema`, `self`, `struct`, `switch`, `val`, `var`, `while` |
+| 关键字 | `break`, `case`, `continue`, `default`, `do`, `else`, `enum`, `export`, `for`, `func`, `if`, `import`, `meta`, `module`, `return`, `schema`, `self`, `struct`, `switch`, `this`, `val`, `var`, `while` |
 | 基础类型 | `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `bool`, `void`, `String`, `func` |
 | 字面量 | 整数、浮点、字符串、布尔（见下文） |
 | 注释 | 单行 `//`（至行尾）；多行 `/* */`（可跨行）；不参与编译 |
-| 标识符 | `self` 为关键字；`this` 为普通标识符（见语义规则） |
+| 标识符 | `self`、`this` 为关键字（见 §2 语义规则） |
 
 **整数字面量**
 
@@ -111,7 +114,9 @@
 **语义规则**
 
 1. `self` 在函数体内指代函数自身，用于递归调用（语法见 §12）。
-2. `this` 非关键字，可作为普通变量名使用。
+2. `this` 为关键字，**仅**可在 struct **成员函数**体（§18.3）内使用；指代调用该成员函数时的接收者实例。
+3. 成员函数体内，`this` 的类型为**具体** struct 类型（该 struct 在声明处写 `: SchemaName` 并满足相应 Schema 契约）；`this.field` 访问当前实例的数据字段（§10.8）。
+4. `this` 不得作为普通标识符（变量名、参数名等）使用。
 
 ---
 
@@ -185,7 +190,7 @@
 
 #### 5.3 make
 
-**定义。** `make` 为 `Program` 的成员函数（§22.8），因 `global=true` 全局可见，分配可容纳 `count` 个 `T` 类型元素的堆内存。
+**定义。** `make` 为 `Program` 的成员函数（§22.7），因 `global=true` 全局可见，分配可容纳 `count` 个 `T` 类型元素的堆内存。
 
 **签名**
 
@@ -208,7 +213,7 @@ var buf = make<u8>(256);
 
 #### 5.4 drop
 
-**定义。** `drop` 为 `Program` 的成员函数（§22.8），因 `global=true` 全局可见，释放堆内存；`<T>` 由实参类型推导。
+**定义。** `drop` 为 `Program` 的成员函数（§22.7），因 `global=true` 全局可见，释放堆内存；`<T>` 由实参类型推导。
 
 **签名**
 
@@ -241,7 +246,7 @@ expr[index]
 
 **语义规则**
 
-1. `next(slot, offset: u32)` / `last(slot, offset: u32)`（`Slot<T>` 可写 UFCS 形式 `slot.next(offset)` / `slot.last(offset)`，§10.10）：`offset` 为相对偏移；分别向堆后方/前方移动，返回新 `Slot<T>`，原槽位不变。
+1. `next(slot, offset: u32)` / `last(slot, offset: u32)`（UFCS：`next(slot, offset)` 等价于 `slot.next(offset)`，`last(slot, offset)` 等价于 `slot.last(offset)`，§10.10）：`offset` 为相对偏移；分别向堆后方/前方移动，返回新 `Slot<T>`，原槽位不变。
 2. 偏移后超出所属 `Heap<T>` 索引范围，或原槽位已无效：返回无效 `Slot<T>`（§15 R4）。
 3. 对无效槽位调用时行为见 §5.8 语义规则 5。
 
@@ -252,7 +257,7 @@ expr[index]
 
 #### 5.8 有效性校验 (is_valid)
 
-**定义。** `is_valid` 为 `Program` 的成员函数（§22.8），因 `global=true` 全局可见，用于查询 `Heap<T>` 或 `Slot<T>` 是否处于有效状态；`<T>` 由实参类型推导。
+**定义。** `is_valid` 为 `Program` 的成员函数（§22.7），因 `global=true` 全局可见，用于查询 `Heap<T>` 或 `Slot<T>` 是否处于有效状态；`<T>` 由实参类型推导。
 
 **签名**
 
@@ -288,7 +293,7 @@ slot_expr.field
 
 #### 5.10 所属堆句柄 (space_of)
 
-**定义。** `space_of` 为 `Program` 的成员函数（§22.8），因 `global=true` 全局可见，获取包含指定 `Slot<T>` 的堆句柄；`<T>` 由实参类型推导。
+**定义。** `space_of` 为 `Program` 的成员函数（§22.7），因 `global=true` 全局可见，获取包含指定 `Slot<T>` 的堆句柄；`<T>` 由实参类型推导。
 
 **签名**
 
@@ -326,6 +331,7 @@ func<T1, T2>(var a: T1, var b: T2) -> T1
 
 1. 泛型函数类型在函数类型基础上增加类型形参列表（`<T>` / `<T1, T2>`），形参规则同 §17.1。
 2. 调用泛型函数类型的值时，必须在调用处显式指定类型实参（如 `make<i32>(10)`）。
+3. 函数类型的参数与返回类型**不得**为 Schema 名（§18 定位）。
 
 ### 7. 枚举
 
@@ -341,7 +347,7 @@ enum Status {
 
 ### 8. 结构体
 
-**定义。** 结构体（`struct`）为值类型聚合容器，包含数据字段及零或多个 **impl 块**（§18.3）。数据字段参与实例内存布局；impl 块中的函数为**类型级函数**，不计入实例布局。
+**定义。** 结构体（`struct`）为值类型聚合容器，包含数据字段与（可选）函数值字段；**可**通过 `: SchemaName` 声明实现的 Schema（§18.3）。数据字段与函数值字段参与实例内存布局；成员函数不计入实例布局。
 
 ```eok
 struct Vec3 {
@@ -351,12 +357,14 @@ struct Vec3 {
 };
 ```
 
-结构体字段的类型必须为已定义类型（含 §6 函数类型、§5 `Heap<T>` 与 `Slot<T>`、§7 枚举等）。泛型定义见 §17；Schema 定义见 §18.1；Schema 继承见 §18.2；impl 块见 §18.3。
+结构体字段的类型必须为已定义类型（含 §6 函数类型、§5 `Heap<T>` 与 `Slot<T>`、§7 枚举等）；**不得**为 Schema 名（§18 定位）。泛型定义见 §17；Schema 定义见 §18.1；Schema 继承见 §18.2；struct 实现 Schema 见 §18.3。
 
 **语义规则**
 
-1. 用户 `struct` **不得**声明实例函数字段（`val` / `var` + `func` 类型字段）；仅 `@Compiler struct`（§22.1）可豁免。
-2. 用户 `struct` 通过 impl 块（§18.3）提供 Schema 所要求的类型级函数。
+1. 用户 `struct` 通过 `: SchemaName` 或 `: SchemaA, SchemaB, ...`（§18.3）声明实现的 Schema；**必须**提供各 Schema 契约所要求的全部成员（数据字段、函数值字段与成员函数）。
+2. 实现 Schema **并不要求** struct 成员列表与 Schema 完全一致；struct **可**在满足契约的前提下声明 Schema **未要求**的额外数据字段、函数值字段等。
+3. 一个 struct **可**同时实现多个 Schema，语法为 `struct A : SchemaA, SchemaB, SchemaC`（§18.3）。
+4. 运行时变量与字段的类型**必须**为具体 `struct`、`enum` 或 §3–§7 已定义类型；**不得**以 Schema 名作为类型（§18 定位）。
 
 ---
 
@@ -371,7 +379,10 @@ val identifier = expression; // 不可变常量
 var identifier = expression; // 可变变量
 ```
 
-**语义规则。** 声明右侧表达式的类型必须为已定义类型；`val` 声明的绑定在初始化后不可再赋值（见 §10.10）。
+**语义规则。**
+
+1. 声明右侧表达式的类型必须为已定义类型；`val` 声明的绑定在初始化后不可再赋值（见 §10.10）。
+2. 显式类型标注及类型推断结果**不得**为 Schema 名（§18 定位）；变量类型**必须**为具体 `struct`、`enum` 或 §3–§7 已定义类型。
 
 ### 10. 表达式与运算符
 
@@ -431,7 +442,7 @@ var identifier = expression; // 可变变量
 | `&&` | 逻辑与（短路） |
 | `\|\|` | 逻辑或（短路） |
 
-**语义规则。** `&&` / `||` 短路求值：左操作数已能确定结果时，不求值右操作数。
+**语义规则。** `&&` / `||` 短路求值：左操作数已能确定结果时，不求值右操作数。对满足 `Boolean` Schema 契约的具体 struct 类型，按 §22.2（Boolean）语义规则 4–5 派发；两侧须为同一具体类型。内置 `bool` 仍按本节短路规则，同时视为满足 `Boolean` 契约。
 
 #### 10.7 条件运算符（三元）
 
@@ -441,14 +452,22 @@ var identifier = expression; // 可变变量
 
 **语义规则。** `expr.field`：`expr` 必须为结构体、模块，或 `Slot<T>`（`T` 为结构体，§5.9）；`field` 为目标内已声明字段或成员。
 
+**成员函数调用。** `expr.method(args)`：`expr` 必须为**具体** struct 实例；`method` 为该 struct 实现的 Schema **成员函数**（§18.3）；编译器在**编译期**静态解析目标函数，将 `expr` 绑定为 `this`，再求值 `args` 并执行函数体。**不得**依赖运行时 Schema 类型信息派发。
+
+**函数值字段调用。** `expr.field(args)`：`field` 为函数值字段时，先读取 `expr.field` 得到函数值，再以 `args` 调用该函数值；**不**绑定 `this`（§18.1 语义规则 6）。
+
 #### 10.9 赋值运算符
 
-**语义规则。** `=` 将右侧值赋给左侧可变目标：左操作数必须为 `var` 变量、结构体可变字段，或 §5.7 规定的 `Slot` 成员访问；两侧类型必须一致；`val` 不可作为赋值目标（编译错误）。
+**语义规则。** `=` 将右侧值赋给左侧可变目标：左操作数必须为 `var` 变量、结构体可变字段，或 §5.7 规定的 `Slot` 成员访问；两侧类型必须一致；`val` 不可作为赋值目标（编译错误）。当左、右均为同一**具体 struct 类型**且该类型在编译期满足 `Assign` Schema 契约时，按 §22.2（Assign）语义规则 4 派发；§5.7 规定的 `Slot` 成员访问赋值从其规定，**不**经 `Assign` 契约。
 
 #### 10.10 其他表达式形式
 
-- 函数调用：`func_name(args)`（含 Schema 类型级函数，§18.3）
-- `@Compiler` 类型 UFCS 调用：`expr.func_name(args)` 等价于 `func_name(expr, args)`（仅 §22 内核类型，如 `Slot` 的 `next` / `has_next`）
+- 顶层函数调用：`func_name(args)`
+- Schema **成员函数**调用：`instance.method(args)`（§18.3）；`this` 绑定为 `instance`
+- Schema **函数值字段**调用：`instance.field(args)`，或先读取字段再调用
+- 成员函数 UFCS：`func_name(receiver, args...)` 等价于 `receiver.func_name(args...)`，当 `receiver` 的**具体 struct 类型**在编译期满足对应 Schema 契约且 `func_name` 为成员函数名时适用（如 `equals(a, b)` 等价于 `a.equals(b)`（§22.2），`assign(a, b)` 对满足 `Assign` 契约的可变左值 `a` 等价于 `a.assign(b)`（§22.2），`not(a)`、`and(a, b)`、`or(a, b)` 对满足 `Boolean` 契约的类型等价（§22.2），`add(a, b)`、`sub(a, b)`、`mul(a, b)`、`div(a, b)`、`mod(a, b)` 对满足相应二元算术 Schema 契约的类型等价（§22.2）；一元 `neg(a)` 对满足 `Neg` 契约的类型等价（§22.2））
+- `@Compiler(global=true)` struct 成员：全局 `func_name(args)` 形式（§22.1 语义规则 5）；`this` 绑定编译器提供的 singleton
+- `@Compiler` 游标类型 UFCS：`func_name(receiver, args...)` 等价于 `receiver.func_name(args...)`（§22.3），如 `next(c, n)` 等价于 `c.next(n)`
 
 #### 10.11 类型约束总表
 
@@ -456,9 +475,17 @@ var identifier = expression; // 可变变量
 |------|------|
 | 数值类型 | `i8`~`i64`、`u8`~`u64`、`f32`、`f64`；用于 §10.2–10.3 一元/算术、`+` `-` `*` `/` |
 | 整数类型 | `i8`~`i64`、`u8`~`u64`（不含浮点）；用于 §10.4 位运算、§10.3 `%` |
-| 比较运算 | 两操作数类型必须一致；`==` / `!=` 须实现 `Equalable`（§22.2）；`<` `>` `<=` `>=` 须实现 `Comparable`（§22.3） |
-| 逻辑运算 | `&&` `||` `!` 操作数必须为 `bool` |
+| 比较运算 | 两操作数须为同一**具体**类型；`==` / `!=` 要求该 struct 在编译期满足 `Equals` Schema 契约（§22.2）；`<` `>` `<=` `>=` 要求满足 `Compare` Schema 契约（§22.2） |
+| 加法运算 | 两操作数须为同一**具体**类型；`+` 对满足 `Add` Schema 契约的 struct 按 §22.2（Add）语义规则 4 派发；基础数值类型按 §10.3 |
+| 减法运算 | 两操作数须为同一**具体**类型；`-`（二元）对满足 `Sub` Schema 契约的 struct 按 §22.2（Sub）语义规则 4 派发；基础数值类型按 §10.3 |
+| 乘法运算 | 两操作数须为同一**具体**类型；`*` 对满足 `Mul` Schema 契约的 struct 按 §22.2（Mul）语义规则 4 派发；基础数值类型按 §10.3 |
+| 除法运算 | 两操作数须为同一**具体**类型；`/` 对满足 `Div` Schema 契约的 struct 按 §22.2（Div）语义规则 4 派发；基础数值类型按 §10.3 |
+| 取余运算 | 两操作数须为同一**具体**类型；`%` 对满足 `Mod` Schema 契约的 struct 按 §22.2（Mod）语义规则 4 派发；基础整数类型按 §10.3 |
+| 取负运算 | 操作数须为**具体**类型；`-expr`（一元，§10.2）对满足 `Neg` Schema 契约的 struct 按 §22.2（Neg）语义规则 4 派发；基础数值类型按 §10.2 |
+| 赋值运算 | 左操作数须为 §10.9 规定的可变目标；左、右须为同一**具体**类型；对满足 `Assign` Schema 契约的 struct 按 §22.2（Assign）语义规则 4 派发；§5.7 `Slot` 成员访问赋值从其规定；基础数值类型、`bool`、`String` 按 §10.9 |
+| 逻辑运算 | `!`（§10.2）、`&&` `||`（§10.6）：操作数须为同一**具体**类型；对满足 `Boolean` Schema 契约的 struct 按 §22.2（Boolean）语义规则 4–5 派发并保留短路；内置 `bool` 按 §10.6；控制流与三元条件仍要求内置 `bool`（§10.7、§11） |
 | 禁止隐式转换 | 混合不同类型运算为编译错误 |
+| Schema 非类型 | Schema 名**不得**作为变量、字段、参数、返回值或 `func` 类型中的类型使用（§18 定位）；多态通过 §17.5 泛型 + Schema 约束 + 单态化实现 |
 
 ### 11. 控制流
 
@@ -597,8 +624,9 @@ func main() -> void {
 **语义规则**
 
 1. **函数不支持重载**：同一声明域内不得存在多个同名函数定义，即使参数列表、类型形参列表或返回类型不同，亦为编译错误。
-2. 此规则适用于顶层 `func` 定义、`@Compiler` 标注的顶层 `func`（§22.1）、struct 的 **impl 块**内函数，以及顶层 **schema** 中的函数原型：同一 struct 的多个 impl 块之间、或同一 schema 内不得重复声明同名函数。
+2. 此规则适用于顶层 `func` 定义、`@Compiler` 标注的顶层 `func`（§22.1）、struct 实现 Schema 时声明的成员函数（§18.3），以及顶层 **schema** 中的成员函数原型：同一 struct 内、或同一 schema 内不得重复声明同名成员函数。
 3. 泛型函数以调用处的类型实参区分实例化，不属于重载；类型形参的名称不影响函数身份。
+4. 函数参数与返回类型**不得**为 Schema 名（§18 定位）；须为具体类型或类型形参。
 
 ### 13. 初始化
 
@@ -622,7 +650,7 @@ var v = Vec3<f32> {
 };
 ```
 
-实现 Schema 约束必须满足 §18；推论见 §15 R3。
+实现 Schema 契约须满足 §18；推论见 §15 R3。
 
 ### 14. 模块系统
 
@@ -665,7 +693,7 @@ import eokas.core.math;
 
 **R3：Schema 约束**（由 §18 推出）
 
-struct 通过 impl 块实现 Schema 时，必须为 Schema 中的每个函数原型提供签名一致的函数体；推论见 §18.3。
+struct 在声明处写 `: SchemaName` 或 `: SchemaA, SchemaB, ...` 时，必须在**编译期**满足所声明各 Schema 契约中的全部成员（含各 Schema 继承链上的基础成员）；**可**另行声明 Schema 未要求的其他成员。Schema 约束不产生运行时类型；推论见 §18.3。
 
 **R4：`Slot<T>` 边界安全**（由 §5.5、§5.6 推出）
 
@@ -687,15 +715,19 @@ struct 通过 impl 块实现 Schema 时，必须为 Schema 中的每个函数原
 
 ### 16. 闭包策略
 
-**推论。** 由 §12 推出：Eokas 不支持闭包；函数值不得隐式捕获外部局部变量，外部上下文必须通过参数显式传递。
+**推论。** 由 §12 推出：Eokas 不支持闭包；**顶层函数**与**函数值**不得隐式捕获外部局部变量，外部上下文必须通过参数显式传递。
 
-**适用范围。** 此规则同样适用于 struct 内 **impl 块**中的函数：函数体不得隐式访问所属 struct 的字段或局部状态，所需数据必须通过参数显式传入（公理 A5）。Schema 类型级函数不计入 struct 实例布局，调用形式为 `func_name(args)`，不宜 `instance.func_name(args)`（`@Compiler` 内核类型 UFCS 例外见 §10.10）。
+**成员函数与 `this`。** Schema **成员函数**（§18.3）**可**通过 `this` 访问当前实例的数据字段；`this` 为编译器注入的显式接收者，不属于闭包捕获。
+
+**函数值字段。** 函数值字段（§18.1）存储的函数值仍须遵守本节闭包约束：不得隐式捕获外部局部变量；所需上下文须通过参数或 `this`（仅当该函数值为成员函数且以 `instance.field(args)` 形式调用时，不适用 `this` 绑定）显式传入。
+
+**自由函数风格。** 顶层自由函数及 `@Compiler(global=true)` struct 导出的全局成员，调用形式为 `func_name(args)`（公理 A5）；Schema 成员函数调用形式为 `instance.method(args)`（§10.10）。
 
 ---
 
 ## 第七部分：静态约束
 
-本节定义编译期**泛型**（类型形参）及基于 Schema 的类型**能力约束**。§5 中 `Heap<T>` 的 `T` 为使用处指定的元素类型；本节 `T` 在 `struct` / `func` / `schema` **定义处**声明，实例化时替换（§17.4）。
+本节定义编译期**泛型**（类型形参）、基于 Schema 的**编译期能力约束**（§17.5）及 Schema 契约（§18）。§5 中 `Heap<T>` 的 `T` 为使用处指定的元素类型；本节 `T` 在 `struct` / `func` / `schema` **定义处**声明，实例化时替换（§17.4）。
 
 ### 17. 泛型
 
@@ -754,44 +786,125 @@ var box = Box<i32> { value: 42 };
 
 - **函数**：调用时按实参类型推导，或显式指定类型实参（若语言实现支持）
 
-### 18. Schema 与 impl
+#### 17.5 Schema 约束与多态
 
-**定义。** Schema 为纯编译期静态约束，**仅**规定 struct 必须提供的类型级函数签名；**不得**声明数据字段。数据字段由 struct 自行定义。形参规则同 §17.1。
+**定义。** Schema 为编译期能力约束（§18 定位）。泛型函数或泛型 struct 的类型形参在**使用处**若须满足某 Schema 契约，编译器在**编译期**校验对应类型实参的**具体 struct** 已在声明处实现该 Schema（`: SchemaName`），并按调用点**单态化**生成具体代码。
 
-**schema 与 impl 的分工**
+**语义规则**
 
-| 关键字 | 出现位置 | 作用 |
+1. Schema 约束**仅**作用于编译期类型检查与单态化；**不**引入运行时 Schema 标识、vtable 或装箱。
+2. 泛型函数体内对类型形参 `T` 的实例调用 Schema 成员函数时，`T` 在调用点替换为具体 struct 类型，成员函数**静态绑定** `this`（§18.3 语义规则 5）。
+3. 不同调用点可传入不同 struct 类型；编译器为每个具体类型分别生成实例，**不**通过 Schema 名做运行时统一抽象。
+4. 若将来语言引入 **existential 类型**（存在量化类型），可单独规定其语法与运行时表示；在该机制出现前，§18 定位中的 Schema 非类型规则仍然适用。
+
+**示例**
+
+```eok
+func log_equal<T>(var a: T, var b: T) -> void {
+    // 编译器要求 T 的具体 struct 在编译期满足 Equals Schema 契约（§22.2）
+    if (a.equals(b)) {
+        // ...
+    }
+}
+
+var w = Widget { ... };
+var e = EntityId { ... };
+log_equal(w, w);   // 单态化为 Widget 版本
+log_equal(e, e);   // 单态化为 EntityId 版本
+```
+
+### 18. Schema 与 struct 实现
+
+**定位。** Schema 是**编译期契约**（trait），**不是**运行时类型。
+
+1. **Schema 无运行时实例**：Schema 名在运行时**不存在**；**不得**用 Schema 名声明变量、字段、函数参数、返回值，或作为 `func` 类型中的类型成分。Schema **无**独立内存布局，**不可**构造 Schema 值。
+2. **数据字段为布局约束**：Schema 中的 `val` / `var` 数据字段仅约束实现 struct **须**提供同名、同类型字段并计入**该 struct** 的实例布局；**不**表示 Schema 自身持有实例数据。
+3. **多态方式**：跨 struct 的共性通过 **泛型 + Schema 约束 + 单态化**（§17.5）表达，**不**通过 Schema 类型的变量或容器 homogeneity 表达。
+4. **成员函数静态派发**：成员函数在编译期绑定至具体 struct 实现；调用 `instance.method(args)` 时 `this` 的类型为**具体** struct，**非** Schema。
+5. **预留**：若将来引入 existential 类型，可允许受控的 Schema 抽象；须独立定义语法与运行时语义，**不**改变本节对现有 `schema` 关键字的定位。
+
+**Schema 名的合法出现位置**
+
+Schema 名**不是**类型名；下列为 Schema 名**允许**与**禁止**出现的上下文：
+
+| 上下文 | 是否允许 | 说明 |
 |--------|----------|------|
-| `schema` | 顶层 | **定义**能力契约：仅含函数原型（无函数体） |
-| `impl` | struct 体内 | **实现**契约：为 Schema 中的每个函数原型提供函数体 |
+| `schema Name { ... }` | ✅ | 定义 Schema 契约 |
+| `schema Child : Parent` | ✅ | Schema 之间继承（合并契约，§18.2） |
+| `struct S : SchemaA, SchemaB` | ✅ | struct **实现** Schema（implements）；**非**类型继承 |
+| 注释、规范正文中的契约指称 | ✅ | 指编译期约束，非运行时类型 |
+| `var x: SchemaName` | ❌ | Schema 非类型 |
+| struct 字段类型、函数参数、返回值 | ❌ | 须为具体 `struct` / `enum` / §3–§7 类型 |
+| `func` 类型的类型成分 | ❌ | 同上 |
 
-Schema 体**仅**含函数原型：以顶层 `func` 语法声明签名，**不得**含函数体，以分号结尾；**不得**含 `val` / `var` 数据字段声明。
+**规范用语。** 正文叙述中，将「某 struct 满足某 Schema」写为 **满足 Schema 契约** 或 **声明 `: SchemaName`**；**避免**写「某**类型**是 Schema」「变量类型为 Schema」等暗示 Schema 为类型的表述。运算符章节中的「须满足 `Equals` Schema」即此含义（§22.2），**不**表示操作数类型为 `Equals`。
+
+**禁止示例**
+
+```eok
+var d: Drawable = widget;              // 编译错误：Schema 非类型
+func accept(var x: Equals) -> void; // 编译错误
+struct Bag { var item: Compare; };  // 编译错误
+```
+
+**定义。** Schema 规定 struct 必须提供的**成员形态**：数据字段、函数值字段与成员函数。struct 通过 `: SchemaName` 或 `: SchemaA, SchemaB, ...` 声明实现，须提供 Schema 要求的对应定义；**可**同时声明 Schema 未要求的其他成员。形参规则同 §17.1。
+
+**Schema 成员形态**
+
+| 声明形式 | 名称 | 实现 struct 布局 | 调用 / 访问形式 |
+|----------|------|------------------|-----------------|
+| `val` / `var` + 非 `func` 类型 | **数据字段** | 实现 struct **须**含同名字段，计入其布局 | `instance.field` |
+| `val name: func(...) -> T;` | **函数值字段** | 实现 struct **须**含同名字段，计入其布局 | `instance.field(args)`；不绑定 `this` |
+| `func name(...) -> T;` | **成员函数** | 不计入布局 | `instance.method(args)`；编译期静态派发，绑定 `this` |
+
+`val name: func(...) -> T;` 与 `func name(...) -> T;` **语义不同**，不得混用或视为等价写法。
+
+**schema 与 struct 的分工**
+
+| 关键字 / 语法 | 出现位置 | 作用 |
+|---------------|----------|------|
+| `schema` | 顶层 | **定义**编译期契约：数据字段、函数值字段、成员函数原型（均无函数体）；**非**运行时类型 |
+| `struct : SchemaName` 或 `struct : SchemaA, SchemaB, ...` | struct 声明处 | **实现**（implements）Schema 契约；**非**从 Schema「继承类型」；**可**含额外成员 |
 
 #### 18.1 Schema 定义
 
-**语法变体：无类型形参**
+**语法变体：数据字段 + 成员函数**
 
 ```eok
-schema Equalable<T> {
-    func equals(val x: T, val y: T) -> bool;
+schema Vertex {
+    var x: f32;
+    var y: f32;
+    func magnitude() -> f32;
 };
 ```
 
-**语法变体：多个类型形参 + 多个函数原型**
+**语法变体：函数值字段（与成员函数对比）**
 
 ```eok
-schema MathOps<T1, T2, T3> {
-    func add(var a: T1, var b: T2) -> T3;
-    func sub(var a: T1, var b: T2) -> T3;
+schema ShapeByField {
+    val area: func() -> f32;
+};
+
+schema ShapeByMethod {
+    func area() -> f32;
+};
+```
+
+上例中 `ShapeByField.area` 为**函数值字段**，约束实现 struct 须提供 `func() -> f32` 类型的同名字段；`ShapeByMethod.area` 为**成员函数**，调用 `instance.area()` 时以 `instance` 静态绑定 `this`，函数体内可通过 `this` 访问数据字段。
+
+**语法变体：能力 Schema（成员函数）**
+
+```eok
+schema Equals<T> {
+    func equals(val other: T) -> bool;
 };
 ```
 
 **语法变体：继承单个 Schema**
 
 ```eok
-schema Comparable<T> : Equalable<T> {
-    func equals(val x: T, val y: T) -> bool;
-    func compare(val x: T, val y: T) -> i32;
+schema Compare<T> : Equals<T> {
+    func compare(val other: T) -> i32;
 };
 ```
 
@@ -806,9 +919,12 @@ schema Drawable : Renderable, Serializable {
 **语义规则**
 
 1. `schema` **仅**用于顶层 Schema 定义；不得出现在 struct 体内。
-2. Schema 中**不得**出现 `val` / `var` 数据字段声明；违反为编译错误。
-3. Schema 中的 `func` 声明为**函数原型**：仅含签名，以 `;` 结尾，不得出现 `{ ... }` 函数体。
-4. 函数原型声明类型级操作；struct 在 **impl 块**中提供对应函数体（§18.3）。
+2. Schema **可**声明数据字段（`val` / `var` + 非 `func` 类型）、函数值字段（`val` + `func` 类型）与成员函数（`func` 签名）；均不得以 `{ ... }` 提供函数体。
+3. Schema 中的数据字段与函数值字段**仅**约束实现 struct 的成员形态与布局（§18 定位 2）；**不**表示 Schema 自身有实例或可实例化。
+4. Schema 名**不得**用作类型（§18 定位 1）；Schema 继承（§18.2）合并编译期契约，**不**构成运行时 subtyping。
+5. Schema 中的 `func` 声明为**成员函数**原型：仅含签名，以 `;` 结尾；实现于 struct 体内，编译期静态派发并绑定 `this`（§2 语义规则 2–3）。
+6. Schema 中的 `val name: func(...) -> T;` 声明为**函数值字段**：约束实现 struct 须提供同名、同类型字段；调用 `instance.name(args)` 时**不**绑定 `this`。
+7. struct 通过 `: SchemaName`（§18.3）提供 Schema 要求的全部成员定义。
 
 #### 18.2 Schema 继承
 
@@ -816,52 +932,101 @@ Schema 可通过 `: BaseSchema` 或 `: Base1, Base2, ...` 声明继承一个或�
 
 **语义规则**
 
-1. 子 Schema **必须**在成员列表中**全量显式声明**其所继承的每个基础 Schema 的全部函数原型；不得省略基础 Schema 中的任何成员。
+1. 子 Schema **只需**在成员列表中声明**增量**成员（数据字段、函数值字段或成员函数）；**不得**原样抄写基础 Schema 中已有的成员。基础 Schema 的全部成员自动纳入子 Schema 的契约。
 2. 子 Schema **可**同时继承多个 Schema（多继承）；语法为 `: Base1, Base2, ...`，逗号分隔。
-3. 多继承时，若多个基础 Schema 中存在**签名完全一致**的同名函数原型，子 Schema 中**只需声明一次**。
-4. 多继承时，若多个基础 Schema 中存在**同名但签名不一致**的函数原型，为编译错误。
-5. struct 通过 impl 块实现 Schema 时，须满足 Schema 中的全部函数原型；推论见 §15 R3。
+3. 多继承时，若多个基础 Schema 中存在**签名完全一致**的同名成员函数，子 Schema **无需**重复声明。
+4. 多继承时，若多个基础 Schema 中存在**同名但形态或签名不一致**的成员（同名数据字段类型不同、或同名成员函数签名不同等），为编译错误。
+5. struct 通过 `: SchemaName` 或 `: SchemaA, SchemaB, ...` 实现 Schema 时，须满足所声明各 Schema 契约中的全部成员；**可**声明 Schema 未要求的额外成员；推论见 §15 R3。
 
-#### 18.3 impl 块 — struct 实现 Schema
+#### 18.3 struct 满足 Schema 契约（`: SchemaName`）
 
-struct 通过 struct 体内的 **impl 块**（`impl SchemaName { ... }`）声明实现的 Schema；**不得**使用 `: SchemaName` 后缀语法，**不得**在 struct 体内使用 `schema` 关键字。一个 struct **可**包含多个 impl 块，分别实现一个或多个 Schema。
+struct 通过声明处的 **`: SchemaName`** 或 **`: SchemaA, SchemaB, SchemaC, ...`** 声明**实现**（implements）Schema 契约；**不得**使用 struct 体内的 `impl` 块，**不得**在 struct 体内使用 `schema` 关键字。`: SchemaName` **不是**类型标注，**不**使 struct 成为 Schema 的子类型。
 
-**语法变体：实现单个 Schema**
+**语法变体：实现函数值字段 Schema**
 
 ```eok
-struct EntityId {
-    val value: i32;
+schema Shape {
+    val area: func() -> f32;
+};
 
-    impl Equalable {
-        func equals(val x: EntityId, val y: EntityId) -> bool {
-            return x.value == y.value;
-        }
+struct Triangle : Shape {
+    val area: func() -> f32 = func() -> f32 {
+        return 1.0;
+    };
+};
+```
+
+**语法变体：实现成员函数 Schema（含 Schema 未要求的额外字段）**
+
+```eok
+struct Triangle2 : ShapeByMethod {
+    val base: f32;
+    val height: f32;
+
+    func area() -> f32 {
+        return this.base * this.height * 0.5;
     }
 };
 ```
 
-**语法变体：实现多个 Schema**
+上例中 `base`、`height` 为 Schema 未要求的额外数据字段；`ShapeByMethod` 仅要求成员函数 `area`。
+
+**语法变体：同时实现多个 Schema**
 
 ```eok
-struct Label {
+// `: Equals, Drawable` 为实现（implements）多个 Schema 契约，非类型继承
+struct Widget : Equals, Drawable {
+    val id: i32;
+    val label: String;
+
+    func equals(val other: Widget) -> bool {
+        return this.id == other.id;
+    }
+    func draw() -> void {
+        // ...
+    }
+};
+```
+
+**语法变体：实现能力 Schema**
+
+```eok
+struct EntityId : Equals {
+    val value: i32;
+
+    func equals(val other: EntityId) -> bool {
+        return this.value == other.value;
+    }
+};
+```
+
+**语法变体：实现继承 Schema（须满足全部成员）**
+
+```eok
+struct Label : Compare {
     val id: i32;
     val name: String;
 
-    impl Equalable {
-        func equals(val x: Label, val y: Label) -> bool {
-            return x.id == y.id;
-        }
+    func equals(val other: Label) -> bool {
+        return this.id == other.id;
     }
+    func compare(val other: Label) -> i32 {
+        if (this.id < other.id) { return -1; }
+        if (this.id > other.id) { return 1; }
+        return 0;
+    }
+};
+```
 
-    impl Comparable {
-        func equals(val x: Label, val y: Label) -> bool {
-            return x.id == y.id;
-        }
-        func compare(val x: Label, val y: Label) -> i32 {
-            if (x.id < y.id) { return -1; }
-            if (x.id > y.id) { return 1; }
-            return 0;
-        }
+**语法变体：实现含数据字段的 Schema**
+
+```eok
+struct Point : Vertex {
+    var x: f32;
+    var y: f32;
+
+    func magnitude() -> f32 {
+        return sqrt(this.x * this.x + this.y * this.y);
     }
 };
 ```
@@ -869,25 +1034,29 @@ struct Label {
 **语法变体：泛型 struct**
 
 ```eok
-struct Box<T> {
+struct Box<T> : Equals {
     var value: T;
 
-    impl Equalable {
-        func equals(val x: Box<T>, val y: Box<T>) -> bool {
-            return x.value == y.value;
-        }
+    func equals(val other: Box<T>) -> bool {
+        return this.value == other.value;
     }
 };
 ```
 
 **语义规则**
 
-1. `impl` **仅**可出现在 struct 体内（含 `@Compiler struct`）；不得出现在顶层或其他上下文。
-2. impl 块**必须**为所实现 Schema 中的**每个**函数原型提供**签名一致**的函数体；函数名、参数列表及返回类型必须与原型匹配；不得省略。
-3. impl 块中的函数为**类型级函数**：不占用 struct 实例内存布局，不作为实例字段访问；调用形式为 `func_name(args)`（如 `equals(a, b)`），由实参类型解析至对应 struct 的 impl 实现。
-4. impl 块中的函数**不得**隐式访问 struct 字段；操作实例数据时，须通过函数参数显式传入（§16）。
-5. 若 Schema 声明类型形参（如 `Equalable<T>`），impl 块写 `impl Equalable { ... }` 时，编译器将 `T` 绑定为当前 struct 类型；亦可显式写 `impl Equalable<StructName> { ... }`。
-6. 用户 struct **不得** impl 内核专用 `@Compiler` Schema（如 `Enumerable<T, C>`，见 §22）；**可**通过 impl 块实现能力 Schema（如 `Equalable<T>`、`Comparable<T>`）。
+1. `: SchemaName` 或 `: SchemaA, SchemaB, ...` **仅**可出现在 struct 声明处（含 `@Compiler struct`）；不得出现在顶层或其他上下文。
+2. struct **必须**为所声明的**每一个** Schema（含其继承链上全部基础 Schema）契约中的每个成员提供**形态一致**的定义：
+   - **数据字段**：声明同名、同类型的 `val` / `var` 字段；
+   - **函数值字段**：声明同名、同类型的 `val` / `var` 字段并提供初始化器；
+   - **成员函数**：提供签名一致的函数体；参数列表与返回类型须与原型匹配，**不得**在签名中显式声明 `this` 形参。
+3. struct **可**声明 Schema **未要求**的额外数据字段、函数值字段等；额外成员不参与 Schema 契约校验，但须满足 §8 字段类型等一般规则。
+4. 同时实现多个 Schema 时，若不同 Schema 对**同名成员**要求**形态或签名不一致**（如类型不同的同名字段、签名不同的同名成员函数），为编译错误；若多个 Schema 要求**签名完全一致**的同名成员函数，struct 中**只需提供一次**实现。
+5. **成员函数**不占用 struct 实例内存布局；调用形式为 `instance.method(args)`（§10.10）；编译器在**编译期**静态解析至具体 struct 的实现，`this` 绑定为 `instance`（§18 定位 4）。
+6. **函数值字段**占用**实现 struct** 的实例布局；调用 `instance.field(args)` 时对字段存储的函数值求值并调用，**不**注入 `this`。
+7. 成员函数体内**可**通过 `this.field` 访问当前实例的数据字段（§16）；函数值字段所存储的函数值**不得**隐式捕获外部变量（§16）。
+8. 若 Schema 声明类型形参（如 `Equals<T>`），struct 在声明处写 `: Equals`（**implements**，非类型标注）时，编译器将 `T` 绑定为当前 struct 类型；亦可显式写 `: Equals<StructName>`。
+9. 用户 struct **不得**声明 `: Enumerable<T, C>` 等内核专用 `@Compiler` Schema（见 §22.3）；**可**声明 `: Add`、`: Sub`、`: Mul`、`: Div`、`: Mod`、`: Neg`、`: Assign`、`: Boolean`、`: Equals`、`: Compare` 等能力 Schema 以满足相应契约。
 
 ---
 
@@ -895,7 +1064,7 @@ struct Box<T> {
 
 ### 19. 元数据系统
 
-**定位。** 元数据系统为编译期扩展机制，依赖 §18 Schema 所描述的类型能力约束。本节统合元数据相关的全部定义：`meta` 关键字（注解规范）、`@` 注解、编译器生成与校验、运行时模块 `eokas.meta` 及使用示例。
+**定位。** 元数据系统为编译期扩展机制，依赖 §18 Schema 所描述的**编译期**能力约束。本节统合元数据相关的全部定义：`meta` 关键字（注解规范）、`@` 注解、编译器生成与校验、运行时模块 `eokas.meta` 及使用示例。
 
 #### 19.1 整体架构
 
@@ -1186,7 +1355,7 @@ module app.meta_demo {
 
 ### 20. 标准库
 
-初始规划四大一级模块；`eokas.meta` 见 §19.6。`make`、`drop`、`is_valid`、`space_of` 等为 `Program` 的全局可见成员（§22.8），不属于标准库。
+初始规划四大一级模块；`eokas.meta` 见 §19.6。`make`、`drop`、`is_valid`、`space_of` 等为 `Program` 的全局可见成员（§22.7），不属于标准库。
 
 #### 20.1 eokas.core
 
@@ -1267,11 +1436,9 @@ Eokas 包（Package）是多个模块的集合单元，通过项目根目录下�
 
 ## 第九部分：编译器形式语法定义
 
-本节使用 Eokas 自身语法（schema + meta + func）形式化声明编译器内核的全部内置类型与操作。目标：语言规范从"文档描述"转变为"代码即规范"——编译器内核行为通过语言自身的语法构造完整表达，用户无需在语法之外阅读隐式规则。
+本节以 Eokas 自身语法（`schema`、`struct`、`meta`、`func`）形式化声明编译器内核的全部内置类型与操作，将规范从「文档描述」转为「代码即规范」：内核行为通过 §17（泛型）、§18（Schema）、§19（Meta）已定义的声明体系完整表达，用户无需在语法之外阅读隐式规则。前序各节给出用户可见的规范性语义；本节与之**语义等价**；Schema 名**仅**作编译期契约指称（§18 定位）。
 
 ### 22. 编译器内核声明
-
-本节以 §17（泛型）、§18（Schema）、§19（Meta）定义的类型系统机制，尝试对核心语法进行形式化重述。前序章节中定义用户可见的语法与语义（规范性定义）；本节定义编译器如何以语言自身的类型声明体系表达这些内置概念。两者语义等价。
 
 #### 22.1 @Compiler 元定义
 
@@ -1285,112 +1452,298 @@ meta Compiler {
 
 **语义规则**
 
-1. `@Compiler` 可标注 `schema`、`struct` 与顶层 `func`。标注 struct 时，impl 块规则同 §18.3。
+1. `@Compiler` 可标注 `schema`、`struct` 与顶层 `func`。标注 struct 时，Schema 实现规则同 §18.3。
 2. 标注于 `schema` 时：
-   - 该 schema **仅**可含函数原型（§18.1 语义规则 2），不得含数据字段；
-   - 函数原型由编译器或用户 struct 的 **impl 块**（§18.3）提供实现；用户代码**不得**另行声明同名 schema 定义；
-   - 内核专用 Schema（如 `Enumerable<T, C>`）仅编译器可通过 `@Compiler struct` 实现；能力 Schema（如 `Equalable<T>`）允许用户 struct 通过 impl 块提供函数体；
+   - 该 schema 为编译期契约（§18 定位），**非**运行时类型；
+   - 该 schema **可**含数据字段、函数值字段与成员函数原型（§18.1）；
+   - 成员函数与函数值字段由编译器或用户 struct 的 **`: SchemaName`** 实现（§18.3）提供定义；用户代码**不得**另行声明同名 schema 定义；
+   - 内核专用 Schema 契约（如 `Enumerable<T, C>`）仅编译器可通过 `@Compiler struct` 声明 `: SchemaName` 满足；能力 Schema 契约（如 `Add`、`Sub`、`Mul`、`Div`、`Mod`、`Neg`、`Assign<T>`、`Boolean`、`Equals<T>`、`Compare<T>`）允许用户 struct 声明 `: SchemaName` 并提供成员函数体；
    - 同一声明域内的多个 `@Compiler schema` 可互相引用类型（无需前向声明）。
 3. 标注于 `struct` 时：
    - 该 struct 由编译器内部实现，用户不可实例化，不可作为变量类型使用；
-   - 其数据字段及 impl 块中的函数由编译器提供实现；源码中 impl 块内的函数可仅声明签名（无函数体）；
+   - 其数据字段、函数值字段及成员函数由编译器提供实现；源码中成员函数可仅声明签名（无函数体）；
    - 编译器隐式提供该 struct 的唯一实例。
 4. 标注于 `func` 时：
    - 该函数由编译器内部实现，源码中仅声明签名，无函数体；
    - 用户不可定义同名同签名函数覆盖；
    - 全局可用，无需 `import`。
 5. `@Compiler(global=true)` 仅可标注 `struct`。标注后：
-   - 该 struct 的 impl 块中所有函数在全局作用域隐式可见，运行时代码可直接以函数名调用，无需 `StructName.` 前缀；
+   - 该 struct 的成员函数以全局 `func_name(args)` 形式可见（§10.10）；`this` 绑定编译器提供的 singleton，运行时代码可直接调用，无需 `StructName.` 前缀；
    - 若隐式函数名与用户代码中的标识符冲突，用户定义优先（局部遮蔽全局）；
    - 该 struct 由编译器隐式提供唯一实例，用户不可实例化、不可作为变量类型使用。
 6. `@Compiler` 标注的 schema、struct 与 func 构成语言的**内核声明层**；任何未在此层声明的内置行为，编译器不得隐式提供。
 
-#### 22.2 Equalable — 可相等约束
+#### 22.2 能力 Schema — 算术、赋值、相等、比较与逻辑
 
-**定义。** `Equalable<T>` 描述类型实例之间可执行相等性判断的形态约束。
+本节定义**能力 Schema** 契约：算术（二元 `Add`、`Sub`、`Mul`、`Div`、`Mod`；一元 `Neg`）、可赋值（`Assign<T>`）、可布尔运算（`Boolean`）、可相等（`Equals<T>`）、可比较（`Compare<T>`）。均为 `@Compiler` 标注；用户 struct **可**通过声明 `: SchemaName` 满足契约（§18.3）。Schema 成员函数签名中出现的 Schema 名（如 `Add`、`Neg`、`Boolean`）指**实现该契约的具体 struct 类型**（§18 定位），**非** Schema 作为运行时类型；**非**内置类型 `bool`。
+
+**Add — 可相加约束**
+
+**定义。** `Add` 描述**具体 struct 实例**之间可执行加法运算并返回同类型结果的形态约束。
 
 ```eok
 @Compiler
-schema Equalable<T> {
-    func equals(val x: T, val y: T) -> bool;
+schema Add {
+    func add(val a: Add, val b: Add) -> Add;
 };
 ```
 
-| 函数 | 签名 | 语义 |
-|------|------|------|
-| `equals` | `func(val x: T, val y: T) -> bool` | 判断 `x` 与 `y` 是否相等；相等为 `true` |
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `add` | `func(val a: Add, val b: Add) -> Add` | 将 `a` 与 `b` 相加，返回与操作数相同具体 struct 类型的结果 |
 
 **语义规则**
 
-1. `Equalable<T>` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 §18.3 impl 块为自定义 struct 提供 `equals` 函数体。
-2. 编译器为所有基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）、`bool` 及 `String` 内置实现 `Equalable`（无需用户 struct）。
-3. `equals` 函数签名中的 `T` 在具体实现中替换为实际 struct 类型；两个操作数必须为同一类型。
-4. 相等运算符 `==` 与 `!=`（§10.5）底层均基于 `Equalable` 实现：`a == b` 等价于 `equals(a, b)`，`a != b` 等价于 `!equals(a, b)`；两侧操作数类型必须一致，且该类型须实现 `Equalable`，否则为编译错误。
+1. `Add` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Add`（§18.3）提供 `add` 成员函数体。
+2. 签名中的 `Add` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其算术操作数满足 `Add` Schema 契约（无需用户 struct 声明 `: Add`）。
+4. 加法运算符 `+`（§10.3）对满足 `Add` Schema 契约的具体 struct 类型：`a + b` 等价于 `add(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础数值类型的 `+` 仍按 §10.3 内置语义，同时视为满足 `Add` 契约。
 
-#### 22.3 Comparable — 可比较约束
+**Sub — 可相减约束**
 
-**定义。** `Comparable<T>` 描述类型实例之间可执行全序比较操作的形态约束，继承 `Equalable<T>`（§22.2）。
+**定义。** `Sub` 描述**具体 struct 实例**之间可执行减法运算并返回同类型结果的形态约束。
 
 ```eok
 @Compiler
-schema Comparable<T> : Equalable<T> {
-    func equals(val x: T, val y: T) -> bool;
-    func compare(val x: T, val y: T) -> i32;
+schema Sub {
+    func sub(val a: Sub, val b: Sub) -> Sub;
 };
 ```
 
-| 函数 | 签名 | 语义 |
-|------|------|------|
-| `equals` | `func(val x: T, val y: T) -> bool` | 判断 `x` 与 `y` 是否相等；相等为 `true` |
-| `compare` | `func(val x: T, val y: T) -> i32` | 比较 `x` 与 `y`，返回比较结果 |
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `sub` | `func(val a: Sub, val b: Sub) -> Sub` | 将 `a` 减去 `b`，返回与操作数相同具体 struct 类型的结果 |
+
+**语义规则**
+
+1. `Sub` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Sub`（§18.3）提供 `sub` 成员函数体。
+2. 签名中的 `Sub` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其算术操作数满足 `Sub` Schema 契约（无需用户 struct 声明 `: Sub`）。
+4. 减法运算符 `-`（二元，§10.3）对满足 `Sub` Schema 契约的具体 struct 类型：`a - b` 等价于 `sub(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础数值类型的二元 `-` 仍按 §10.3 内置语义，同时视为满足 `Sub` 契约。一元负号 `-expr`（§10.2）**不**经 `Sub` 契约派发，而经 `Neg` Schema 契约派发（§22.2（Neg））。
+
+**Mul — 可相乘约束**
+
+**定义。** `Mul` 描述**具体 struct 实例**之间可执行乘法运算并返回同类型结果的形态约束。
+
+```eok
+@Compiler
+schema Mul {
+    func mul(val a: Mul, val b: Mul) -> Mul;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `mul` | `func(val a: Mul, val b: Mul) -> Mul` | 将 `a` 与 `b` 相乘，返回与操作数相同具体 struct 类型的结果 |
+
+**语义规则**
+
+1. `Mul` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Mul`（§18.3）提供 `mul` 成员函数体。
+2. 签名中的 `Mul` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其算术操作数满足 `Mul` Schema 契约（无需用户 struct 声明 `: Mul`）。
+4. 乘法运算符 `*`（§10.3）对满足 `Mul` Schema 契约的具体 struct 类型：`a * b` 等价于 `mul(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础数值类型的 `*` 仍按 §10.3 内置语义，同时视为满足 `Mul` 契约。
+
+**Div — 可相除约束**
+
+**定义。** `Div` 描述**具体 struct 实例**之间可执行除法运算并返回同类型结果的形态约束。
+
+```eok
+@Compiler
+schema Div {
+    func div(val a: Div, val b: Div) -> Div;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `div` | `func(val a: Div, val b: Div) -> Div` | 将 `a` 除以 `b`，返回与操作数相同具体 struct 类型的结果 |
+
+**语义规则**
+
+1. `Div` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Div`（§18.3）提供 `div` 成员函数体。
+2. 签名中的 `Div` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其算术操作数满足 `Div` Schema 契约（无需用户 struct 声明 `: Div`）。
+4. 除法运算符 `/`（§10.3）对满足 `Div` Schema 契约的具体 struct 类型：`a / b` 等价于 `div(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础数值类型的 `/` 仍按 §10.3 内置语义，同时视为满足 `Div` 契约。
+
+**Mod — 可取余约束**
+
+**定义。** `Mod` 描述**具体 struct 实例**之间可执行取余运算并返回同类型结果的形态约束。
+
+```eok
+@Compiler
+schema Mod {
+    func mod(val a: Mod, val b: Mod) -> Mod;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `mod` | `func(val a: Mod, val b: Mod) -> Mod` | 将 `a` 对 `b` 取余，返回与操作数相同具体 struct 类型的结果 |
+
+**语义规则**
+
+1. `Mod` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Mod`（§18.3）提供 `mod` 成员函数体。
+2. 签名中的 `Mod` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+3. 编译器对基础整数类型（`i8`–`i64`、`u8`–`u64`）**内置认定**其取余操作数满足 `Mod` Schema 契约（无需用户 struct 声明 `: Mod`）；浮点类型不适用 `%`。
+4. 取余运算符 `%`（§10.3）对满足 `Mod` Schema 契约的具体 struct 类型：`a % b` 等价于 `mod(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础整数类型的 `%` 仍按 §10.3 内置语义，同时视为满足 `Mod` 契约。
+
+**Neg — 可取负约束**
+
+**定义。** `Neg` 描述**具体 struct 实例**可执行一元取负运算并返回同类型结果的形态约束。
+
+```eok
+@Compiler
+schema Neg {
+    func neg(val a: Neg) -> Neg;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `neg` | `func(val a: Neg) -> Neg` | 对 `a` 取负，返回与操作数相同具体 struct 类型的结果 |
+
+**语义规则**
+
+1. `Neg` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Neg`（§18.3）提供 `neg` 成员函数体。
+2. 签名中的 `Neg` 在实现 struct 处替换为该 struct 的具体类型；参数与返回值须为同一具体类型。
+3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其一元取负操作数满足 `Neg` Schema 契约（无需用户 struct 声明 `: Neg`）。
+4. 一元负号运算符 `-expr`（§10.2）对满足 `Neg` Schema 契约的具体 struct 类型：`-a` 等价于 `neg(a)`（UFCS 形式）；操作数须为**具体**类型，否则为编译错误。基础数值类型的 `-expr` 仍按 §10.2 内置语义，同时视为满足 `Neg` 契约。一元正号 `+expr`（§10.2）**不**经 `Neg` 契约派发。
+
+**Equals — 可相等约束**
+
+**定义。** `Equals<T>` 描述**具体 struct 实例**之间可执行相等性判断的形态约束。
+
+```eok
+@Compiler
+schema Equals<T> {
+    func equals(val other: T) -> bool;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `equals` | `func(val other: T) -> bool` | 判断 `this` 与 `other` 是否相等；相等为 `true` |
+
+**语义规则**
+
+1. `Equals<T>` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Equals`（§18.3）为满足契约提供 `equals` 成员函数体。
+2. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）、`bool` 及 `String` **内置认定**其运算操作数满足 `Equals` Schema 契约（无需用户 struct 声明 `: Equals`）。
+3. `equals` 成员函数签名中的 `T` 在具体实现中绑定为**实现 struct** 的类型；`this` 与 `other` 必须为同一具体类型。
+4. 相等运算符 `==` 与 `!=`（§10.5）在编译期校验操作数的**具体 struct 类型**满足 `Equals` Schema 契约：`a == b` 等价于 `a.equals(b)`（UFCS 形式 `equals(a, b)` 等价），`a != b` 等价于 `!a.equals(b)`；两侧须为同一具体类型，否则为编译错误。
+
+**Compare — 可比较约束**
+
+**定义。** `Compare<T>` 描述**具体 struct 实例**之间可执行全序比较操作的形态约束；Schema 继承（§18.2）`Equals<T>` 契约。
+
+```eok
+@Compiler
+schema Compare<T> : Equals<T> {
+    func compare(val other: T) -> i32;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `equals` | `func(val other: T) -> bool` | 继承自 `Equals<T>`（§18.2）；判断 `this` 与 `other` 是否相等 |
+| `compare` | `func(val other: T) -> i32` | 比较 `this` 与 `other`，返回比较结果 |
 
 **返回值约定**
 
 | 条件 | `compare` 返回值 | `equals` 返回值 |
 |------|------------------|-----------------|
-| `x < y` | `-1` | `false` |
-| `x == y` | `0` | `true` |
-| `x > y` | `1` | `false` |
+| `this < other` | `-1` | `false` |
+| `this == other` | `0` | `true` |
+| `this > other` | `1` | `false` |
 
 **语义规则**
 
-1. `Comparable<T>` 为 `@Compiler` 标注的 schema，通过 schema 继承（§18.2）实现 `Equalable<T>`；用户代码不得另行定义同名 schema，但**可**通过 §18.3 impl 块为自定义 struct 提供 `equals` 与 `compare` 函数体。
-2. 编译器为所有基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）及 `String` 内置实现 `Comparable`（同时满足 `Equalable`）。
-3. `compare` 及 `equals` 函数签名中的 `T` 在具体实现中替换为实际 struct 类型；两个操作数必须为同一类型。
-4. `compare(x, y)` 返回值严格限定为 `-1`、`0`、`1` 之一；`compare(x, y) == 0` 当且仅当 `equals(x, y) == true`。
-5. 比较运算符 `>`、`<`、`>=`、`<=`（§10.5）底层均基于 `Comparable` 实现：`a < b` 等价于 `compare(a, b) == -1`，`a > b` 等价于 `compare(a, b) == 1`，`a <= b` 等价于 `compare(a, b) <= 0`，`a >= b` 等价于 `compare(a, b) >= 0`；两侧操作数类型必须一致，且该类型须实现 `Comparable`，否则为编译错误。
+1. `Compare<T>` 为 `@Compiler` 标注的 schema，通过 Schema 继承（§18.2）合并 `Equals<T>` 契约；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Compare`（§18.3）提供 `equals` 与 `compare` 成员函数体。
+2. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）及 `String` **内置认定**其比较操作数满足 `Compare` Schema 契约（同时涵盖 `Equals`）。
+3. `compare` 及 `equals` 成员函数签名中的 `T` 绑定为**实现 struct** 的类型；`this` 与 `other` 必须为同一具体类型。
+4. `this.compare(other)` 返回值严格限定为 `-1`、`0`、`1` 之一；`this.compare(other) == 0` 当且仅当 `this.equals(other) == true`。
+5. 比较运算符 `>`、`<`、`>=`、`<=`（§10.5）在编译期校验操作数的**具体 struct 类型**满足 `Compare` Schema 契约：`a < b` 等价于 `a.compare(b) == -1`，`a > b` 等价于 `a.compare(b) == 1`，`a <= b` 等价于 `a.compare(b) <= 0`，`a >= b` 等价于 `a.compare(b) >= 0`（UFCS 形式如 `compare(a, b)` 等价）；两侧须为同一具体类型，否则为编译错误。
 
-#### 22.4 Enumerable — 可枚举约束
+**Assign — 可赋值约束**
+
+**定义。** `Assign<T>` 描述**具体 struct 实例**可从同类型 `other` 接收赋值并更新 `this` 的形态约束。
+
+```eok
+@Compiler
+schema Assign<T> {
+    func assign(val other: T) -> void;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `assign` | `func(val other: T) -> void` | 将 `other` 的值赋给 `this`；返回 `void` |
+
+**语义规则**
+
+1. `Assign<T>` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Assign`（§18.3）为满足契约提供 `assign` 成员函数体。
+2. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）、`bool` 及 `String` **内置认定**其赋值操作数满足 `Assign` Schema 契约（无需用户 struct 声明 `: Assign`）。
+3. `assign` 成员函数签名中的 `T` 在具体实现中绑定为**实现 struct** 的类型；`this` 与 `other` 必须为同一具体类型。
+4. 赋值运算符 `=`（§10.9）在左操作数为 §10.9 规定的可变目标、且左、右两侧**具体 struct 类型**相同时：若该 struct 在编译期满足 `Assign` Schema 契约，则 `left = right` 等价于 `left.assign(right)`（UFCS 形式 `assign(left, right)` 等价）；`val` 绑定不可作为赋值目标。基础数值类型、`bool` 与 `String` 的 `=` 仍按 §10.9 内置语义，同时视为满足 `Assign` 契约。§5.7 规定的 `Slot` 成员访问赋值**不**经 `Assign` 契约派发。
+
+**Boolean — 可布尔运算约束**
+
+**定义。** `Boolean` 描述**具体 struct 实例**可执行逻辑非、逻辑与、逻辑或并返回同类型结果的形态约束。
+
+```eok
+@Compiler
+schema Boolean {
+    func not() -> Boolean;
+    func and(val rhs: Boolean) -> Boolean;
+    func or(val rhs: Boolean) -> Boolean;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `not` | `func() -> Boolean` | 对 `this` 取逻辑非，返回与操作数相同具体 struct 类型的结果 |
+| `and` | `func(val rhs: Boolean) -> Boolean` | 将 `this` 与 `rhs` 做逻辑与，返回与操作数相同具体 struct 类型的结果 |
+| `or` | `func(val rhs: Boolean) -> Boolean` | 将 `this` 与 `rhs` 做逻辑或，返回与操作数相同具体 struct 类型的结果 |
+
+**语义规则**
+
+1. `Boolean` 为 `@Compiler` 标注的 schema；用户代码不得另行定义同名 schema，但**可**通过 struct 声明 `: Boolean`（§18.3）提供 `not`、`and`、`or` 成员函数体。
+2. 签名中的 `Boolean` 在实现 struct 处替换为该 struct 的具体类型；`this`、`rhs` 及 `not` / `and` / `or` 的返回值须为同一具体类型。
+3. 编译器对内置 `bool` **内置认定**其逻辑操作数满足 `Boolean` Schema 契约（无需用户 struct 声明 `: Boolean`）。
+4. 逻辑非运算符 `!expr`（§10.2）对满足 `Boolean` Schema 契约的具体 struct 类型：`!a` 等价于 `a.not()`（UFCS 形式 `not(a)` 等价）；操作数须为**具体**类型，否则为编译错误。内置 `bool` 的 `!` 仍按 §10.2 内置语义，同时视为满足 `Boolean` 契约。`!` **不**经 `Neg` Schema 契约派发。
+5. 逻辑与 `a && b`、逻辑或 `a || b`（§10.6）对满足 `Boolean` Schema 契约的具体 struct 类型：两侧须为同一具体类型，并**保留短路求值**——`a && b` 先求值 `a`，若 `a.not()` 为 `true` 则不求值 `b`，结果为 `a`；否则求值 `b`，结果为 `a.and(b)`。`a || b` 先求值 `a`，若 `a.not()` 为 `false`（即 `a` 为真）则不求值 `b`，结果为 `a`；否则求值 `b`，结果为 `a.or(b)`。内置 `bool` 的 `&&` / `||` 仍按 §10.6 内置语义，同时视为满足 `Boolean` 契约。
+6. 控制流条件（§11）及三元条件运算符（§10.7）的操作数类型仍须为内置 `bool`；仅满足 `Boolean` 契约的其他 struct **不得**直接用作条件，除非显式转换为 `bool`（转换机制不在本节定义）。
+
+#### 22.3 Enumerable — 可枚举约束
 
 **定义。** `Enumerable<T, C>` 描述游标类型 `C` 可沿序列方向移动（前进 / 后退）并读写元素类型 `T` 的形态约束，是范围循环 `for` 结构的必要前提。
 
 ```eok
 @Compiler
 schema Enumerable<T, C> {
-    func has_next(val c: C, val offset: u32) -> bool;
-    func has_last(val c: C, val offset: u32) -> bool;
-    func next(val c: C, val offset: u32) -> C;
-    func last(val c: C, val offset: u32) -> C;
-    func get_value(val c: C) -> T;
-    func set_value(val c: C, val x: T) -> void;
+    func has_next(val offset: u32) -> bool;
+    func has_last(val offset: u32) -> bool;
+    func next(val offset: u32) -> C;
+    func last(val offset: u32) -> C;
+    func get_value() -> T;
+    func set_value(val x: T) -> void;
 };
 ```
 
-| 函数 | 签名 | 语义 |
-|------|------|------|
-| `has_next` | `func(val c: C, val offset: u32) -> bool` | 从 `c` 向后偏移 `offset` 个位置后是否存在可达元素；`true` 表示可安全调用 `next(c, offset)` |
-| `has_last` | `func(val c: C, val offset: u32) -> bool` | 从 `c` 向前偏移 `offset` 个位置后是否存在可达元素；`true` 表示可安全调用 `last(c, offset)` |
-| `next` | `func(val c: C, val offset: u32) -> C` | 从 `c` 向后偏移 `offset` 个位置，返回新游标；原游标不变 |
-| `last` | `func(val c: C, val offset: u32) -> C` | 从 `c` 向前偏移 `offset` 个位置，返回新游标；原游标不变 |
-| `get_value` | `func(val c: C) -> T` | 读取 `c` 当前位置所指向的元素值 |
-| `set_value` | `func(val c: C, val x: T) -> void` | 将 `x` 写入 `c` 当前位置 |
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `has_next` | `func(val offset: u32) -> bool` | 从 `this` 向后偏移 `offset` 个位置后是否存在可达元素；`true` 表示可安全调用 `this.next(offset)` |
+| `has_last` | `func(val offset: u32) -> bool` | 从 `this` 向前偏移 `offset` 个位置后是否存在可达元素；`true` 表示可安全调用 `this.last(offset)` |
+| `next` | `func(val offset: u32) -> C` | 从 `this` 向后偏移 `offset` 个位置，返回新游标；原游标不变 |
+| `last` | `func(val offset: u32) -> C` | 从 `this` 向前偏移 `offset` 个位置，返回新游标；原游标不变 |
+| `get_value` | `func() -> T` | 读取 `this` 当前位置所指向的元素值 |
+| `set_value` | `func(val x: T) -> void` | 将 `x` 写入 `this` 当前位置 |
 
 **语义规则**
 
-1. `Enumerable<T, C>` 为 `@Compiler` 标注的内核 Schema；仅编译器可通过 `@Compiler struct` 实现；用户代码不得自行实现。
-2. `MemorySlot<T>` 为 `@Compiler struct`（§22.6）；`Slot<T>` 通过 impl 块实现 `Enumerable<T, Slot<T>>`；编译器为 `Slot<T>` 提供全部函数实现。
-3. 范围循环 `for` 结构的迭代变量类型**必须**为已实现 `Enumerable` 的游标类型；未实现为编译错误。
-4. `@Compiler` 游标类型（如 `Slot<T>`）支持 UFCS 语法糖（§10.10）：`c.next(n)` 等价于 `next(c, n)`，`c.has_next(n)` 等价于 `has_next(c, n)`，以此类推。
+1. `Enumerable<T, C>` 为 `@Compiler` 标注的内核 Schema 契约；仅编译器可通过 `@Compiler struct` 声明 `: Enumerable<...>` 实现；用户代码不得自行实现。
+2. `MemorySlot<T>` 为 `@Compiler struct`（§22.5）；`Slot<T>` 通过声明 `: Enumerable<T, Slot<T>>` 满足该 Schema 契约；编译器为 `Slot<T>` 提供全部成员函数实现。
+3. 范围循环 `for` 结构的迭代变量须为**具体**游标 struct 类型（如 `Slot<T>`），且该 struct 在声明处写 `: Enumerable<T, C>` 并满足相应 Schema 契约；否则为编译错误。
+4. `@Compiler` 游标类型（如 `Slot<T>`）支持 UFCS 语法糖（§10.10）：`has_next(c, n)` 等价于 `c.has_next(n)`，`next(c, n)` 等价于 `c.next(n)`，以此类推。
 
 **范围循环 `for`**
 
@@ -1407,8 +1760,8 @@ for (var cursor = init_expr; has_next(cursor, step); cursor = next(cursor, step)
 **语义规则**
 
 1. `init_expr` 的类型必须为 `Enumerable` 的游标类型 `C`，否则为编译错误；
-2. 步进表达式中，迭代变量**必须**通过 `next(cursor, step)` 或 `last(cursor, step)` 推进（`@Compiler` 游标类型可写 UFCS 形式 `cursor.next(step)`）；不得使用算术运算或其他方式修改迭代变量；
-3. 条件表达式**宜**使用 `has_next(cursor, step)` 或 `has_last(cursor, step)` 判断是否可继续迭代（`@Compiler` 游标类型可写 UFCS 形式）；也可使用其他 `bool` 表达式；
+2. 步进表达式中，迭代变量**必须**通过 `cursor.next(step)` 或 `cursor.last(step)` 推进（UFCS 形式 `next(cursor, step)` 等价）；不得使用算术运算或其他方式修改迭代变量；
+3. 条件表达式**宜**使用 `cursor.has_next(step)` 或 `cursor.has_last(step)` 判断是否可继续迭代（UFCS 形式 `has_next(cursor, step)` 等价）；也可使用其他 `bool` 表达式；
 4. `break` / `continue` 规则同 §11.6。
 
 **示例**
@@ -1421,7 +1774,7 @@ for (var cur = slot_at(h, 0); has_next(cur, 1); cur = next(cur, 1)) {
 drop(h);
 ```
 
-#### 22.5 MemorySpace — 内存空间
+#### 22.4 MemorySpace — 内存空间
 
 **定义。** `MemorySpace<T>` 为编译器提供的 `@Compiler struct`，描述一块可容纳多个 `T` 类型元素的内存空间的状态形态。数据字段由 struct 定义，**非** Schema。
 
@@ -1438,9 +1791,9 @@ struct MemorySpace<T> {
 | `count` | `u32` | 空间可容纳的 `T` 类型元素数量；分配后不变 |
 | `valid` | `bool` | 当前句柄是否有效；`drop` 后由编译器置 `false` |
 
-#### 22.6 MemorySlot — 内存槽位
+#### 22.5 MemorySlot — 内存槽位
 
-**定义。** `MemorySlot<T>` 为编译器提供的 `@Compiler struct`，描述内存空间内一个具体位置的状态形态。`Slot<T>`（§22.7）为其唯一实现，并通过 impl 块实现 `Enumerable<T, Slot<T>>`（§22.4）。
+**定义。** `MemorySlot<T>` 为编译器提供的 `@Compiler struct`，描述内存空间内一个具体位置的状态形态。`Slot<T>`（§22.6）为其唯一实现 struct，并在声明处通过 `: Enumerable<T, Slot<T>>` 满足 `Enumerable` Schema 契约（§22.3）。
 
 ```eok
 @Compiler
@@ -1455,18 +1808,18 @@ struct MemorySlot<T> {
 | `owner` | `MemorySpace<T>` | 所属内存空间；创建后不变 |
 | `valid` | `bool` | 当前槽位是否有效；越界、失效时由编译器置 `false` |
 
-**Enumerable 操作**（由 `Slot<T>` 的 impl 块实现，§22.7）
+**Enumerable 操作**（`Slot<T>` 作为具体 struct 满足 `Enumerable<T, Slot<T>>` Schema 契约而提供的成员函数，§22.6）
 
-| 函数 | 签名 | 语义 |
-|------|------|------|
-| `has_next` | `func(val c: Slot<T>, val offset: u32) -> bool` | 从 `c` 向后偏移 `offset` 个位置后是否可达 |
-| `has_last` | `func(val c: Slot<T>, val offset: u32) -> bool` | 从 `c` 向前偏移 `offset` 个位置后是否可达 |
-| `next` | `func(val c: Slot<T>, val offset: u32) -> Slot<T>` | 向后偏移，返回新槽位；越界或原槽位无效时返回无效槽位 |
-| `last` | `func(val c: Slot<T>, val offset: u32) -> Slot<T>` | 向前偏移；规则同 `next` |
-| `get_value` | `func(val c: Slot<T>) -> T` | 读取 `c` 所指位置的 `T` 值；`c.valid == false` 时 UB |
-| `set_value` | `func(val c: Slot<T>, val x: T) -> void` | 将 `x` 写入 `c` 所指位置；`c.valid == false` 时 UB |
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `has_next` | `func(val offset: u32) -> bool` | 从 `this` 向后偏移 `offset` 个位置后是否可达 |
+| `has_last` | `func(val offset: u32) -> bool` | 从 `this` 向前偏移 `offset` 个位置后是否可达 |
+| `next` | `func(val offset: u32) -> Slot<T>` | 向后偏移，返回新槽位；越界或原槽位无效时返回无效槽位 |
+| `last` | `func(val offset: u32) -> Slot<T>` | 向前偏移；规则同 `next` |
+| `get_value` | `func() -> T` | 读取 `this` 所指位置的 `T` 值；`this.valid == false` 时 UB |
+| `set_value` | `func(val x: T) -> void` | 将 `x` 写入 `this` 所指位置；`this.valid == false` 时 UB |
 
-#### 22.7 Heap 与 Slot — 编译器提供的实现
+#### 22.6 Heap 与 Slot — 编译器提供的实现
 
 **定义。** `Heap<T>` 与 `Slot<T>` 为编译器提供的 `MemorySpace<T>` 与 `MemorySlot<T>` 的唯一实现类型。
 
@@ -1478,29 +1831,27 @@ struct Heap<T> {
 };
 
 @Compiler
-struct Slot<T> {
+struct Slot<T> : Enumerable<T, Slot<T>> {
     val owner: MemorySpace<T>;
     var valid: bool;
 
-    impl Enumerable<T, Slot<T>> {
-        func has_next(val c: Slot<T>, val offset: u32) -> bool;
-        func has_last(val c: Slot<T>, val offset: u32) -> bool;
-        func next(val c: Slot<T>, val offset: u32) -> Slot<T>;
-        func last(val c: Slot<T>, val offset: u32) -> Slot<T>;
-        func get_value(val c: Slot<T>) -> T;
-        func set_value(val c: Slot<T>, val x: T) -> void;
-    }
+    func has_next(val offset: u32) -> bool;
+    func has_last(val offset: u32) -> bool;
+    func next(val offset: u32) -> Slot<T>;
+    func last(val offset: u32) -> Slot<T>;
+    func get_value() -> T;
+    func set_value(val x: T) -> void;
 };
 ```
 
 **语义规则**
 
 1. `Heap<T>` 与 `Slot<T>` 为值类型，所有权归属所在作用域；作用域结束时句柄销毁，不自动调用 `drop`。
-2. `Heap<T>` 与 `MemorySpace<T>` 布局一致；`Slot<T>` 与 `MemorySlot<T>` 布局一致；分别用于具体类型名与抽象类型名（§22.8 `Program` 签名）。
-3. `Slot<T>` 的 impl 块中函数仅声明签名，由编译器内部提供实现；字段值由编译器内部管理。
+2. `Heap<T>` 与 `MemorySpace<T>` 布局一致；`Slot<T>` 与 `MemorySlot<T>` 布局一致；分别用于具体类型名与抽象类型名（§22.7 `Program` 签名）。
+3. `Slot<T>` 的成员函数仅声明签名，由编译器内部提供实现；字段值由编译器内部管理。
 4. 用户不得自行定义与 `MemorySpace<T>` / `MemorySlot<T>` 布局兼容的 `@Compiler` 替代 struct（§22.1 语义规则 2）。
 
-#### 22.8 Program — 进程实体
+#### 22.7 Program — 进程实体
 
 **定义。** `Program` 为编译器提供的全局唯一实体，代表当前进程（公理 A1），持有内存生命周期管理操作。
 
@@ -1517,16 +1868,14 @@ schema ProgramMemory {
 };
 
 @Compiler(global=true)
-struct Program {
-    impl ProgramMemory {
-        func make<T>(val count: u32) -> Heap<T>;
-        func drop<T>(val space: Heap<T>) -> void;
-        func is_valid<T, H>(val x: H) -> bool;
-        func slot_at<T>(val space: MemorySpace<T>, val index: u32) -> Slot<T>;
-        func space_of<T>(val slot: MemorySlot<T>) -> MemorySpace<T>;
-        func get_value<T>(val slot: MemorySlot<T>) -> T;
-        func set_value<T>(val slot: MemorySlot<T>, val x: T) -> void;
-    }
+struct Program : ProgramMemory {
+    func make<T>(val count: u32) -> Heap<T>;
+    func drop<T>(val space: Heap<T>) -> void;
+    func is_valid<T, H>(val x: H) -> bool;
+    func slot_at<T>(val space: MemorySpace<T>, val index: u32) -> Slot<T>;
+    func space_of<T>(val slot: MemorySlot<T>) -> MemorySpace<T>;
+    func get_value<T>(val slot: MemorySlot<T>) -> T;
+    func set_value<T>(val slot: MemorySlot<T>, val x: T) -> void;
 };
 ```
 
@@ -1537,8 +1886,8 @@ struct Program {
 | `is_valid(x)` | 等价于读取 `x.valid`；返回 `true` 表示有效，`false` 表示已失效 |
 | `slot_at(space, i)` | 索引在 `[0, space.count)` 内返回有效 `Slot<T>`；越界返回无效 `Slot<T>`（非 UB）；`space.valid == false` 时返回无效 `Slot<T>` |
 | `space_of(s)` | 等价于读取 `s.owner`；`s.valid == false` 时返回无效 `Heap<T>` |
-| `get_value(s)` | 调用 `Slot<T>` 的 `Enumerable` 实现 `get_value(s)`（§22.7）；`s.valid == false` 时 UB |
-| `set_value(s, x)` | 调用 `Slot<T>` 的 `Enumerable` 实现 `set_value(s, x)`（§22.7）；`s.valid == false` 时 UB |
+| `get_value(s)` | 调用 `s.get_value()`（§22.6）；`s.valid == false` 时 UB |
+| `set_value(s, x)` | 调用 `s.set_value(x)`（§22.6）；`s.valid == false` 时 UB |
 
 **语义规则**
 
@@ -1556,19 +1905,19 @@ if (is_valid(arr)) {         // 等价于 Program.is_valid(arr)
 }
 ```
 
-#### 22.9 公理对应关系
+#### 22.8 公理对应关系
 
 | 公理 / 推论 | 内核声明中的体现 |
 |-------------|-----------------|
-| A1（资源所有权） | `make` 与 `drop` 为 `Program` 的成员操作（§22.8）— Program 通过此两函数管控堆生命周期 |
+| A1（资源所有权） | `make` 与 `drop` 为 `Program` 的成员操作（§22.7）— Program 通过此两函数管控堆生命周期 |
 | A2（失效原则） | `drop` 语义：编译器将相关所有 `valid` 字段置 `false` |
 | A3（使用前校验） | `is_valid` 函数与 `.valid` 字段 — 两种等价访问路径 |
-| A4（最小抽象） | `@Compiler` 限定仅编译器内核可定义此类抽象，用户不可扩展 |
-| A5（操作数据分离） | Schema 函数为类型级操作，调用形式 `func_name(args)`；struct 实例不含函数布局（§18.3） |
+| A4（最小抽象） | `@Compiler` 限定仅编译器内核可定义此类抽象，用户不可扩展；Schema 无运行时类型信息（§18 定位） |
+| A5（操作数据分离） | 顶层自由函数与 `@Compiler(global=true)` 成员以 `func_name(args)` 调用；Schema 成员函数以 `instance.method(args)` **静态**调用并绑定 `this`；函数值字段按字段存取（§18） |
 | R4（边界安全） | `slot_at` 越界返回无效 `Slot<T>`（非 UB） |
 | R5（批量失效） | `drop` 语义中明确声明 |
 
-#### 22.10 Operator 语法糖预留
+#### 22.9 Operator 语法糖预留
 
 本节内核声明为后续 operator 语法规范预留对接点：
 
@@ -1580,7 +1929,7 @@ if (is_valid(arr)) {         // 等价于 Program.is_valid(arr)
 
 Operator 规范将独立定义语法糖到函数调用的映射规则，不改变本节核心模型。
 
-#### 22.11 示例
+#### 22.10 示例
 
 ```eok
 val arr = make<i32>(1024);
