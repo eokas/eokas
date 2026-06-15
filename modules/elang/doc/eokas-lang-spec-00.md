@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.67
+# Eokas 语言规范 v0.1.68
 
 **分册导航**
 
@@ -8,7 +8,7 @@
 - [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §22
 - [04 示例代码](eokas-lang-spec-04-examples.md) — §23
 
-# Eokas 语言规范 v0.1.67
+# Eokas 语言规范 v0.1.68
 
 ## 规范结构说明
 
@@ -60,7 +60,7 @@
 | 槽位 | `Slot<T>` | 元素类型为 `T` 的堆内位置标识（§7） |
 | 句柄 | — | 统称 `Heap<T>` / `Slot<T>` 变量 |
 | 无效 | 无效句柄/槽位 | `is_valid(x) == false`；与公理 A2「失效」等价 |
-| Schema | `schema` | 编译期契约（trait），**非**运行时类型；见 §18 定位 |
+| Schema | `schema` | 编译期能力约束（类似 C++ Concept / Rust trait），**非**运行时类型，**非** C# interface；Schema 名**不得**出现在任何类型位置（含 schema 定义内签名）；见 §18 |
 | 成员函数 | — | Schema 中以 `func` 声明的函数原型；实现于 struct 体内，编译期静态派发并绑定 `this`（§18） |
 | 函数值字段 | — | Schema 中以 `val name: func(...)` 声明的字段；约束实现 struct 须提供同名字段并计入其布局（§18） |
 

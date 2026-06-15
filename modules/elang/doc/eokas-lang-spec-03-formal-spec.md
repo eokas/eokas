@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.67 — 第三部分：语言形式规范
+# Eokas 语言规范 v0.1.68 — 第三部分：语言形式规范
 
 **分册导航**
 
@@ -31,7 +31,7 @@ module eokas.kernel {
    - 为编译期契约（§18 定位），**非**运行时类型；
    - **可**含数据字段、函数值字段与成员函数原型（§18.1）；
    - 成员由 `eokas.kernel` 内 struct 或用户 struct 的 **`: SchemaName`**（§18.3）实现；用户代码**不得**另行声明与 `eokas.kernel` 同名的 schema；
-   - 内核专用 Schema（如 `Enumerable<T, C>`）**仅** `eokas.kernel` 内 struct 可声明 `: SchemaName` 满足；能力 Schema（如 `Add`、`Predicate`、`Equals<T>` 等）允许用户 struct 声明 `: SchemaName` 并提供成员函数体；
+   - 内核专用 Schema（如 `Enumerable<T, C>`）**仅** `eokas.kernel` 内 struct 可声明 `: SchemaName` 满足；能力 Schema（如 `Add<T>`、`Sub<T>`、…、`Predicate<T>`、`Equals<T>`、`Compare<T>`、`Assign<T>` 等）允许用户 struct 声明 `: SchemaName` 或 `: SchemaName<StructName>` 并提供成员函数体；
    - 模块内多个 schema **可**互相引用类型（无需前向声明）。
 3. **句柄 struct**（`export struct` 的 `Heap<T>`、`Slot<T>`、`MemorySpace<T>`、`MemorySlot<T>`）：
    - 由编译器实现；用户**不得**字面量构造，**可**作为变量类型持有 `make` / `slot_at` 等返回的句柄；
@@ -48,131 +48,131 @@ module eokas.kernel {
 
 #### 22.2  能力 Schema — 算术、赋值、相等、比较与逻辑
 
-本节定义 `eokas.kernel` 中的**能力 Schema** 契约：算术（二元 `Add`、`Sub`、`Mul`、`Div`、`Mod`；一元 `Neg`）、可赋值（`Assign<T>`）、可谓词运算（`Predicate`）、可相等（`Equals<T>`）、可比较（`Compare<T>`）。用户 struct **可**通过声明 `: SchemaName` 满足契约（§18.3）。Schema 成员函数签名中出现的 Schema 名（如 `Add`、`Neg`、`Predicate`）指**实现该契约的具体 struct 类型**（§18 定位），**非** Schema 作为运行时类型；**非**内置类型 `bool`。
+本节定义 `eokas.kernel` 中的**能力 Schema** 契约：算术（二元 `Add<T>`、`Sub<T>`、`Mul<T>`、`Div<T>`、`Mod<T>`；一元 `Neg<T>`）、可赋值（`Assign<T>`）、可谓词运算（`Predicate<T>`）、可相等（`Equals<T>`）、可比较（`Compare<T>`）。本节能力 Schema 均通过类型形参（如 `Add<T>`）在成员签名中引用 `T`；Schema 名**不得**出现在任何类型位置（§18 定位 1）。用户 struct **可**通过 `: SchemaName` 或 `: SchemaName<StructName>` 满足契约（§18.3）。
 
-**Add — 可相加约束**
+**Add\<T\> — 可相加约束**
 
-**定义。** `Add` 描述**具体 struct 实例**之间可执行加法运算并返回同类型结果的形态约束。
+**定义。** `Add<T>` 描述**具体 struct 实例**之间可执行加法运算并返回同类型结果的形态约束。
 
 ```eok
-export schema Add {
-    func add(val a: Add, val b: Add) -> Add;
+export schema Add<T> {
+    func add(val a: T, val b: T) -> T;
 };
 ```
 
 | 成员函数 | 签名 | 语义 |
 |----------|------|------|
-| `add` | `func(val a: Add, val b: Add) -> Add` | 将 `a` 与 `b` 相加，返回与操作数相同具体 struct 类型的结果 |
+| `add` | `func(val a: T, val b: T) -> T` | 将 `a` 与 `b` 相加，返回与操作数相同具体 struct 类型的结果 |
 
 **语义规则**
 
-1. `Add` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Add`（§18.3）提供 `add` 成员函数体。
-2. 签名中的 `Add` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+1. `Add<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Add` 或 `: Add<StructName>`（§18.3）提供 `add` 成员函数体。
+2. `add` 成员函数签名中的 `T` 在 struct 声明 `: Add` 或 `: Add<StructName>` 时绑定为**该 struct 的具体类型**；`a`、`b` 及返回值须为同一具体类型。
 3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其算术操作数满足 `Add` Schema 契约（无需用户 struct 声明 `: Add`）。
 4. 加法运算符 `+`（§12.3）对满足 `Add` Schema 契约的具体 struct 类型：`a + b` 等价于 `add(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础数值类型的 `+` 仍按 §12.3 内置语义，同时视为满足 `Add` 契约。
 
-**Sub — 可相减约束**
+**Sub\<T\> — 可相减约束**
 
-**定义。** `Sub` 描述**具体 struct 实例**之间可执行减法运算并返回同类型结果的形态约束。
+**定义。** `Sub<T>` 描述**具体 struct 实例**之间可执行减法运算并返回同类型结果的形态约束。
 
 ```eok
-export schema Sub {
-    func sub(val a: Sub, val b: Sub) -> Sub;
+export schema Sub<T> {
+    func sub(val a: T, val b: T) -> T;
 };
 ```
 
 | 成员函数 | 签名 | 语义 |
 |----------|------|------|
-| `sub` | `func(val a: Sub, val b: Sub) -> Sub` | 将 `a` 减去 `b`，返回与操作数相同具体 struct 类型的结果 |
+| `sub` | `func(val a: T, val b: T) -> T` | 将 `a` 减去 `b`，返回与操作数相同具体 struct 类型的结果 |
 
 **语义规则**
 
-1. `Sub` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Sub`（§18.3）提供 `sub` 成员函数体。
-2. 签名中的 `Sub` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+1. `Sub<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Sub` 或 `: Sub<StructName>`（§18.3）提供 `sub` 成员函数体。
+2. `sub` 成员函数签名中的 `T` 在 struct 声明 `: Sub` 或 `: Sub<StructName>` 时绑定为**该 struct 的具体类型**；`a`、`b` 及返回值须为同一具体类型。
 3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其算术操作数满足 `Sub` Schema 契约（无需用户 struct 声明 `: Sub`）。
 4. 减法运算符 `-`（二元，§12.3）对满足 `Sub` Schema 契约的具体 struct 类型：`a - b` 等价于 `sub(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础数值类型的二元 `-` 仍按 §12.3 内置语义，同时视为满足 `Sub` 契约。一元负号 `-expr`（§12.2）**不**经 `Sub` 契约派发，而经 `Neg` Schema 契约派发（§22.2（Neg））。
 
-**Mul — 可相乘约束**
+**Mul\<T\> — 可相乘约束**
 
-**定义。** `Mul` 描述**具体 struct 实例**之间可执行乘法运算并返回同类型结果的形态约束。
+**定义。** `Mul<T>` 描述**具体 struct 实例**之间可执行乘法运算并返回同类型结果的形态约束。
 
 ```eok
-export schema Mul {
-    func mul(val a: Mul, val b: Mul) -> Mul;
+export schema Mul<T> {
+    func mul(val a: T, val b: T) -> T;
 };
 ```
 
 | 成员函数 | 签名 | 语义 |
 |----------|------|------|
-| `mul` | `func(val a: Mul, val b: Mul) -> Mul` | 将 `a` 与 `b` 相乘，返回与操作数相同具体 struct 类型的结果 |
+| `mul` | `func(val a: T, val b: T) -> T` | 将 `a` 与 `b` 相乘，返回与操作数相同具体 struct 类型的结果 |
 
 **语义规则**
 
-1. `Mul` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Mul`（§18.3）提供 `mul` 成员函数体。
-2. 签名中的 `Mul` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+1. `Mul<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Mul` 或 `: Mul<StructName>`（§18.3）提供 `mul` 成员函数体。
+2. `mul` 成员函数签名中的 `T` 在 struct 声明 `: Mul` 或 `: Mul<StructName>` 时绑定为**该 struct 的具体类型**；`a`、`b` 及返回值须为同一具体类型。
 3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其算术操作数满足 `Mul` Schema 契约（无需用户 struct 声明 `: Mul`）。
 4. 乘法运算符 `*`（§12.3）对满足 `Mul` Schema 契约的具体 struct 类型：`a * b` 等价于 `mul(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础数值类型的 `*` 仍按 §12.3 内置语义，同时视为满足 `Mul` 契约。
 
-**Div — 可相除约束**
+**Div\<T\> — 可相除约束**
 
-**定义。** `Div` 描述**具体 struct 实例**之间可执行除法运算并返回同类型结果的形态约束。
+**定义。** `Div<T>` 描述**具体 struct 实例**之间可执行除法运算并返回同类型结果的形态约束。
 
 ```eok
-export schema Div {
-    func div(val a: Div, val b: Div) -> Div;
+export schema Div<T> {
+    func div(val a: T, val b: T) -> T;
 };
 ```
 
 | 成员函数 | 签名 | 语义 |
 |----------|------|------|
-| `div` | `func(val a: Div, val b: Div) -> Div` | 将 `a` 除以 `b`，返回与操作数相同具体 struct 类型的结果 |
+| `div` | `func(val a: T, val b: T) -> T` | 将 `a` 除以 `b`，返回与操作数相同具体 struct 类型的结果 |
 
 **语义规则**
 
-1. `Div` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Div`（§18.3）提供 `div` 成员函数体。
-2. 签名中的 `Div` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+1. `Div<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Div` 或 `: Div<StructName>`（§18.3）提供 `div` 成员函数体。
+2. `div` 成员函数签名中的 `T` 在 struct 声明 `: Div` 或 `: Div<StructName>` 时绑定为**该 struct 的具体类型**；`a`、`b` 及返回值须为同一具体类型。
 3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其算术操作数满足 `Div` Schema 契约（无需用户 struct 声明 `: Div`）。
 4. 除法运算符 `/`（§12.3）对满足 `Div` Schema 契约的具体 struct 类型：`a / b` 等价于 `div(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础数值类型的 `/` 仍按 §12.3 内置语义，同时视为满足 `Div` 契约。
 
-**Mod — 可取余约束**
+**Mod\<T\> — 可取余约束**
 
-**定义。** `Mod` 描述**具体 struct 实例**之间可执行取余运算并返回同类型结果的形态约束。
+**定义。** `Mod<T>` 描述**具体 struct 实例**之间可执行取余运算并返回同类型结果的形态约束。
 
 ```eok
-export schema Mod {
-    func mod(val a: Mod, val b: Mod) -> Mod;
+export schema Mod<T> {
+    func mod(val a: T, val b: T) -> T;
 };
 ```
 
 | 成员函数 | 签名 | 语义 |
 |----------|------|------|
-| `mod` | `func(val a: Mod, val b: Mod) -> Mod` | 将 `a` 对 `b` 取余，返回与操作数相同具体 struct 类型的结果 |
+| `mod` | `func(val a: T, val b: T) -> T` | 将 `a` 对 `b` 取余，返回与操作数相同具体 struct 类型的结果 |
 
 **语义规则**
 
-1. `Mod` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Mod`（§18.3）提供 `mod` 成员函数体。
-2. 签名中的 `Mod` 在实现 struct 处替换为该 struct 的具体类型；`a`、`b` 及返回值须为同一具体类型。
+1. `Mod<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Mod` 或 `: Mod<StructName>`（§18.3）提供 `mod` 成员函数体。
+2. `mod` 成员函数签名中的 `T` 在 struct 声明 `: Mod` 或 `: Mod<StructName>` 时绑定为**该 struct 的具体类型**；`a`、`b` 及返回值须为同一具体类型。
 3. 编译器对基础整数类型（`i8`–`i64`、`u8`–`u64`）**内置认定**其取余操作数满足 `Mod` Schema 契约（无需用户 struct 声明 `: Mod`）；浮点类型不适用 `%`。
 4. 取余运算符 `%`（§12.3）对满足 `Mod` Schema 契约的具体 struct 类型：`a % b` 等价于 `mod(a, b)`（UFCS 形式）；两侧须为同一具体类型，否则为编译错误。基础整数类型的 `%` 仍按 §12.3 内置语义，同时视为满足 `Mod` 契约。
 
-**Neg — 可取负约束**
+**Neg\<T\> — 可取负约束**
 
-**定义。** `Neg` 描述**具体 struct 实例**可执行一元取负运算并返回同类型结果的形态约束。
+**定义。** `Neg<T>` 描述**具体 struct 实例**可执行一元取负运算并返回同类型结果的形态约束。
 
 ```eok
-export schema Neg {
-    func neg(val a: Neg) -> Neg;
+export schema Neg<T> {
+    func neg(val a: T) -> T;
 };
 ```
 
 | 成员函数 | 签名 | 语义 |
 |----------|------|------|
-| `neg` | `func(val a: Neg) -> Neg` | 对 `a` 取负，返回与操作数相同具体 struct 类型的结果 |
+| `neg` | `func(val a: T) -> T` | 对 `a` 取负，返回与操作数相同具体 struct 类型的结果 |
 
 **语义规则**
 
-1. `Neg` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Neg`（§18.3）提供 `neg` 成员函数体。
-2. 签名中的 `Neg` 在实现 struct 处替换为该 struct 的具体类型；参数与返回值须为同一具体类型。
+1. `Neg<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Neg` 或 `: Neg<StructName>`（§18.3）提供 `neg` 成员函数体。
+2. `neg` 成员函数签名中的 `T` 在 struct 声明 `: Neg` 或 `: Neg<StructName>` 时绑定为**该 struct 的具体类型**；参数与返回值须为同一具体类型。
 3. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）**内置认定**其一元取负操作数满足 `Neg` Schema 契约（无需用户 struct 声明 `: Neg`）。
 4. 一元负号运算符 `-expr`（§12.2）对满足 `Neg` Schema 契约的具体 struct 类型：`-a` 等价于 `neg(a)`（UFCS 形式）；操作数须为**具体**类型，否则为编译错误。基础数值类型的 `-expr` 仍按 §12.2 内置语义，同时视为满足 `Neg` 契约。一元正号 `+expr`（§12.2）**不**经 `Neg` 契约派发。
 
@@ -192,9 +192,9 @@ export schema Equals<T> {
 
 **语义规则**
 
-1. `Equals<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Equals`（§18.3）为满足契约提供 `equals` 成员函数体。
+1. `Equals<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Equals` 或 `: Equals<StructName>`（§18.3）为满足契约提供 `equals` 成员函数体。
 2. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）、`bool` 及 `String` **内置认定**其运算操作数满足 `Equals` Schema 契约（无需用户 struct 声明 `: Equals`）。
-3. `equals` 成员函数签名中的 `T` 在具体实现中绑定为**实现 struct** 的类型；`this` 与 `other` 必须为同一具体类型。
+3. `equals` 成员函数签名中的 `T` 在 struct 声明 `: Equals` 或 `: Equals<StructName>` 时绑定为**该 struct 的具体类型**；`this` 与 `other` 必须为同一具体类型。
 4. 相等运算符 `==` 与 `!=`（§12.5）在编译期校验操作数的**具体 struct 类型**满足 `Equals` Schema 契约：`a == b` 等价于 `a.equals(b)`（UFCS 形式 `equals(a, b)` 等价），`a != b` 等价于 `!a.equals(b)`；两侧须为同一具体类型，否则为编译错误。
 
 **Compare — 可比较约束**
@@ -222,9 +222,9 @@ export schema Compare<T> : Equals<T> {
 
 **语义规则**
 
-1. `Compare<T>` 为 `eokas.kernel` 导出的 schema，通过 Schema 继承（§18.2）合并 `Equals<T>` 契约；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Compare`（§18.3）提供 `equals` 与 `compare` 成员函数体。
+1. `Compare<T>` 为 `eokas.kernel` 导出的 schema，通过 Schema 继承（§18.2）合并 `Equals<T>` 契约；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Compare` 或 `: Compare<StructName>`（§18.3）提供 `equals` 与 `compare` 成员函数体。
 2. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）及 `String` **内置认定**其比较操作数满足 `Compare` Schema 契约（同时涵盖 `Equals`）。
-3. `compare` 及 `equals` 成员函数签名中的 `T` 绑定为**实现 struct** 的类型；`this` 与 `other` 必须为同一具体类型。
+3. `compare` 及 `equals` 成员函数签名中的 `T` 在 struct 声明 `: Compare` 或 `: Compare<StructName>` 时绑定为**该 struct 的具体类型**；`this` 与 `other` 必须为同一具体类型。
 4. `this.compare(other)` 返回值严格限定为 `-1`、`0`、`1` 之一；`this.compare(other) == 0` 当且仅当 `this.equals(other) == true`。
 5. 比较运算符 `>`、`<`、`>=`、`<=`（§12.5）在编译期校验操作数的**具体 struct 类型**满足 `Compare` Schema 契约：`a < b` 等价于 `a.compare(b) == -1`，`a > b` 等价于 `a.compare(b) == 1`，`a <= b` 等价于 `a.compare(b) <= 0`，`a >= b` 等价于 `a.compare(b) >= 0`（UFCS 形式如 `compare(a, b)` 等价）；两侧须为同一具体类型，否则为编译错误。
 
@@ -244,35 +244,35 @@ export schema Assign<T> {
 
 **语义规则**
 
-1. `Assign<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Assign`（§18.3）为满足契约提供 `assign` 成员函数体。
+1. `Assign<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Assign` 或 `: Assign<StructName>`（§18.3）为满足契约提供 `assign` 成员函数体。
 2. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）、`bool` 及 `String` **内置认定**其赋值操作数满足 `Assign` Schema 契约（无需用户 struct 声明 `: Assign`）。
-3. `assign` 成员函数签名中的 `T` 在具体实现中绑定为**实现 struct** 的类型；`this` 与 `other` 必须为同一具体类型。
+3. `assign` 成员函数签名中的 `T` 在 struct 声明 `: Assign` 或 `: Assign<StructName>` 时绑定为**该 struct 的具体类型**；`this` 与 `other` 必须为同一具体类型。
 4. 赋值运算符 `=`（§12.9）在左操作数为 §12.9 规定的可变目标、且左、右两侧**具体 struct 类型**相同时：若该 struct 在编译期满足 `Assign` Schema 契约，则 `left = right` 等价于 `left.assign(right)`（UFCS 形式 `assign(left, right)` 等价）；`val` 绑定不可作为赋值目标。基础数值类型、`bool` 与 `String` 的 `=` 仍按 §12.9 内置语义，同时视为满足 `Assign` 契约。§7.7 规定的 `Slot` 成员访问赋值**不**经 `Assign` 契约派发。
 
-**Predicate — 可谓词运算约束**
+**Predicate\<T\> — 可谓词运算约束**
 
-**定义。** `Predicate` 描述**具体 struct 实例**可执行逻辑非、逻辑与、逻辑或并返回同类型结果，并可转换为内置 `bool` 的形态约束。
+**定义。** `Predicate<T>` 描述**具体 struct 实例**可执行逻辑非、逻辑与、逻辑或并返回同类型结果，并可转换为内置 `bool` 的形态约束。
 
 ```eok
-export schema Predicate {
-    func not() -> Predicate;
-    func and(val rhs: Predicate) -> Predicate;
-    func or(val rhs: Predicate) -> Predicate;
+export schema Predicate<T> {
+    func not() -> T;
+    func and(val rhs: T) -> T;
+    func or(val rhs: T) -> T;
     func to_bool() -> bool;
 };
 ```
 
 | 成员函数 | 签名 | 语义 |
 |----------|------|------|
-| `not` | `func() -> Predicate` | 对 `this` 取逻辑非，返回与操作数相同具体 struct 类型的结果 |
-| `and` | `func(val rhs: Predicate) -> Predicate` | 将 `this` 与 `rhs` 做逻辑与，返回与操作数相同具体 struct 类型的结果 |
-| `or` | `func(val rhs: Predicate) -> Predicate` | 将 `this` 与 `rhs` 做逻辑或，返回与操作数相同具体 struct 类型的结果 |
+| `not` | `func() -> T` | 对 `this` 取逻辑非，返回与操作数相同具体 struct 类型的结果 |
+| `and` | `func(val rhs: T) -> T` | 将 `this` 与 `rhs` 做逻辑与，返回与操作数相同具体 struct 类型的结果 |
+| `or` | `func(val rhs: T) -> T` | 将 `this` 与 `rhs` 做逻辑或，返回与操作数相同具体 struct 类型的结果 |
 | `to_bool` | `func() -> bool` | 将 `this` 的逻辑真值映射为内置 `bool` |
 
 **语义规则**
 
-1. `Predicate` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Predicate`（§18.3）提供 `not`、`and`、`or`、`to_bool` 成员函数体。
-2. 签名中的 `Predicate` 在实现 struct 处替换为该 struct 的具体类型；`this`、`rhs` 及 `not` / `and` / `or` 的返回值须为同一具体类型；`to_bool` 的返回类型恒为内置 `bool`。
+1. `Predicate<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Predicate` 或 `: Predicate<StructName>`（§18.3）提供 `not`、`and`、`or`、`to_bool` 成员函数体。
+2. `not` / `and` / `or` 成员函数签名中的 `T` 在 struct 声明 `: Predicate` 或 `: Predicate<StructName>` 时绑定为**该 struct 的具体类型**；`this`、`rhs` 及 `not` / `and` / `or` 的返回值须为同一具体类型；`to_bool` 的返回类型恒为内置 `bool`。
 3. 编译器对内置 `bool` **内置认定**其逻辑操作数满足 `Predicate` Schema 契约（无需用户 struct 声明 `: Predicate`）；对 `bool` 实例，`to_bool()` 返回与 `this` 等价的 `bool` 值。
 4. 逻辑非运算符 `!expr`（§12.2）对满足 `Predicate` Schema 契约的具体 struct 类型：`!a` 等价于 `a.not()`（UFCS 形式 `not(a)` 等价）；操作数须为**具体**类型，否则为编译错误。内置 `bool` 的 `!` 仍按 §12.2 内置语义，同时视为满足 `Predicate` 契约。`!` **不**经 `Neg` Schema 契约派发。
 5. 逻辑与 `a && b`、逻辑或 `a || b`（§12.6）对满足 `Predicate` Schema 契约的具体 struct 类型：两侧须为同一具体类型，并**保留短路求值**——`a && b` 先求值 `a`，若 `a.not()` 为 `true` 则不求值 `b`，结果为 `a`；否则求值 `b`，结果为 `a.and(b)`。`a || b` 先求值 `a`，若 `a.not()` 为 `false`（即 `a` 为真）则不求值 `b`，结果为 `a`；否则求值 `b`，结果为 `a.or(b)`。内置 `bool` 的 `&&` / `||` 仍按 §12.6 内置语义，同时视为满足 `Predicate` 契约。
@@ -324,7 +324,7 @@ for (var cursor = init_expr; has_next(cursor, step); cursor = next(cursor, step)
 
 **语义规则**
 
-1. `init_expr` 的类型必须为 `Enumerable` 的游标类型 `C`，否则为编译错误；
+1. `init_expr` 的类型必须为**具体**游标 struct 类型 `C`，且该 struct 在声明处满足 `Enumerable<T, C>` Schema 契约（§22.3 语义规则 3），否则为编译错误；
 2. 步进表达式中，迭代变量**必须**通过 `cursor.next(step)` 或 `cursor.last(step)` 推进（UFCS 形式 `next(cursor, step)` 等价）；不得使用算术运算或其他方式修改迭代变量；
 3. 条件表达式**宜**使用 `cursor.has_next(step)` 或 `cursor.has_last(step)` 判断是否可继续迭代（UFCS 形式 `has_next(cursor, step)` 等价）；也可使用其他 `bool` 表达式；
 4. `break` / `continue` 规则同 §13.6。
@@ -469,7 +469,7 @@ if (is_valid(arr)) {         // 等价于 eokas.kernel.is_valid(arr)
 | A1（资源所有权） | `make` 与 `drop` 为 `eokas.kernel` 的 `export func`（§22.7）— 进程通过此两函数管控堆生命周期 |
 | A2（失效原则） | `drop` 语义：编译器将相关所有 `valid` 字段置 `false` |
 | A3（使用前校验） | `is_valid` 函数与 `.valid` 字段 — 两种等价访问路径 |
-| A4（最小抽象） | `eokas.kernel` 限定内核抽象由工具链内置提供，用户不可扩展或覆盖；Schema 无运行时类型信息（§18 定位） |
+| A4（最小抽象） | `eokas.kernel` 限定内核抽象由工具链内置提供，用户不可扩展或覆盖；Schema 为编译期 Concept 式约束，无运行时类型信息（§18 定位） |
 | A5（操作数据分离） | 顶层自由函数与 `eokas.kernel` 预导入堆操作以 `func_name(args)` 调用；Schema 成员函数以 `instance.method(args)` **静态**调用并绑定 `this`；函数值字段按字段存取（§18） |
 | R4（边界安全） | `slot_at` 越界返回无效 `Slot<T>`（非 UB） |
 | R5（批量失效） | `drop` 语义中明确声明 |

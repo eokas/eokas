@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.67 — 第一部分：设计原则
+# Eokas 语言规范 v0.1.68 — 第一部分：设计原则
 
 **分册导航**
 
@@ -44,7 +44,7 @@
 
 **R3：Schema 约束**（由 §18 推出）
 
-struct 在声明处写 `: SchemaName` 或 `: SchemaA, SchemaB, ...` 时，必须在**编译期**满足所声明各 Schema 契约中的全部成员（含各 Schema 继承链上的基础成员）；**可**另行声明 Schema 未要求的其他成员。Schema 约束不产生运行时类型；推论见 §18.3。
+struct 在声明处写 `: SchemaName` 或 `: SchemaA, SchemaB, ...` 时，必须在**编译期**满足所声明各 Schema 契约中的全部成员（含各 Schema 继承链上的基础成员）；**可**另行声明 Schema 未要求的其他成员。Schema 约束不产生运行时类型；Schema 为编译期约束（类似 C++ Concept），**非** interface 式运行时抽象类型；推论见 §18.3。
 
 **R4：`Slot<T>` 边界安全**（由 §7.5、§7.6 推出）
 

@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.67 — 第二部分：语言核心规范
+# Eokas 语言规范 v0.1.68 — 第二部分：语言核心规范
 
 **分册导航**
 
@@ -258,7 +258,7 @@ func<T1, T2>(var a: T1, var b: T2) -> T1
 
 1. 泛型函数类型在函数类型基础上增加类型形参列表（`<T>` / `<T1, T2>`），形参规则同 §17.1。
 2. 调用泛型函数类型的值时，必须在调用处显式指定类型实参（如 `make<i32>(10)`）。
-3. 函数类型的参数与返回类型**不得**为 Schema 名（§18 定位）。
+3. 函数类型的参数与返回类型**不得**为 Schema 名（§18 定位 1；含 schema 定义内签名）。
 
 ### 9. 枚举
 
@@ -291,7 +291,7 @@ struct Vec3 {
 1. 用户 `struct` 通过 `: SchemaName` 或 `: SchemaA, SchemaB, ...`（§18.3）声明实现的 Schema；**必须**提供各 Schema 契约所要求的全部成员（数据字段、函数值字段与成员函数）。
 2. 实现 Schema **并不要求** struct 成员列表与 Schema 完全一致；struct **可**在满足契约的前提下声明 Schema **未要求**的额外数据字段、函数值字段等。
 3. 一个 struct **可**同时实现多个 Schema，语法为 `struct A : SchemaA, SchemaB, SchemaC`（§18.3）。
-4. 运行时变量与字段的类型**必须**为具体 `struct`、`enum` 或 §5–§9 已定义类型；**不得**以 Schema 名作为类型（§18 定位）。
+4. 运行时变量与字段的类型**必须**为具体 `struct`、`enum` 或 §5–§9 已定义类型；**不得**以 Schema 名作为类型（§18 定位 1；含 schema 定义内签名）。
 
 ---
 
@@ -307,7 +307,7 @@ var identifier = expression; // 可变变量
 **语义规则。**
 
 1. 声明右侧表达式的类型必须为已定义类型；`val` 声明的绑定在初始化后不可再赋值（见 §12.10）。
-2. 显式类型标注及类型推断结果**不得**为 Schema 名（§18 定位）；变量类型**必须**为具体 `struct`、`enum` 或 §5–§9 已定义类型。
+2. 显式类型标注及类型推断结果**不得**为 Schema 名（§18 定位 1；含 schema 定义内签名）；变量类型**必须**为具体 `struct`、`enum` 或 §5–§9 已定义类型。
 
 ### 12. 表达式与运算符
 
@@ -551,7 +551,7 @@ func main() -> void {
 1. **函数不支持重载**：同一声明域内不得存在多个同名函数定义，即使参数列表、类型形参列表或返回类型不同，亦为编译错误。
 2. 此规则适用于顶层 `func` 定义、`eokas.kernel` 导出的 `export func`（§22.1）、struct 实现 Schema 时声明的成员函数（§18.3），以及顶层 **schema** 中的成员函数原型：同一 struct 内、或同一 schema 内不得重复声明同名成员函数。
 3. 泛型函数以调用处的类型实参区分实例化，不属于重载；类型形参的名称不影响函数身份。
-4. 函数参数与返回类型**不得**为 Schema 名（§18 定位）；须为具体类型或类型形参。
+4. 函数参数与返回类型**不得**为 Schema 名（§18 定位 1；含 schema 定义内签名）；须为具体类型或类型形参。
 
 ### 15. 初始化
 
@@ -694,7 +694,9 @@ log_equal(e, e);   // 单态化为 EntityId 版本
 
 **定位。** Schema 是**编译期契约**（trait），**不是**运行时类型。
 
-1. **Schema 无运行时实例**：Schema 名在运行时**不存在**；**不得**用 Schema 名声明变量、字段、函数参数、返回值，或作为 `func` 类型中的类型成分。Schema **无**独立内存布局，**不可**构造 Schema 值。
+**概念模型。** `schema` 声明编译期能力约束，语义类似 **C++ Concepts**：用于约束泛型实例化与编译期成员检查，**不**引入运行时抽象类型、虚表或 interface 式引用。Schema 名**不是**类型名；`struct : SchemaName` 表示该 struct **满足**（models）Schema 契约，**非** interface 实现中的类型继承。若无 future existential 类型（§18 定位 5），**不得**以 Schema 名声明变量、参数、返回值或 homogeneous 容器元素类型。
+
+1. **Schema 无运行时实例**：Schema 名在运行时**不存在**；**不得**用 Schema 名声明变量、字段、函数参数、返回值，或作为 `func` 类型中的类型成分；**含** `schema` 定义体内的成员函数与函数值字段原型签名。**无例外。** Schema **无**独立内存布局，**不可**构造 Schema 值。
 2. **数据字段为布局约束**：Schema 中的 `val` / `var` 数据字段仅约束实现 struct **须**提供同名、同类型字段并计入**该 struct** 的实例布局；**不**表示 Schema 自身持有实例数据。
 3. **多态方式**：跨 struct 的共性通过 **泛型 + Schema 约束 + 单态化**（§17.5）表达，**不**通过 Schema 类型的变量或容器 homogeneity 表达。
 4. **成员函数静态派发**：成员函数在编译期绑定至具体 struct 实现；调用 `instance.method(args)` 时 `this` 的类型为**具体** struct，**非** Schema。
@@ -713,6 +715,7 @@ Schema 名**不是**类型名；下列为 Schema 名**允许**与**禁止**出�
 | `var x: SchemaName` | ❌ | Schema 非类型 |
 | struct 字段类型、函数参数、返回值 | ❌ | 须为具体 `struct` / `enum` / §5–§9 类型 |
 | `func` 类型的类型成分 | ❌ | 同上 |
+| schema 成员函数 / 函数值字段签名中的参数或返回类型 | ❌ | 须为具体类型、内置类型或 schema 的类型形参（如 `T`）；**不得**为 Schema 名 |
 
 **规范用语。** 正文叙述中，将「某 struct 满足某 Schema」写为 **满足 Schema 契约** 或 **声明 `: SchemaName`**；**避免**写「某**类型**是 Schema」「变量类型为 Schema」等暗示 Schema 为类型的表述。运算符章节中的「须满足 `Equals` Schema」即此含义（§22.2），**不**表示操作数类型为 `Equals`。
 
@@ -722,6 +725,9 @@ Schema 名**不是**类型名；下列为 Schema 名**允许**与**禁止**出�
 var d: Drawable = widget;              // 编译错误：Schema 非类型
 func accept(var x: Equals) -> void; // 编译错误
 struct Bag { var item: Compare; };  // 编译错误
+schema BadAdd {
+    func add(val a: Add, val b: Add) -> Add;  // 编译错误：Schema 名不得作类型
+};
 ```
 
 **定义。** Schema 规定 struct 必须提供的**成员形态**：数据字段、函数值字段与成员函数。struct 通过 `: SchemaName` 或 `: SchemaA, SchemaB, ...` 声明实现，须提供 Schema 要求的对应定义；**可**同时声明 Schema 未要求的其他成员。形参规则同 §17.1。
@@ -798,7 +804,7 @@ schema Drawable : Renderable, Serializable {
 1. `schema` **仅**用于顶层 Schema 定义；不得出现在 struct 体内。
 2. Schema **可**声明数据字段（`val` / `var` + 非 `func` 类型）、函数值字段（`val` + `func` 类型）与成员函数（`func` 签名）；均不得以 `{ ... }` 提供函数体。
 3. Schema 中的数据字段与函数值字段**仅**约束实现 struct 的成员形态与布局（§18 定位 2）；**不**表示 Schema 自身有实例或可实例化。
-4. Schema 名**不得**用作类型（§18 定位 1）；Schema 继承（§18.2）合并编译期契约，**不**构成运行时 subtyping。
+4. Schema 名**不得**出现在任何类型位置（§18 定位 1），**含**本 `schema` 定义内的成员签名。Self 型能力契约**须**声明类型形参（如 `Add<T>`）并在签名中使用 `T`，**不得**用 Schema 名自引用。Schema 继承（§18.2）合并编译期契约，**不**构成运行时 subtyping。
 5. Schema 中的 `func` 声明为**成员函数**原型：仅含签名，以 `;` 结尾；实现于 struct 体内，编译期静态派发并绑定 `this`（§4 语义规则 2–3）。
 6. Schema 中的 `val name: func(...) -> T;` 声明为**函数值字段**：约束实现 struct 须提供同名、同类型字段；调用 `instance.name(args)` 时**不**绑定 `this`。
 7. struct 通过 `: SchemaName`（§18.3）提供 Schema 要求的全部成员定义。
@@ -932,8 +938,8 @@ struct Box<T> : Equals {
 5. **成员函数**不占用 struct 实例内存布局；调用形式为 `instance.method(args)`（§12.10）；编译器在**编译期**静态解析至具体 struct 的实现，`this` 绑定为 `instance`（§18 定位 4）。
 6. **函数值字段**占用**实现 struct** 的实例布局；调用 `instance.field(args)` 时对字段存储的函数值求值并调用，**不**注入 `this`。
 7. 成员函数体内**可**通过 `this.field` 访问当前实例的数据字段（§3）；函数值字段所存储的函数值**不得**隐式捕获外部变量（§3）。
-8. 若 Schema 声明类型形参（如 `Equals<T>`），struct 在声明处写 `: Equals`（**implements**，非类型标注）时，编译器将 `T` 绑定为当前 struct 类型；亦可显式写 `: Equals<StructName>`。
-9. 用户 struct **不得**声明 `: Enumerable<T, C>` 等内核专用 Schema（见 §22.3，`eokas.kernel` 限定）；**可**声明 `: Add`、`: Sub`、`: Mul`、`: Div`、`: Mod`、`: Neg`、`: Assign`、`: Predicate`、`: Equals`、`: Compare` 等 `eokas.kernel` 能力 Schema 以满足相应契约。
+8. 若 Schema 声明类型形参（如 `Equals<T>`、`Add<T>`、`Predicate<T>`），struct 在声明处写 `: SchemaName`（**implements**，非类型标注）时，编译器将 `T` 绑定为当前 struct 类型；亦可显式写 `: SchemaName<StructName>`。
+9. 用户 struct **不得**声明 `: Enumerable<T, C>` 等内核专用 Schema（见 §22.3，`eokas.kernel` 限定）；**可**声明 `: Add`、`: Sub`、`: Mul`、`: Div`、`: Mod`、`: Neg`、`: Assign`、`: Predicate`、`: Equals`、`: Compare` 等 `eokas.kernel` 能力 Schema 以满足相应契约（对含类型形参的 Schema，`: Name` 等价于 `: Name<当前 struct 名>`；亦可显式写 `: Add<MyStruct>`）。
 
 ---
 
