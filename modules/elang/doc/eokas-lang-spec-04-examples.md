@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.68 — 第四部分：示例代码
+# Eokas 语言规范 v0.1.69 — 第四部分：示例代码
 
 **分册导航**
 
@@ -38,7 +38,7 @@ module app.fib {
 
 #### 23.2  结构体与 Result
 
-*说明规范节：§10, §16, §20*
+*说明规范节：§10, §15, §16, §20*
 
 ```eok
 module app.calc {
@@ -88,32 +88,38 @@ module app.list {
 
     func push(var list: Slot<IntList>, var v: i32) -> void {
         val h = make<Node>(1);
-        if (is_valid(h)) {
-            h[0].value = v;
-            h[0].next = list.head;
-            list.head = h[0];
+        if (h.valid) {
+            val node = h[0];
+            if (node.valid) {
+                node.value = v;
+                node.next = list.head;
+                list.head = node;
+            }
+            // h 句柄出作用域不 drop；堆由 list.head 中 Slot<Node>.owner 持有（§7、§22.4）
         }
     }
 
     func pop(var list: Slot<IntList>) -> i32 {
-        if (!is_valid(list.head)) {
+        if (!list.head.valid) {
             return 0;
         }
         val s = list.head;
         val v = s.value;
         list.head = s.next;
-        drop(space_of(s));
+        drop(s.owner);
         return v;
     }
 
     func main() -> void {
         val lh = make<IntList>(1);
-        if (is_valid(lh)) {
+        if (lh.valid) {
             val list = lh[0];
-            push(list, 10);
-            push(list, 20);
-            val a = pop(list);
-            val b = pop(list);
+            if (list.valid) {
+                push(list, 10);
+                push(list, 20);
+                val a = pop(list);
+                val b = pop(list);
+            }
             drop(lh);
         }
     }

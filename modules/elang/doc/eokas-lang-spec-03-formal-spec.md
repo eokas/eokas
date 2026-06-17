@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.68 — 第三部分：语言形式规范
+# Eokas 语言规范 v0.1.69 — 第三部分：语言形式规范
 
 **分册导航**
 
@@ -16,39 +16,39 @@
 
 #### 22.1  模块定义与语义
 
-**定义。** `eokas.kernel` 为工具链**内置**的内核模块，封装 §22.2–§22.7 的全部 `export` 声明；由编译器提供实现，用户**不得**修改或覆盖其定义，**不得**在其他模块中重复声明同名 `schema` / `struct` / `export func`。
+**定义。** `eokas.kernel` 为工具链**内置**的内核模块，封装 §22.2–§22.5 的全部 `export` 声明；由编译器提供实现，用户**不得**修改或覆盖其定义，**不得**在其他模块中重复声明同名 `schema` / `struct` / `export func`。
 
 ```eok
 module eokas.kernel {
-    // §22.2–§22.7 所列 export schema、export struct、export func 的规范性汇总
+    // §22.2–§22.5 所列 export schema、export struct、export func 的规范性汇总
 };
 ```
 
 **语义规则**
 
-1. **预导入。** 所有用户模块**隐式**依赖 `eokas.kernel`；其中标记为**全局堆操作**的 `export func`（§22.7）在任意模块内以 `func_name(args)` 形式直接可用，无需 `import`，无需 `kernel.` 前缀（§12.10）。
+1. **预导入。** 所有用户模块**隐式**依赖 `eokas.kernel`；其中标记为**全局堆操作**的 `export func`（§22.5）在任意模块内以 `func_name(args)` 形式直接可用，无需 `import`，无需 `kernel.` 前缀（§12.11）。
 2. **schema**（`export schema`）：
    - 为编译期契约（§18 定位），**非**运行时类型；
    - **可**含数据字段、函数值字段与成员函数原型（§18.1）；
    - 成员由 `eokas.kernel` 内 struct 或用户 struct 的 **`: SchemaName`**（§18.3）实现；用户代码**不得**另行声明与 `eokas.kernel` 同名的 schema；
-   - 内核专用 Schema（如 `Enumerable<T, C>`）**仅** `eokas.kernel` 内 struct 可声明 `: SchemaName` 满足；能力 Schema（如 `Add<T>`、`Sub<T>`、…、`Predicate<T>`、`Equals<T>`、`Compare<T>`、`Assign<T>` 等）允许用户 struct 声明 `: SchemaName` 或 `: SchemaName<StructName>` 并提供成员函数体；
+   - 内核专用 Schema（如 `Enumerable<T, C>`）**仅** `eokas.kernel` 内 struct 可声明 `: SchemaName` 满足；能力 Schema（如 `Add<T>`、`Sub<T>`、…、`Predicate<T>`、`BitOp<T>`、`IndexOp<Index, Item>`、`Equals<T>`、`Compare<T>`、`Assign<T>` 等）允许用户 struct 声明 `: SchemaName` 或 `: SchemaName<StructName>` 并提供成员函数体；
    - 模块内多个 schema **可**互相引用类型（无需前向声明）。
-3. **句柄 struct**（`export struct` 的 `Heap<T>`、`Slot<T>`、`MemorySpace<T>`、`MemorySlot<T>`）：
-   - 由编译器实现；用户**不得**字面量构造，**可**作为变量类型持有 `make` / `slot_at` 等返回的句柄；
+3. **句柄 struct**（`export struct` 的 `Heap<T>`、`Slot<T>`）：
+   - 由编译器实现；用户**不得**字面量构造，**可**作为变量类型持有 `make` / 下标访问等返回的句柄；
    - 数据字段与成员函数由编译器管理；源码中成员函数可仅声明签名（无函数体）；
-   - `Slot<T>` 等游标 struct 支持 UFCS（§12.10）。
-4. **内核 export func**（§22.7）：
+   - `Slot<T>` 等游标 struct 支持 UFCS（§12.11）。
+4. **内核 export func**（§22.5）：
    - 由编译器实现，规范中可仅声明签名；
    - 用户**不得**定义同名同签名顶层函数覆盖；
    - 全局堆操作**可**直接调用；亦可写 `import eokas.kernel` 后以限定名访问（非必须）。
 5. **冲突遮蔽。** 全局堆操作函数名与用户局部标识符冲突时，用户定义优先（局部遮蔽预导入名）。
-6. **封闭性。** 未在 `eokas.kernel`（§22.2–§22.7）中声明的内置行为，编译器**不得**隐式提供。
+6. **封闭性。** 未在 `eokas.kernel`（§22.2–§22.5）中声明的内置行为，编译器**不得**隐式提供。
 
-**以下 §22.2–§22.7** 为 `eokas.kernel` 各组成部分的分解说明；所列 `export` 声明均属于该模块。
+**以下 §22.2–§22.5** 为 `eokas.kernel` 各组成部分的分解说明；所列 `export` 声明均属于该模块。
 
 #### 22.2  能力 Schema — 算术、赋值、相等、比较与逻辑
 
-本节定义 `eokas.kernel` 中的**能力 Schema** 契约：算术（二元 `Add<T>`、`Sub<T>`、`Mul<T>`、`Div<T>`、`Mod<T>`；一元 `Neg<T>`）、可赋值（`Assign<T>`）、可谓词运算（`Predicate<T>`）、可相等（`Equals<T>`）、可比较（`Compare<T>`）。本节能力 Schema 均通过类型形参（如 `Add<T>`）在成员签名中引用 `T`；Schema 名**不得**出现在任何类型位置（§18 定位 1）。用户 struct **可**通过 `: SchemaName` 或 `: SchemaName<StructName>` 满足契约（§18.3）。
+本节定义 `eokas.kernel` 中的**能力 Schema** 契约：算术（二元 `Add<T>`、`Sub<T>`、`Mul<T>`、`Div<T>`、`Mod<T>`；一元 `Neg<T>`）、可赋值（`Assign<T>`）、可谓词运算（`Predicate<T>`）、可按位运算（`BitOp<T>`）、可下标访问（`IndexOp<Index, Item>`）、可相等（`Equals<T>`）、可比较（`Compare<T>`）。本节能力 Schema 均通过类型形参（如 `Add<T>`）在成员签名中引用 `T`；Schema 名**不得**出现在任何类型位置（§18 定位 1）。用户 struct **可**通过 `: SchemaName` 或 `: SchemaName<StructName>` 满足契约（§18.3）。
 
 **Add\<T\> — 可相加约束**
 
@@ -247,7 +247,7 @@ export schema Assign<T> {
 1. `Assign<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: Assign` 或 `: Assign<StructName>`（§18.3）为满足契约提供 `assign` 成员函数体。
 2. 编译器对基础数值类型（`i8`–`i64`、`u8`–`u64`、`f32`、`f64`）、`bool` 及 `String` **内置认定**其赋值操作数满足 `Assign` Schema 契约（无需用户 struct 声明 `: Assign`）。
 3. `assign` 成员函数签名中的 `T` 在 struct 声明 `: Assign` 或 `: Assign<StructName>` 时绑定为**该 struct 的具体类型**；`this` 与 `other` 必须为同一具体类型。
-4. 赋值运算符 `=`（§12.9）在左操作数为 §12.9 规定的可变目标、且左、右两侧**具体 struct 类型**相同时：若该 struct 在编译期满足 `Assign` Schema 契约，则 `left = right` 等价于 `left.assign(right)`（UFCS 形式 `assign(left, right)` 等价）；`val` 绑定不可作为赋值目标。基础数值类型、`bool` 与 `String` 的 `=` 仍按 §12.9 内置语义，同时视为满足 `Assign` 契约。§7.7 规定的 `Slot` 成员访问赋值**不**经 `Assign` 契约派发。
+4. 赋值运算符 `=`（§12.10）在左操作数为 §12.10 规定的可变目标、且左、右两侧**具体 struct 类型**相同时：若该 struct 在编译期满足 `Assign` Schema 契约，则 `left = right` 等价于 `left.assign(right)`（UFCS 形式 `assign(left, right)` 等价）；`val` 绑定不可作为赋值目标。基础数值类型、`bool` 与 `String` 的 `=` 仍按 §12.10 内置语义，同时视为满足 `Assign` 契约。§7.7 规定的 `Slot` 成员访问赋值与 §12.8 规定的下标赋值**不**经 `Assign` 契约派发。
 
 **Predicate\<T\> — 可谓词运算约束**
 
@@ -279,6 +279,63 @@ export schema Predicate<T> {
 6. `to_bool()` 将满足 `Predicate` 契约的实例映射为内置 `bool`：`a.to_bool()` 等价于 UFCS 形式 `to_bool(a)`。`this.to_bool()` 的返回值须与 `this.not()`、`this.and(rhs)`、`this.or(rhs)` 所隐含的逻辑真值一致（即 `this.to_bool() == true` 当且仅当 `this` 在逻辑上为真）。
 7. 控制流条件（§13）及三元条件运算符（§12.7）的操作数类型须为内置 `bool`；满足 `Predicate` 契约的具体 struct **不得**直接用作条件，须通过 `expr.to_bool()`（或 UFCS `to_bool(expr)`）显式转换。
 
+**BitOp\<T\> — 可按位运算约束**
+
+**定义。** `BitOp<T>` 描述**具体 struct 实例**可执行按位与、或、异或、取反及移位运算并返回同类型结果的形态约束。
+
+```eok
+export schema BitOp<T> {
+    func bit_and(val rhs: T) -> T;
+    func bit_or(val rhs: T) -> T;
+    func bit_xor(val rhs: T) -> T;
+    func bit_flip() -> T;
+    func bit_shl(val bits: u32) -> T;
+    func bit_shr(val bits: u32) -> T;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `bit_and` | `func(val rhs: T) -> T` | 将 `this` 与 `rhs` 做按位与，返回与操作数相同具体 struct 类型的结果 |
+| `bit_or` | `func(val rhs: T) -> T` | 将 `this` 与 `rhs` 做按位或，返回与操作数相同具体 struct 类型的结果 |
+| `bit_xor` | `func(val rhs: T) -> T` | 将 `this` 与 `rhs` 做按位异或，返回与操作数相同具体 struct 类型的结果 |
+| `bit_flip` | `func() -> T` | 对 `this` 按位取反，返回与操作数相同具体 struct 类型的结果 |
+| `bit_shl` | `func(val bits: u32) -> T` | 将 `this` 左移 `bits` 位，返回与操作数相同具体 struct 类型的结果 |
+| `bit_shr` | `func(val bits: u32) -> T` | 将 `this` 右移 `bits` 位，返回与操作数相同具体 struct 类型的结果 |
+
+**语义规则**
+
+1. `BitOp<T>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: BitOp` 或 `: BitOp<StructName>`（§18.3）提供 `bit_and`、`bit_or`、`bit_xor`、`bit_flip`、`bit_shl`、`bit_shr` 成员函数体。
+2. `bit_and` / `bit_or` / `bit_xor` / `bit_flip` / `bit_shl` / `bit_shr` 成员函数签名中的 `T` 在 struct 声明 `: BitOp` 或 `: BitOp<StructName>` 时绑定为**该 struct 的具体类型**；`this`、`rhs` 及返回值须为同一具体类型；`bit_shl` / `bit_shr` 的 `bits` 为无符号 32 位移位量。
+3. 编译器对基础整数类型（`i8`–`i64`、`u8`–`u64`）**内置认定**其位运算操作数满足 `BitOp` Schema 契约（无需用户 struct 声明 `: BitOp`）；浮点类型不适用位运算。
+4. 一元按位取反运算符 `~expr`（§12.4）对满足 `BitOp` Schema 契约的具体 struct 类型：`~a` 等价于 `a.bit_flip()`（UFCS 形式 `bit_flip(a)` 等价）；操作数须为**具体**类型，否则为编译错误。基础整数类型的 `~expr` 仍按 §12.4 内置语义，同时视为满足 `BitOp` 契约。`~` **不**经 `Neg` 或 `Predicate` Schema 契约派发。
+5. 二元位运算符 `&`、`|`、`^`、`|<`、`|>`（§12.4）对满足 `BitOp` Schema 契约的具体 struct 类型：两侧（移位运算符的左操作数）须为同一具体类型，否则为编译错误。`a & b` 等价于 `a.bit_and(b)`，`a | b` 等价于 `a.bit_or(b)`，`a ^ b` 等价于 `a.bit_xor(b)`，`a |< b` 等价于 `a.bit_shl(b)`，`a |> b` 等价于 `a.bit_shr(b)`（UFCS 形式如 `bit_and(a, b)` 等价）。基础整数类型的位运算仍按 §12.4 内置语义，同时视为满足 `BitOp` 契约；右移语义同 §12.4（无符号逻辑右移、有符号算术右移）。
+
+**IndexOp\<Index, Item\> — 可下标访问约束**
+
+**定义。** `IndexOp<Index, Item>` 描述**具体 struct 实例**可通过下标读取与写入元素的形态约束；`Index` 为下标类型，`Item` 为元素类型（读返回值与写实参须一致）。
+
+```eok
+export schema IndexOp<Index, Item> {
+    func get_by_index(val index: Index) -> Item;
+    func set_by_index(val index: Index, val item: Item) -> void;
+};
+```
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `get_by_index` | `func(val index: Index) -> Item` | 读取 `this` 在 `index` 处的元素，返回 `Item` |
+| `set_by_index` | `func(val index: Index, val item: Item) -> void` | 将 `item` 写入 `this` 在 `index` 处 |
+
+**语义规则**
+
+1. `IndexOp<Index, Item>` 为 `eokas.kernel` 导出的 schema；用户代码**不得**在其他模块另行定义同名 schema，但**可**通过 struct 声明 `: IndexOp` 或 `: IndexOp<IndexType, ItemType>`（§18.3）提供 `get_by_index` 与 `set_by_index` 成员函数体。
+2. `get_by_index` / `set_by_index` 成员函数签名中的 `Index`、`Item` 在 struct 声明 `: IndexOp` 或 `: IndexOp<IndexType, ItemType>` 时绑定为**该 struct 声明处的具体类型**；`index` 类型为 `Index`，读返回值与写实参 `item` 类型均为 `Item`。
+3. `Heap<T>` 由编译器实现并声明 `: IndexOp<u32, Slot<T>>`（§22.4）；`get_by_index` / `set_by_index` 由编译器提供实现，用户**不得**对 `Heap<T>` 自行实现。
+4. 下标运算符 `expr[index]`（读，§12.8）对满足 `IndexOp` Schema 契约的具体 struct 类型：`expr[index]` 等价于 `expr.get_by_index(index)`（UFCS 形式 `get_by_index(expr, index)` 等价）；`index` 表达式类型须可转换为该 struct 绑定的 `Index` 类型，否则为编译错误。
+5. 下标赋值 `expr[index] = item`（写，§12.8）在 `expr` 为 §12.10 规定的可变目标、且 `expr` 的**具体 struct 类型**满足 `IndexOp` Schema 契约、`item` 类型为 `Item` 时：等价于 `expr.set_by_index(index, item)`（UFCS 形式 `set_by_index(expr, index, item)` 等价）。**不**经 `Assign` Schema 契约派发。
+6. **`Heap<T>` 特例。** `Heap<T>` 的 `Item` 为 `Slot<T>` 而非 `T`：`expr[index]` 返回槽位句柄（§7.5、§2 R4）；向堆写入 **`T` 值**须经 `heap[index].set_value(x)` 或 §7.9 字段访问（§7.7），**不得**写 `heap[index] = x`（`x: T`）。`heap[index] = s`（`s: Slot<T>`）经规则 5 派发至 `set_by_index`，语义由编译器定义（通常等价于将 `s` 所指位置的值复制到 `index` 处）。
+
 #### 22.3  Enumerable — 可枚举约束
 
 **定义。** `Enumerable<T, C>` 描述游标类型 `C` 可沿序列方向移动（前进 / 后退）并读写元素类型 `T` 的形态约束，是范围循环 `for` 结构的必要前提。
@@ -306,9 +363,9 @@ export schema Enumerable<T, C> {
 **语义规则**
 
 1. `Enumerable<T, C>` 为 `eokas.kernel` 导出的内核 Schema 契约；**仅** `eokas.kernel` 内 struct 可声明 `: Enumerable<...>` 满足；用户代码不得自行实现。
-2. `MemorySlot<T>` 为 `eokas.kernel` 中的 struct（§22.5）；`Slot<T>` 通过声明 `: Enumerable<T, Slot<T>>` 满足该 Schema 契约；编译器为 `Slot<T>` 提供全部成员函数实现。
+2. `Slot<T>` 为 `eokas.kernel` 中的 struct（§22.4）；通过声明 `: Enumerable<T, Slot<T>>` 满足该 Schema 契约；编译器为 `Slot<T>` 提供全部成员函数实现。
 3. 范围循环 `for` 结构的迭代变量须为**具体**游标 struct 类型（如 `Slot<T>`），且该 struct 在声明处写 `: Enumerable<T, C>` 并满足相应 Schema 契约；否则为编译错误。
-4. `eokas.kernel` 游标类型（如 `Slot<T>`）支持 UFCS 语法糖（§12.10）：`has_next(c, n)` 等价于 `c.has_next(n)`，`next(c, n)` 等价于 `c.next(n)`，以此类推。
+4. `eokas.kernel` 游标类型（如 `Slot<T>`）支持 UFCS 语法糖（§12.11）：`has_next(c, n)` 等价于 `c.has_next(n)`，`next(c, n)` 等价于 `c.next(n)`，以此类推。
 
 **范围循环 `for`**
 
@@ -333,67 +390,27 @@ for (var cursor = init_expr; has_next(cursor, step); cursor = next(cursor, step)
 
 ```eok
 val h = make<i32>(100);
-for (var cur = slot_at(h, 0); has_next(cur, 1); cur = next(cur, 1)) {
-    set_value(cur, 0);
+for (var cur = h[0]; has_next(cur, 1); cur = next(cur, 1)) {
+    cur.set_value(0);
 }
 drop(h);
 ```
 
-#### 22.4  MemorySpace — 内存空间
+#### 22.4  Heap 与 Slot — 堆句柄
 
-**定义。** `MemorySpace<T>` 为 `eokas.kernel` 导出的 struct，描述一块可容纳多个 `T` 类型元素的内存空间的状态形态。数据字段由 struct 定义，**非** Schema。
+**定义。** `Heap<T>` 与 `Slot<T>` 为 `eokas.kernel` 导出的 struct，分别描述堆内存空间与其内槽位的状态形态。数据字段由 struct 定义，**非** Schema。
 
 ```eok
-export struct MemorySpace<T> {
+export struct Heap<T> : IndexOp<u32, Slot<T>> {
     val count: u32;
     var valid: bool;
-};
-```
 
-| 字段 | 类型 | 语义 |
-|------|------|------|
-| `count` | `u32` | 空间可容纳的 `T` 类型元素数量；分配后不变 |
-| `valid` | `bool` | 当前句柄是否有效；`drop` 后由编译器置 `false` |
-
-#### 22.5  MemorySlot — 内存槽位
-
-**定义。** `MemorySlot<T>` 为 `eokas.kernel` 导出的 struct，描述内存空间内一个具体位置的状态形态。`Slot<T>`（§22.6）为其唯一实现 struct，并在声明处通过 `: Enumerable<T, Slot<T>>` 满足 `Enumerable` Schema 契约（§22.3）。
-
-```eok
-export struct MemorySlot<T> {
-    val owner: MemorySpace<T>;
-    var valid: bool;
-};
-```
-
-| 字段 | 类型 | 语义 |
-|------|------|------|
-| `owner` | `MemorySpace<T>` | 所属内存空间；创建后不变 |
-| `valid` | `bool` | 当前槽位是否有效；越界、失效时由编译器置 `false` |
-
-**Enumerable 操作**（`Slot<T>` 作为具体 struct 满足 `Enumerable<T, Slot<T>>` Schema 契约而提供的成员函数，§22.6）
-
-| 成员函数 | 签名 | 语义 |
-|----------|------|------|
-| `has_next` | `func(val offset: u32) -> bool` | 从 `this` 向后偏移 `offset` 个位置后是否可达 |
-| `has_last` | `func(val offset: u32) -> bool` | 从 `this` 向前偏移 `offset` 个位置后是否可达 |
-| `next` | `func(val offset: u32) -> Slot<T>` | 向后偏移，返回新槽位；越界或原槽位无效时返回无效槽位 |
-| `last` | `func(val offset: u32) -> Slot<T>` | 向前偏移；规则同 `next` |
-| `get_value` | `func() -> T` | 读取 `this` 所指位置的 `T` 值；`this.valid == false` 时 UB |
-| `set_value` | `func(val x: T) -> void` | 将 `x` 写入 `this` 所指位置；`this.valid == false` 时 UB |
-
-#### 22.6  Heap 与 Slot — `eokas.kernel` 实现
-
-**定义。** `Heap<T>` 与 `Slot<T>` 为 `eokas.kernel` 中 `MemorySpace<T>` 与 `MemorySlot<T>` 的唯一实现类型。
-
-```eok
-export struct Heap<T> {
-    val count: u32;
-    var valid: bool;
+    func get_by_index(val index: u32) -> Slot<T>;
+    func set_by_index(val index: u32, val item: Slot<T>) -> void;
 };
 
 export struct Slot<T> : Enumerable<T, Slot<T>> {
-    val owner: MemorySpace<T>;
+    val owner: Heap<T>;
     var valid: bool;
 
     func has_next(val offset: u32) -> bool;
@@ -405,106 +422,101 @@ export struct Slot<T> : Enumerable<T, Slot<T>> {
 };
 ```
 
+| 类型 | 字段 | 类型 | 语义 |
+|------|------|------|------|
+| `Heap<T>` | `count` | `u32` | 空间可容纳的 `T` 类型元素数量；分配后不变 |
+| `Heap<T>` | `valid` | `bool` | 当前句柄是否有效；`drop` 后由编译器置 `false` |
+
+**IndexOp 操作**（`Heap<T>` 满足 `IndexOp<u32, Slot<T>>` Schema 契约而提供的成员函数）
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `get_by_index` | `func(val index: u32) -> Slot<T>` | 索引在 `[0, count)` 内返回有效 `Slot<T>`；越界返回无效 `Slot<T>`（非 UB，§2 R4）；`this.valid == false` 时返回无效 `Slot<T>` |
+| `set_by_index` | `func(val index: u32, val item: Slot<T>) -> void` | 将 `item` 所指位置的 `T` 值写入 `index` 处；`this`、`item` 或目标槽位无效时为 UB；`item` 须与 `this` 同属一块堆 |
+
+| 类型 | 字段 | 类型 | 语义 |
+|------|------|------|------|
+| `Slot<T>` | `owner` | `Heap<T>` | 所属堆空间；创建后不变 |
+| `Slot<T>` | `valid` | `bool` | 当前槽位是否有效；越界、失效时由编译器置 `false` |
+
+**Enumerable 操作**（`Slot<T>` 满足 `Enumerable<T, Slot<T>>` Schema 契约而提供的成员函数）
+
+| 成员函数 | 签名 | 语义 |
+|----------|------|------|
+| `has_next` | `func(val offset: u32) -> bool` | 从 `this` 向后偏移 `offset` 个位置后是否可达 |
+| `has_last` | `func(val offset: u32) -> bool` | 从 `this` 向前偏移 `offset` 个位置后是否可达 |
+| `next` | `func(val offset: u32) -> Slot<T>` | 向后偏移，返回新槽位；越界或原槽位无效时返回无效槽位 |
+| `last` | `func(val offset: u32) -> Slot<T>` | 向前偏移；规则同 `next` |
+| `get_value` | `func() -> T` | 读取 `this` 所指位置的 `T` 值；`this.valid == false` 时 UB |
+| `set_value` | `func(val x: T) -> void` | 将 `x` 写入 `this` 所指位置；`this.valid == false` 时 UB |
+
 **语义规则**
 
 1. `Heap<T>` 与 `Slot<T>` 为值类型，所有权归属所在作用域；作用域结束时句柄销毁，不自动调用 `drop`。
-2. `Heap<T>` 与 `MemorySpace<T>` 布局一致；`Slot<T>` 与 `MemorySlot<T>` 布局一致；分别用于具体类型名与抽象类型名（§22.7 `eokas.kernel` 签名）。
-3. `Slot<T>` 的成员函数仅声明签名，由编译器内部提供实现；字段值由编译器内部管理。
-4. 用户不得自行定义与 `MemorySpace<T>` / `MemorySlot<T>` 布局兼容的替代 struct（§22.1 语义规则 3）。
+2. `Heap<T>` 与 `Slot<T>` 的成员函数仅声明签名，由编译器内部提供实现；字段值由编译器内部管理。
+3. 用户不得自行定义与 `Heap<T>` / `Slot<T>` 布局兼容的替代 struct（§22.1 语义规则 3）。
+4. `Heap<T>[index]` 与 `get_by_index(index)` 语义等价（§22.2 IndexOp 规则 4–6）；向堆写入 `T` 值须经返回的 `Slot<T>`（§7.7），**不得**写 `heap[index] = x`（`x: T`）。
 
-#### 22.7  堆内存操作 — 全局 export func
+#### 22.5  堆内存操作 — 全局 export func
 
 **定义。** 下列 `export func` 声明于 `eokas.kernel`，代表当前进程（公理 A1）的堆生命周期管理操作；由编译器绑定运行时实现，并按 §22.1 语义规则 1 **预导入**为全局自由函数风格。
 
 ```eok
-export schema ProgramMemory {
-    func make<T>(val count: u32) -> Heap<T>;
-    func drop<T>(val space: Heap<T>) -> void;
-    func is_valid<T, H>(val x: H) -> bool;
-    func slot_at<T>(val space: MemorySpace<T>, val index: u32) -> Slot<T>;
-    func space_of<T>(val slot: MemorySlot<T>) -> MemorySpace<T>;
-    func get_value<T>(val slot: MemorySlot<T>) -> T;
-    func set_value<T>(val slot: MemorySlot<T>, val x: T) -> void;
-};
-
 export func make<T>(val count: u32) -> Heap<T>;
-export func drop<T>(val space: Heap<T>) -> void;
-export func is_valid<T, H>(val x: H) -> bool;
-export func slot_at<T>(val space: MemorySpace<T>, val index: u32) -> Slot<T>;
-export func space_of<T>(val slot: MemorySlot<T>) -> MemorySpace<T>;
-export func get_value<T>(val slot: MemorySlot<T>) -> T;
-export func set_value<T>(val slot: MemorySlot<T>, val x: T) -> void;
+export func drop<T>(val heap: Heap<T>) -> void;
 ```
 
 | 成员 | 语义 |
 |------|------|
 | `make<T>(n)` | 在进程名下分配可容纳 `n` 个 `T` 元素的内存空间，返回有效 `Heap<T>`；`n == 0` 时返回无效句柄（`valid == false`） |
-| `drop(h)` | 释放 `h` 对应的内存；`h` 及其所有副本句柄的 `valid` 置 `false`；由 `h` 派生的所有 `Slot<T>` 的 `valid` 置 `false` |
-| `is_valid(x)` | 等价于读取 `x.valid`；返回 `true` 表示有效，`false` 表示已失效 |
-| `slot_at(space, i)` | 索引在 `[0, space.count)` 内返回有效 `Slot<T>`；越界返回无效 `Slot<T>`（非 UB）；`space.valid == false` 时返回无效 `Slot<T>` |
-| `space_of(s)` | 等价于读取 `s.owner`；`s.valid == false` 时返回无效 `Heap<T>` |
-| `get_value(s)` | 调用 `s.get_value()`（§22.6）；`s.valid == false` 时 UB |
-| `set_value(s, x)` | 调用 `s.set_value(x)`（§22.6）；`s.valid == false` 时 UB |
+| `drop(heap)` | 释放 `heap` 对应的内存；`heap` 及其所有副本句柄的 `valid` 置 `false`；由 `heap` 派生的所有 `Slot<T>` 的 `valid` 置 `false` |
 
 **语义规则**
 
 1. 按 §22.1 语义规则 1，上表 `export func` 在任意用户模块内可直接以 `func_name(args)` 调用，无需 `import` 与模块前缀。
 2. 用户**不得**定义与上述 `export func` 同名同签名的顶层函数。
 3. `drop` 仅接受 `Heap<T>` 实参，传入 `Slot<T>` 或其他类型为编译错误。
-4. `is_valid` 的 `H` 必须为 `MemorySpace<T>`、`MemorySlot<T>` 或其对应实现类型 `Heap<T>`、`Slot<T>`；传入其他类型为编译错误。
 
 **示例**
 
 ```eok
 val arr = make<i32>(1024);   // 等价于 eokas.kernel.make<i32>(1024)
-if (is_valid(arr)) {         // 等价于 eokas.kernel.is_valid(arr)
+if (arr.valid) {
     drop(arr);               // 等价于 eokas.kernel.drop(arr)
 }
 ```
 
-#### 22.8  公理对应关系
+#### 22.6  公理对应关系
 
 | 公理 / 推论 | 内核声明中的体现 |
 |-------------|-----------------|
-| A1（资源所有权） | `make` 与 `drop` 为 `eokas.kernel` 的 `export func`（§22.7）— 进程通过此两函数管控堆生命周期 |
+| A1（资源所有权） | `make` 与 `drop` 为 `eokas.kernel` 的 `export func`（§22.5）— 进程通过此两函数管控堆生命周期 |
 | A2（失效原则） | `drop` 语义：编译器将相关所有 `valid` 字段置 `false` |
-| A3（使用前校验） | `is_valid` 函数与 `.valid` 字段 — 两种等价访问路径 |
+| A3（使用前校验） | `Heap<T>` / `Slot<T>` 的 `.valid` 字段 |
 | A4（最小抽象） | `eokas.kernel` 限定内核抽象由工具链内置提供，用户不可扩展或覆盖；Schema 为编译期 Concept 式约束，无运行时类型信息（§18 定位） |
 | A5（操作数据分离） | 顶层自由函数与 `eokas.kernel` 预导入堆操作以 `func_name(args)` 调用；Schema 成员函数以 `instance.method(args)` **静态**调用并绑定 `this`；函数值字段按字段存取（§18） |
-| R4（边界安全） | `slot_at` 越界返回无效 `Slot<T>`（非 UB） |
+| R4（边界安全） | `Heap<T>.get_by_index` / `heap[i]` 越界返回无效 `Slot<T>`（非 UB，§7.5、§22.4） |
 | R5（批量失效） | `drop` 语义中明确声明 |
 
-#### 22.9  Operator 语法糖预留
-
-`eokas.kernel` 为后续 operator 语法规范预留对接点：
-
-| 语法糖 | 映射目标 |
-|--------|----------|
-| `space[i]` | `slot_at(space, i)` |
-| `slot.field`（读） | 当 `T` 为 struct 时，对 `get_value(slot)` 返回值的字段访问 |
-| `slot.field = x`（写） | 当 `T` 为 struct 时，字段级写入操作 |
-
-Operator 规范将独立定义语法糖到函数调用的映射规则，不改变本节核心模型。
-
-#### 22.10  示例
+#### 22.7  示例
 
 ```eok
 val arr = make<i32>(1024);
 
-val s = slot_at(arr, 0);
-set_value(s, 42);
-val v = get_value(s);
+val s = arr[0];
+s.set_value(42);
+val v = s.get_value();
 
 val s2 = s.next(1);
-set_value(s2, 100);
+s2.set_value(100);
 
-val s_bad = slot_at(arr, 9999);
+val s_bad = arr[9999];
 // s_bad.valid == false
 
 if (arr.valid) {
-    val first = slot_at(arr, 0);
+    val first = arr[0];
     if (first.valid) {
-        set_value(first, 0);
+        first.set_value(0);
     }
 }
 
@@ -516,9 +528,9 @@ drop(arr);
 
 ```eok
 val h = make<i32>(100);
-var cur = slot_at(h, 0);
+var cur = h[0];
 while (cur.valid) {
-    set_value(cur, 0);
+    cur.set_value(0);
     cur = cur.next(1);
 }
 drop(h);

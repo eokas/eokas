@@ -172,7 +172,7 @@ namespace eokas
                         return;
                     }
                 
-                case '|': // ||, |< or |
+                case '|': // ||, |<, |> or |
                     this->save_and_read_char();
                     if (m_current == '|')
                     {
@@ -184,6 +184,12 @@ namespace eokas
                     {
                         this->save_and_read_char();
                         m_token.type = token_t::SHIFT_L;
+                        return;
+                    }
+                    else if (m_current == '>')
+                    {
+                        this->save_and_read_char();
+                        m_token.type = token_t::SHIFT_R;
                         return;
                     }
                     else
@@ -220,15 +226,9 @@ namespace eokas
                         return;
                     }
                 
-                case '>': // >|, >= or >
+                case '>': // >= or >
                     this->save_and_read_char();
-                    if (m_current == '|')
-                    {
-                        this->save_and_read_char();
-                        m_token.type = token_t::SHIFT_R;
-                        return;
-                    }
-                    else if (m_current == '=')
+                    if (m_current == '=')
                     {
                         this->save_and_read_char();
                         m_token.type = token_t::GE;
@@ -251,6 +251,20 @@ namespace eokas
                     else
                     {
                         m_token.type = token_t::NOT;
+                        return;
+                    }
+                
+                case '-': // -> or -
+                    this->save_and_read_char();
+                    if (m_current == '>')
+                    {
+                        this->save_and_read_char();
+                        m_token.type = token_t::ARROW;
+                        return;
+                    }
+                    else
+                    {
+                        m_token.type = token_t::SUB;
                         return;
                     }
                 
@@ -333,17 +347,65 @@ namespace eokas
             {
                 this->save_and_read_char();
             }
-            m_token.type = token_t::INT_D;
+            
+            bool is_float = false;
             
             if (m_current == '.')
             {
-                this->save_and_read_char();
-                while (_ascil_is_number(m_current))
+                char next = *m_position;
+                if (_ascil_is_number(next))
                 {
                     this->save_and_read_char();
+                    while (_ascil_is_number(m_current))
+                    {
+                        this->save_and_read_char();
+                    }
+                    is_float = true;
                 }
-                m_token.type = token_t::FLOAT;
+                else if (next == 'e' || next == 'E')
+                {
+                    char exp_next = *(m_position + 1);
+                    if (_ascil_is_number(exp_next) || exp_next == '+' || exp_next == '-')
+                    {
+                        char after = (exp_next == '+' || exp_next == '-') ? *(m_position + 2) : exp_next;
+                        if (_ascil_is_number(after))
+                        {
+                            this->save_and_read_char();
+                            is_float = true;
+                        }
+                    }
+                }
             }
+            
+            if (m_current == 'e' || m_current == 'E')
+            {
+                char next = *m_position;
+                if (_ascil_is_number(next) || next == '+' || next == '-')
+                {
+                    char after = (next == '+' || next == '-') ? *(m_position + 1) : next;
+                    if (_ascil_is_number(after))
+                    {
+                        this->save_and_read_char();
+                        if (m_current == '+' || m_current == '-')
+                        {
+                            this->save_and_read_char();
+                        }
+                        while (_ascil_is_number(m_current))
+                        {
+                            this->save_and_read_char();
+                        }
+                        is_float = true;
+                    }
+                }
+            }
+            
+            if (m_current == 'f' || m_current == 'F' || m_current == 'd' || m_current == 'D')
+            {
+                this->save_and_read_char();
+                is_float = true;
+            }
+            
+            m_token.type = is_float ? token_t::FLOAT : token_t::INT_D;
         }
     }
     

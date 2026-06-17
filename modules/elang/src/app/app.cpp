@@ -1,12 +1,13 @@
 #include "app.h"
 #include "./parser.h"
-#include "./coder.h"
+#include "../sema/sema-analyzer.h"
+#include "../cpp/cpp-backend.h"
 
 using namespace eokas;
 
 #include <stdio.h>
 
-static void eokas_main(coder_t& coder, const String& fileName, const String& cmd);
+static void eokas_main(const String& fileName);
 static void about(void);
 static void help(void);
 static void bad_command(const char* command);
@@ -14,8 +15,6 @@ static String read_text_file(String& filePath);
 
 int main(int argc, char** argv) {
     cli::Command program(argv[0]);
-
-    coder_t coder;
 
     program.action([&](const cli::Command& cmd) -> void {
         about();
@@ -35,7 +34,7 @@ int main(int argc, char** argv) {
 
             printf("=> Source file: %s\n", file.cstr());
 
-            eokas_main(coder, file, cmd.name);
+            eokas_main(file);
         });
 
     program.subCommand("run", "")
@@ -50,7 +49,7 @@ int main(int argc, char** argv) {
 
             printf("=> Source file: %s\n", file.cstr());
 
-            eokas_main(coder, file, cmd.name);
+            eokas_main(file);
         });
 
     try {
@@ -63,8 +62,12 @@ int main(int argc, char** argv) {
     }
 }
 
-static void eokas_main(coder_t& coder, const String& file, const String& cmd) {
+static void eokas_main(const String& file) {
     std::map<String, ast_node_module_t*> modules;
+
+    // Keep the parsers (and therefore the AST nodes owned by their factories)
+    // alive until semantic analysis and code generation have finished.
+    std::vector<std::unique_ptr<parser_t>> parsers;
 
     std::vector<String> filesToParse;
     filesToParse.push_back(file);
@@ -83,7 +86,8 @@ static void eokas_main(coder_t& coder, const String& file, const String& cmd) {
         printf("%s\n", source.replace("%", "%%").cstr());
         printf("------------------------------------------\n");
 
-        parser_t parser;
+        parsers.push_back(std::make_unique<parser_t>());
+        parser_t& parser = *parsers.back();
         ast_node_module_t* node = parser.parse(source.cstr());
         if (node == nullptr) {
             const String& error = parser.error();
@@ -113,39 +117,59 @@ static void eokas_main(coder_t& coder, const String& file, const String& cmd) {
         modules.insert(std::make_pair(filePath, node));
     }
 
-    omis_module_t* mainModule = nullptr;
-    // NOTE: index >= 0 is always true because of size_t is unsigned.
-    for(size_t index = filesToParse.size() - 1; index < filesToParse.size(); index--) {
-        const String& filePath = filesToParse[index];
-        ast_node_module_t* node = modules[filePath];
-
-        omis_module_t* mod = coder.encode(node);
-        if (mod == nullptr) {
-            return;
-        }
-
-        if(filePath == file) {
-            mainModule = mod;
-        }
-    }
-
-    if(mainModule == nullptr) {
+    ast_node_module_t* mainNode = modules[file];
+    if (mainNode == nullptr) {
+        printf("ERROR: main module is not parsed.\n");
         return;
     }
-    FileStream out(String::format("%s.ll", file.cstr()), "w+");
-    if (!out.open())
-        return;
 
-    printf("=> Encode to IR:\n");
-    printf("------------------------------------------\n");
-    printf("%s", coder.dump(mainModule).cstr());
-    printf("------------------------------------------\n");
-    if(cmd == "run")
-        coder.jit(mainModule);
-    else
-        coder.aot(mainModule);
-    printf("------------------------------------------\n");
+    // Semantic analysis works per-module. Analyze dependencies first (reverse
+    // parse order: imported modules are appended after their importer) so that
+    // imports can be resolved against already-analyzed modules.
+    sema_program_t program;
+    for (size_t i = filesToParse.size(); i-- > 0;) {
+        ast_node_module_t* n = modules[filesToParse[i]];
+        if (n == nullptr)
+            continue;
+        sema_analyzer_t analyzer(&program);
+        analyzer.analyze(n);
+    }
+
+    String mainName = mainNode->name.isEmpty() ? String("<main>") : mainNode->name;
+    sema_module_t* mainModule = program.get_module(mainName);
+    if (mainModule == nullptr) {
+        printf("ERROR: main module '%s' was not analyzed.\n", mainName.cstr());
+        return;
+    }
+    if (!mainModule->ok()) {
+        printf("=> Semantic errors:\n");
+        printf("------------------------------------------\n");
+        printf("%s", mainModule->diagnostics().dump().replace("%", "%%").cstr());
+        printf("------------------------------------------\n");
+        return;
+    }
+
+    cpp_backend_t backend;
+    String source = backend.generate(mainModule);
+    if (source.isEmpty()) {
+        printf("ERROR: %s\n", backend.error().cstr());
+        return;
+    }
+
+    String outPath = String::format("%s.cpp", file.cstr());
+    FileStream out(outPath, "w+");
+    if (!out.open()) {
+        printf("ERROR: failed to open output file '%s'.\n", outPath.cstr());
+        return;
+    }
+    out.write((void*) source.cstr(), source.length());
     out.close();
+
+    printf("=> Generate C++ source:\n");
+    printf("------------------------------------------\n");
+    printf("%s", source.replace("%", "%%").cstr());
+    printf("------------------------------------------\n");
+    printf("=> Output: %s\n", outPath.cstr());
 }
 
 static void about(void) {

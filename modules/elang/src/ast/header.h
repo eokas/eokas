@@ -18,12 +18,14 @@ namespace eokas
 
         EXPR_TRINARY, EXPR_BINARY, EXPR_UNARY,
         LITERAL_INT, LITERAL_FLOAT, LITERAL_BOOL, LITERAL_STRING,
-        ARRAY_DEF, ARRAY_REF,
+        ARRAY_REF,
 		OBJECT_DEF, OBJECT_REF,
 
-		STRUCT_DEF, ENUM_DEF, PROC_DEF,
+		STRUCT_DEF, ENUM_DEF, SCHEMA_DEF, META_DEF,
 
-        RETURN, IF, LOOP, BREAK, CONTINUE, BLOCK, ASSIGN, INVOKE,
+		ANNOTATION,
+
+        RETURN, IF, FOR, WHILE, SWITCH, BREAK, CONTINUE, BLOCK, ASSIGN, INVOKE,
 	};
 	
 	enum class ast_binary_oper_t
@@ -40,7 +42,7 @@ namespace eokas
 	
 	enum class ast_unary_oper_t
 	{
-		POS = 900, NEG, FLIP, SIZE_OF, TYPE_OF,
+		POS = 900, NEG, FLIP,
         NOT = 1000,
         MAX_LEVEL = 1100,
         UNKNOWN = 0x7FFFFFFF
@@ -88,18 +90,21 @@ namespace eokas
 	struct ast_node_literal_bool_t;
 	struct ast_node_literal_string_t;
 
-	struct ast_node_array_def_t;
 	struct ast_node_array_ref_t;
 	struct ast_node_object_def_t;
 	struct ast_node_object_ref_t;
 
 	struct ast_node_struct_def_t;
 	struct ast_node_enum_def_t;
-	struct ast_node_proc_def_t;
+	struct ast_node_schema_def_t;
+	struct ast_node_meta_def_t;
+	struct ast_node_annotation_t;
 
     struct ast_node_return_t;
     struct ast_node_if_t;
-    struct ast_node_loop_t;
+    struct ast_node_for_t;
+    struct ast_node_while_t;
+    struct ast_node_switch_t;
 	struct ast_node_break_t;
 	struct ast_node_continue_t;
 	struct ast_node_block_t;

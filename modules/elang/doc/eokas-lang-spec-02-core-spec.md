@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.68 — 第二部分：语言核心规范
+# Eokas 语言规范 v0.1.69 — 第二部分：语言核心规范
 
 **分册导航**
 
@@ -16,7 +16,7 @@
 |------|------|
 | 关键字 | `break`, `case`, `continue`, `default`, `do`, `else`, `enum`, `export`, `for`, `func`, `if`, `import`, `meta`, `module`, `return`, `schema`, `self`, `struct`, `switch`, `this`, `val`, `var`, `while` |
 | 基础类型 | `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `bool`, `void`, `String`, `func` |
-| 字面量 | 整数、浮点、字符串、布尔（见下文） |
+| 字面量 | 整数、浮点、字符串、布尔、结构体字面量（见下文） |
 | 注释 | 单行 `//`（至行尾）；多行 `/* */`（可跨行）；不参与编译 |
 | 标识符 | `self`、`this` 为关键字（见 §4 语义规则） |
 
@@ -43,12 +43,13 @@
 
 - 字符串：`"hello"`
 - 布尔值：`true`、`false`
+- 结构体字面量：`StructName { field: value, ... }`（泛型见 §15.2；语义见 §15）
 
 **语义规则**
 
 1. `self` 在函数体内指代函数自身，用于递归调用（语法见 §14）。
 2. `this` 为关键字，**仅**可在 struct **成员函数**体（§18.3）内使用；指代调用该成员函数时的接收者实例。
-3. 成员函数体内，`this` 的类型为**具体** struct 类型（该 struct 在声明处写 `: SchemaName` 并满足相应 Schema 契约）；`this.field` 访问当前实例的数据字段（§12.8）。
+3. 成员函数体内，`this` 的类型为**具体** struct 类型（该 struct 在声明处写 `: SchemaName` 并满足相应 Schema 契约）；`this.field` 访问当前实例的数据字段（§12.9）。
 4. `this` 不得作为普通标识符（变量名、参数名等）使用。
 
 ---
@@ -105,7 +106,7 @@
 
 语法：`Heap<T>`
 
-- 下标访问获取 `Slot<T>`（§7.5）
+- 下标访问获取 `Slot<T>`（§7.5、§12.8 IndexOp）
 - 创建：`make<T>(count: u32)`（§7.3）
 - 释放：`drop`（§7.4）
 
@@ -119,7 +120,7 @@
 
 #### 7.3  make
 
-**定义。** `make` 为 `eokas.kernel` 的 `export func`（§22.7），预导入后全局可见，分配可容纳 `count` 个 `T` 类型元素的堆内存。
+**定义。** `make` 为 `eokas.kernel` 的 `export func`（§22.5），预导入后全局可见，分配可容纳 `count` 个 `T` 类型元素的堆内存。
 
 **签名**
 
@@ -142,7 +143,7 @@ var buf = make<u8>(256);
 
 #### 7.4  drop
 
-**定义。** `drop` 为 `eokas.kernel` 的 `export func`（§22.7），预导入后全局可见，释放堆内存；`<T>` 由实参类型推导。
+**定义。** `drop` 为 `eokas.kernel` 的 `export func`（§22.5），预导入后全局可见，释放堆内存；`<T>` 由实参类型推导。
 
 **签名**
 
@@ -166,16 +167,19 @@ drop(expr);
 expr[index]
 ```
 
-- `expr` 类型必须为 `Heap<T>`；`index` 必须为整数类型；结果类型为 `Slot<T>`
+下标运算符的通用语义见 §12.8（`IndexOp`）。`Heap<T>` 满足 `IndexOp<u32, Slot<T>>`（§22.4），特例规则如下：
+
+- `expr` 类型必须为 `Heap<T>`；`index` 必须为整数类型，并转换为 `u32` 参与索引；结果类型为 `Slot<T>`
+- 等价于 `expr.get_by_index(index)`（§22.2 IndexOp）
 - 下标必须在 `[0, count)` 内（`count` 见 §7.3）：在范围内返回有效 `Slot<T>`；**越界返回无效 `Slot<T>`**（非 UB，§2 R4）
 - `expr` 为无效 `Heap<T>` 时，返回无效 `Slot<T>`
-- 读写元素内容必须通过 §7.9 成员访问或 §7.7 赋值
+- 读写 **`T` 值**须通过返回的 `Slot<T>`（§7.9 成员访问、`set_value` 或 §7.7 赋值）；**不得**写 `heap[index] = x`（`x: T`）
 
 #### 7.6  槽位遍历
 
 **语义规则**
 
-1. `next(slot, offset: u32)` / `last(slot, offset: u32)`（UFCS：`next(slot, offset)` 等价于 `slot.next(offset)`，`last(slot, offset)` 等价于 `slot.last(offset)`，§12.10）：`offset` 为相对偏移；分别向堆后方/前方移动，返回新 `Slot<T>`，原槽位不变。
+1. `next(slot, offset: u32)` / `last(slot, offset: u32)`（UFCS：`next(slot, offset)` 等价于 `slot.next(offset)`，`last(slot, offset)` 等价于 `slot.last(offset)`，§12.11）：`offset` 为相对偏移；分别向堆后方/前方移动，返回新 `Slot<T>`，原槽位不变。
 2. 偏移后超出所属 `Heap<T>` 索引范围，或原槽位已无效：返回无效 `Slot<T>`（§2 R4）。
 3. 对无效槽位调用时行为见 §7.8 语义规则 5。
 
@@ -186,7 +190,7 @@ expr[index]
 
 #### 7.8  有效性校验 (is_valid)
 
-**定义。** `is_valid` 为 `eokas.kernel` 的 `export func`（§22.7），预导入后全局可见，用于查询 `Heap<T>` 或 `Slot<T>` 是否处于有效状态；`<T>` 由实参类型推导。
+**定义。** `is_valid` 为 `eokas.kernel` 的 `export func`（§22.5），预导入后全局可见，用于查询 `Heap<T>` 或 `Slot<T>` 是否处于有效状态；`<T>` 由实参类型推导。
 
 **签名**
 
@@ -217,12 +221,12 @@ slot_expr.field
 1. `slot_expr` 类型必须为 `Slot<T>`，且 `T` 为结构体类型。
 2. `field` 为 `T` 的已声明字段；结果类型为该字段类型。
 3. 作为右值时，读取该 `Slot<T>` 所指位置处结构体实例的对应字段。
-4. 作为赋值左值时，写入该 `Slot<T>` 所指位置处结构体实例的对应字段（见 §7.7、§12.9）。
+4. 作为赋值左值时，写入该 `Slot<T>` 所指位置处结构体实例的对应字段（见 §7.7、§12.10）。
 5. 对无效 `Slot<T>` 读写字段的行为未定义（UB）；宜先调用 `is_valid`（§2 R1）。
 
 #### 7.10  所属堆句柄 (space_of)
 
-**定义。** `space_of` 为 `eokas.kernel` 的 `export func`（§22.7），预导入后全局可见，获取包含指定 `Slot<T>` 的堆句柄；`<T>` 由实参类型推导。
+**定义。** `space_of` 为 `eokas.kernel` 的 `export func`（§22.5），预导入后全局可见，获取包含指定 `Slot<T>` 的堆句柄；`<T>` 由实参类型推导。
 
 **签名**
 
@@ -292,6 +296,7 @@ struct Vec3 {
 2. 实现 Schema **并不要求** struct 成员列表与 Schema 完全一致；struct **可**在满足契约的前提下声明 Schema **未要求**的额外数据字段、函数值字段等。
 3. 一个 struct **可**同时实现多个 Schema，语法为 `struct A : SchemaA, SchemaB, SchemaC`（§18.3）。
 4. 运行时变量与字段的类型**必须**为具体 `struct`、`enum` 或 §5–§9 已定义类型；**不得**以 Schema 名作为类型（§18 定位 1；含 schema 定义内签名）。
+5. struct 实例可通过**结构体字面量**（§15）在表达式上下文中构造。
 
 ---
 
@@ -300,14 +305,18 @@ struct Vec3 {
 **语法。** 语言支持类型推断，多数场景可省略显式类型标注。
 
 ```eok
-val identifier = expression; // 不可变常量
-var identifier = expression; // 可变变量
+val identifier: Type = expression;   // 不可变常量，显式类型
+val identifier = expression;           // 不可变常量，类型推断
+var identifier: Type = expression;   // 可变变量，显式类型
+var identifier = expression;         // 可变变量，类型推断
 ```
 
 **语义规则。**
 
-1. 声明右侧表达式的类型必须为已定义类型；`val` 声明的绑定在初始化后不可再赋值（见 §12.10）。
+1. 声明右侧表达式的类型必须为已定义类型；`val` 声明的绑定在初始化后不可再赋值（见 §12.11）。
 2. 显式类型标注及类型推断结果**不得**为 Schema 名（§18 定位 1；含 schema 定义内签名）；变量类型**必须**为具体 `struct`、`enum` 或 §5–§9 已定义类型。
+3. 显式 `Type` 与右侧表达式类型须一致（或可赋值）；不一致为编译错误。
+4. 结构体字面量可通过 `val x: A = A {...}` 或 `val x = A {...}` 等形式初始化（§15）。
 
 ### 12. 表达式与运算符
 
@@ -339,13 +348,17 @@ var identifier = expression; // 可变变量
 
 | 运算符 | 含义 |
 |--------|------|
+| `~expr` | 按位取反 |
 | `&` | 按位与 |
 | `\|` | 按位或 |
 | `^` | 按位异或 |
-| `<<` | 左移 |
-| `>>` | 右移 |
+| `|<` | 左移 |
+| `|>` | 右移 |
 
-**语义规则。** 右移：无符号类型逻辑右移（高位补 0）；有符号类型算术右移（高位补符号位）。
+**语义规则.**
+
+1. 右移：无符号类型逻辑右移（高位补 0）；有符号类型算术右移（高位补符号位）。
+2. 对满足 `BitOp` Schema 契约的具体 struct 类型，位运算符按 §22.2（BitOp）语义规则 4–5 派发；`~expr` 映射 `bit_flip()`，**不**经 `Neg` 或 `Predicate` Schema 契约派发。基础整数类型的位运算仍按本节内置语义，同时视为满足 `BitOp` 契约。
 
 #### 12.5  比较运算符
 
@@ -373,7 +386,24 @@ var identifier = expression; // 可变变量
 
 **语义规则。** `expr_cond ? expr_true : expr_false`：`expr_cond` 必须为 `bool`；`expr_true` 与 `expr_false` 类型必须一致，即为整个表达式结果类型。
 
-#### 12.8  成员访问运算符
+#### 12.8  下标运算符
+
+```eok
+expr[index]           // 读
+expr[index] = item;   // 写
+```
+
+| 形式 | 语义 |
+|------|------|
+| `expr[index]` | 读：`expr` 的**具体 struct 类型**须满足 `IndexOp` Schema 契约（§22.2）；等价于 `expr.get_by_index(index)`（UFCS 形式 `get_by_index(expr, index)` 等价）；`index` 须可转换为该 struct 绑定的 `Index` 类型；结果类型为 `Item` |
+| `expr[index] = item` | 写：`expr` 须为 §12.10 规定的可变目标，且满足 `IndexOp`；`item` 类型须为 `Item`；等价于 `expr.set_by_index(index, item)`（UFCS 形式 `set_by_index(expr, index, item)` 等价）；**不**经 `Assign` 契约派发 |
+
+**语义规则。**
+
+1. 对满足 `IndexOp` Schema 契约的用户 struct，读写规则按 §22.2（IndexOp）语义规则 4–5 派发。
+2. `Heap<T>` 满足 `IndexOp<u32, Slot<T>>`；`Item` 为 `Slot<T>` 而非 `T`，堆上 **`T` 值**写入规则见 §7.5、§7.7。
+
+#### 12.9  成员访问运算符
 
 **语义规则。** `expr.field`：`expr` 必须为结构体、模块，或 `Slot<T>`（`T` 为结构体，§7.9）；`field` 为目标内已声明字段或成员。
 
@@ -381,20 +411,21 @@ var identifier = expression; // 可变变量
 
 **函数值字段调用。** `expr.field(args)`：`field` 为函数值字段时，先读取 `expr.field` 得到函数值，再以 `args` 调用该函数值；**不**绑定 `this`（§18.1 语义规则 6）。
 
-#### 12.9  赋值运算符
+#### 12.10  赋值运算符
 
-**语义规则。** `=` 将右侧值赋给左侧可变目标：左操作数必须为 `var` 变量、结构体可变字段，或 §7.7 规定的 `Slot` 成员访问；两侧类型必须一致；`val` 不可作为赋值目标（编译错误）。当左、右均为同一**具体 struct 类型**且该类型在编译期满足 `Assign` Schema 契约时，按 §22.2（Assign）语义规则 4 派发；§7.7 规定的 `Slot` 成员访问赋值从其规定，**不**经 `Assign` 契约。
+**语义规则。** `=` 将右侧值赋给左侧可变目标：左操作数必须为 `var` 变量、结构体可变字段、§12.8 规定的下标赋值左式，或 §7.7 规定的 `Slot` 成员访问；两侧类型必须一致；`val` 不可作为赋值目标（编译错误）。当左、右均为同一**具体 struct 类型**且该类型在编译期满足 `Assign` Schema 契约时，按 §22.2（Assign）语义规则 4 派发；§7.7 规定的 `Slot` 成员访问赋值与其规定一致，**不**经 `Assign` 契约；§12.8 规定的下标赋值与其规定一致，**不**经 `Assign` 契约。
 
-#### 12.10  其他表达式形式
+#### 12.11  其他表达式形式
 
+- **结构体字面量**：`StructName { field: value, ... }`（§15）；结果类型为对应 struct；泛型 struct 须显式写出类型实参（§15.2）
 - 顶层函数调用：`func_name(args)`
 - Schema **成员函数**调用：`instance.method(args)`（§18.3）；`this` 绑定为 `instance`
 - Schema **函数值字段**调用：`instance.field(args)`，或先读取字段再调用
-- 成员函数 UFCS：`func_name(receiver, args...)` 等价于 `receiver.func_name(args...)`，当 `receiver` 的**具体 struct 类型**在编译期满足对应 Schema 契约且 `func_name` 为成员函数名时适用（如 `equals(a, b)` 等价于 `a.equals(b)`（§22.2），`assign(a, b)` 对满足 `Assign` 契约的可变左值 `a` 等价于 `a.assign(b)`（§22.2），`not(a)`、`and(a, b)`、`or(a, b)`、`to_bool(a)` 对满足 `Predicate` 契约的类型等价（§22.2），`add(a, b)`、`sub(a, b)`、`mul(a, b)`、`div(a, b)`、`mod(a, b)` 对满足相应二元算术 Schema 契约的类型等价（§22.2）；一元 `neg(a)` 对满足 `Neg` 契约的类型等价（§22.2））
-- `eokas.kernel` 预导入的堆操作 `export func`：全局 `func_name(args)` 形式（§22.1 语义规则 1、§22.7）
+- 成员函数 UFCS：`func_name(receiver, args...)` 等价于 `receiver.func_name(args...)`，当 `receiver` 的**具体 struct 类型**在编译期满足对应 Schema 契约且 `func_name` 为成员函数名时适用（如 `equals(a, b)` 等价于 `a.equals(b)`（§22.2），`assign(a, b)` 对满足 `Assign` 契约的可变左值 `a` 等价于 `a.assign(b)`（§22.2），`not(a)`、`and(a, b)`、`or(a, b)`、`to_bool(a)` 对满足 `Predicate` 契约的类型等价（§22.2），`add(a, b)`、`sub(a, b)`、`mul(a, b)`、`div(a, b)`、`mod(a, b)` 对满足相应二元算术 Schema 契约的类型等价（§22.2）；一元 `neg(a)` 对满足 `Neg` 契约的类型等价（§22.2），一元 `bit_flip(a)` 及 `bit_and(a, b)`、`bit_or(a, b)`、`bit_xor(a, b)`、`bit_shl(a, b)`、`bit_shr(a, b)` 对满足 `BitOp` 契约的类型等价（§22.2），`get_by_index(c, i)`、`set_by_index(c, i, item)` 对满足 `IndexOp` 契约的类型等价（§22.2））
+- `eokas.kernel` 预导入的堆操作 `export func`：全局 `func_name(args)` 形式（§22.1 语义规则 1、§22.5）
 - `eokas.kernel` 游标类型 UFCS：`func_name(receiver, args...)` 等价于 `receiver.func_name(args...)`（§22.3），如 `next(c, n)` 等价于 `c.next(n)`
 
-#### 12.11  类型约束总表
+#### 12.12  类型约束总表
 
 | 约束 | 说明 |
 |------|------|
@@ -407,7 +438,9 @@ var identifier = expression; // 可变变量
 | 除法运算 | 两操作数须为同一**具体**类型；`/` 对满足 `Div` Schema 契约的 struct 按 §22.2（Div）语义规则 4 派发；基础数值类型按 §12.3 |
 | 取余运算 | 两操作数须为同一**具体**类型；`%` 对满足 `Mod` Schema 契约的 struct 按 §22.2（Mod）语义规则 4 派发；基础整数类型按 §12.3 |
 | 取负运算 | 操作数须为**具体**类型；`-expr`（一元，§12.2）对满足 `Neg` Schema 契约的 struct 按 §22.2（Neg）语义规则 4 派发；基础数值类型按 §12.2 |
-| 赋值运算 | 左操作数须为 §12.9 规定的可变目标；左、右须为同一**具体**类型；对满足 `Assign` Schema 契约的 struct 按 §22.2（Assign）语义规则 4 派发；§7.7 `Slot` 成员访问赋值从其规定；基础数值类型、`bool`、`String` 按 §12.9 |
+| 位运算 | `~expr`（§12.4）及 `&` `\|` `^` `|<` `|>`（§12.4）：操作数须为**具体**类型（二元位运算两侧须为同一具体类型，移位运算符的左操作数为 `BitOp` 操作数）；对满足 `BitOp` Schema 契约的 struct 按 §22.2（BitOp）语义规则 4–5 派发；基础整数类型按 §12.4 |
+| 下标运算 | `expr[index]` / `expr[index] = item`（§12.8）：`expr` 须满足 `IndexOp` Schema 契约；`index` 须可转换为 `Index`；`item` 类型须为 `Item`；按 §22.2（IndexOp）语义规则 4–5 派发；`Heap<T>` 特例见 §7.5 |
+| 赋值运算 | 左操作数须为 §12.10 规定的可变目标；左、右须为同一**具体**类型；对满足 `Assign` Schema 契约的 struct 按 §22.2（Assign）语义规则 4 派发；§7.7 `Slot` 成员访问赋值与其规定一致；§12.8 下标赋值与其规定一致；基础数值类型、`bool`、`String` 按 §12.10 |
 | 逻辑运算 | `!`（§12.2）、`&&` `||`（§12.6）：操作数须为同一**具体**类型；对满足 `Predicate` Schema 契约的 struct 按 §22.2（Predicate）语义规则 4–5 派发并保留短路；内置 `bool` 按 §12.6；控制流与三元条件须内置 `bool`，`: Predicate` struct 须经 `to_bool()`（§22.2 语义规则 7） |
 | 禁止隐式转换 | 混合不同类型运算为编译错误 |
 | Schema 非类型 | Schema 名**不得**作为变量、字段、参数、返回值或 `func` 类型中的类型使用（§18 定位）；多态通过 §17.5 泛型 + Schema 约束 + 单态化实现 |
@@ -553,19 +586,58 @@ func main() -> void {
 3. 泛型函数以调用处的类型实参区分实例化，不属于重载；类型形参的名称不影响函数身份。
 4. 函数参数与返回类型**不得**为 Schema 名（§18 定位 1；含 schema 定义内签名）；须为具体类型或类型形参。
 
-### 15. 初始化
+### 15. 结构体字面量
 
-#### 15.1  非泛型初始化
+**定义。** 结构体字面量为以 struct 类型名引导、花括号内按字段名赋值的表达式，用于构造该 struct 的实例值。
+
+**语法**
 
 ```eok
-var p = Player {
-    hp: 100
-};
+StructName {
+    fieldName: expression,
+    ...
+}
+
+// 泛型 struct（须显式类型实参，§17.4）
+StructName<T1, T2, ...> {
+    fieldName: expression,
+    ...
+}
 ```
 
-#### 15.2  泛型实例化
+**语义规则**
 
-结构体初始化须显式指定类型实参（规则见 §17.4）：
+1. `StructName` 须为已定义的**具体** struct（**不得**为 Schema 名）；泛型 struct 须在使用处写出全部类型实参（§17.4）。
+2. 字面量结果类型为该 struct 的具体类型（含实例化后的泛型类型）。
+3. 花括号内每项 `fieldName: expression` 中，`fieldName` 须为该 struct 的**数据字段**或**函数值字段**名；**不得**初始化成员函数。
+4. 各 `expression` 的类型须与对应字段类型一致（或可赋值）；未知字段名、重复字段名为编译错误。
+5. **部分初始化**：未在字面量中出现的字段，按该字段类型的**零值**初始化——数值类型为 `0`、布尔为 `false`、`String` 为空串、函数值字段为零函数值（若语言对函数值有零值语义）；`Heap<T>` / `Slot<T>` 等句柄字段为零/无效句柄（与 §7 无效状态一致）。
+6. 字段书写顺序**不必**与 struct 声明顺序一致。
+7. `Heap<T>`、`Slot<T>` **不得**以结构体字面量构造（§22.1）；仅可通过 `make`、下标访问等内核操作获得。
+8. 结构体字面量可用于变量初始化、函数实参、`return` 表达式等任意要求 struct 类型值的上下文（§12.11）。
+
+#### 15.1  非泛型
+
+```eok
+struct A {
+    var id: String;
+    var name: String;
+}
+
+val a1: A = A {id: "0x001", name: "java++"};
+val a2 = A {id: "0x001", name: "java++"};
+```
+
+部分初始化示例：
+
+```eok
+val p = Player { hp: 100 };
+// transform、rigidbody 等未列字段按零值初始化
+```
+
+#### 15.2  泛型
+
+泛型 struct 的结构体字面量须显式指定类型实参（规则见 §17.4）：
 
 ```eok
 var v = Vec3<f32> {
@@ -655,7 +727,7 @@ func sum<T>(var a: T, var b: T) -> T {
 
 **语义规则。** 使用泛型结构体或函数时，必须为每个类型形参给定具体类型（类型实参）。
 
-- **结构体**：初始化时显式写出类型实参，语法见 §15.2
+- **结构体**：结构体字面量须显式写出类型实参，语法见 §15.2
 
 ```eok
 var box = Box<i32> { value: 42 };
@@ -677,6 +749,23 @@ var box = Box<i32> { value: 42 };
 **示例**
 
 ```eok
+struct Widget : Equals {
+    val id: i32;
+    val label: String;
+
+    func equals(val other: Widget) -> bool {
+        return this.id == other.id;
+    }
+};
+
+struct EntityId : Equals {
+    val value: i32;
+
+    func equals(val other: EntityId) -> bool {
+        return this.value == other.value;
+    }
+};
+
 func log_equal<T>(var a: T, var b: T) -> void {
     // 编译器要求 T 的具体 struct 在编译期满足 Equals Schema 契约（§22.2）
     if (a.equals(b)) {
@@ -684,8 +773,8 @@ func log_equal<T>(var a: T, var b: T) -> void {
     }
 }
 
-var w = Widget { ... };
-var e = EntityId { ... };
+var w = Widget { id: 1, label: "a" };
+var e = EntityId { value: 1 };
 log_equal(w, w);   // 单态化为 Widget 版本
 log_equal(e, e);   // 单态化为 EntityId 版本
 ```
@@ -935,7 +1024,7 @@ struct Box<T> : Equals {
    - **成员函数**：提供签名一致的函数体；参数列表与返回类型须与原型匹配，**不得**在签名中显式声明 `this` 形参。
 3. struct **可**声明 Schema **未要求**的额外数据字段、函数值字段等；额外成员不参与 Schema 契约校验，但须满足 §10 字段类型等一般规则。
 4. 同时实现多个 Schema 时，若不同 Schema 对**同名成员**要求**形态或签名不一致**（如类型不同的同名字段、签名不同的同名成员函数），为编译错误；若多个 Schema 要求**签名完全一致**的同名成员函数，struct 中**只需提供一次**实现。
-5. **成员函数**不占用 struct 实例内存布局；调用形式为 `instance.method(args)`（§12.10）；编译器在**编译期**静态解析至具体 struct 的实现，`this` 绑定为 `instance`（§18 定位 4）。
+5. **成员函数**不占用 struct 实例内存布局；调用形式为 `instance.method(args)`（§12.11）；编译器在**编译期**静态解析至具体 struct 的实现，`this` 绑定为 `instance`（§18 定位 4）。
 6. **函数值字段**占用**实现 struct** 的实例布局；调用 `instance.field(args)` 时对字段存储的函数值求值并调用，**不**注入 `this`。
 7. 成员函数体内**可**通过 `this.field` 访问当前实例的数据字段（§3）；函数值字段所存储的函数值**不得**隐式捕获外部变量（§3）。
 8. 若 Schema 声明类型形参（如 `Equals<T>`、`Add<T>`、`Predicate<T>`），struct 在声明处写 `: SchemaName`（**implements**，非类型标注）时，编译器将 `T` 绑定为当前 struct 类型；亦可显式写 `: SchemaName<StructName>`。
@@ -1066,11 +1155,11 @@ eokas build --meta=project.eokmeta main.eok -o app
 
 **元数据文件格式（JSON）**
 
-`version` 字段为生成该文件时所依据的**语言规范版本号**（与本文档标题版本一致，如 `0.1.67`）。
+`version` 字段为生成该文件时所依据的**语言规范版本号**（与本文档标题版本一致，如 `0.1.69`）。
 
 ```json
 {
-    "version": "0.1.67",
+    "version": "0.1.69",
     "hash": "0xDEADBEEF",
     "types": [
         {
@@ -1212,7 +1301,7 @@ module app.meta_demo {
 
     func main() -> void {
         val ctx_heap = meta.load("project.eokmeta");
-        if (!is_valid(ctx_heap)) {
+        if (!ctx_heap.valid) {
             io.print("Metadata load failed!");
             return;
         }
@@ -1225,7 +1314,7 @@ module app.meta_demo {
         }
 
         val type_info = meta.get_type(ctx, "app.game.Transform");
-        if (is_valid(type_info)) {
+        if (type_info.valid) {
             io.print(type_info.name);
         }
 
@@ -1240,7 +1329,7 @@ module app.meta_demo {
 
 #### 20.0  eokas.kernel（内核，见 §22）
 
-`eokas.kernel` 由工具链内置，承载堆句柄类型、能力 Schema 与预导入堆操作；完整声明见 §22。`make`、`drop`、`is_valid`、`space_of`、`get_value`、`set_value`、`slot_at` 等见 §22.7。
+`eokas.kernel` 由工具链内置，承载堆句柄类型、能力 Schema 与预导入堆操作；完整声明见 §22。`make`、`drop`、`is_valid`、`space_of`、`get_value`、`set_value`、`slot_at` 等见 §22.5。
 
 #### 20.1  eokas.core
 
@@ -1297,7 +1386,7 @@ Eokas 包（Package）是多个模块的集合单元，通过项目根目录下�
 {
     "name": "com.example.my_game_logic",
     "version": "1.4.2",
-    "eokas": "0.1.67",
+    "eokas": "0.1.69",
     "dependencies": {
         "eokas.core": "^1.0.0",
         "eokas.math": "~2.3.0",
@@ -1310,7 +1399,7 @@ Eokas 包（Package）是多个模块的集合单元，通过项目根目录下�
 
 - `name`：包唯一标识名称（字符串）；
 - `version`：包自身版本号，遵循 Semantic Versioning 2.0.0 规范（主版本.次版本.修订号）；
-- `eokas`：所依据的**语言规范版本号**（与本文档标题版本一致，如 `"0.1.67"`）；
+- `eokas`：所依据的**语言规范版本号**（与本文档标题版本一致，如 `"0.1.69"`）；
 - `dependencies`：依赖映射表，键为依赖包名，值为版本约束规则。
 
 #### 21.4  依赖解析

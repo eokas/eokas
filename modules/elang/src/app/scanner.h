@@ -19,24 +19,29 @@ namespace eokas
         {
             VAR,
             VAL,
-            MAKE,
             MODULE,
             IMPORT,
             EXPORT,
-            PUBLIC,
-            PRIVATE,
             FUNC,
-            PROC,
             STRUCT,
             ENUM,
             IF,
             ELSE,
-            LOOP,
             BREAK,
             CONTINUE,
             RETURN,
             TRUE,
             FALSE,
+            CASE,
+            DEFAULT,
+            DO,
+            FOR,
+            META,
+            SCHEMA,
+            SELF,
+            SWITCH,
+            THIS,
+            WHILE,
             COMMA,
             SEMICOLON,
             COLON,
@@ -71,6 +76,7 @@ namespace eokas
             LE,
             SHIFT_L,
             SHIFT_R,
+            ARROW,
             DOT,
             DOT2,
             DOT3,
@@ -85,9 +91,9 @@ namespace eokas
             UNKNOWN
         };
         
-        constexpr static const char* const names[COUNT] = {"var", "val", "make", "module", "import", "export", "public", "private", "func", "proc", "struct", "enum", "if", "else", "loop", "break",
-            "continue", "return", "true", "false", ",", ";", ":", "?", "@", "#", "$", "+", "-", "*", "/", "%", "^", "~", "(", ")", "[", "]", "{", "}", "&", "&&", "|", "||", "=", "==", "!", "!=", ">",
-            ">=", "<", "<=", ">|", "|<", ".", "..", "...", "<b-int>", "<x-int>", "<d-int>", "<float>", "<string>", "<identifier>", "<eos>"};
+        constexpr static const char* const names[COUNT] = {"var", "val", "module", "import", "export", "func", "struct", "enum", "if", "else", "break", "continue", "return", "true", "false",
+            "case", "default", "do", "for", "meta", "schema", "self", "switch", "this", "while", ",", ";", ":", "?", "@", "#", "$", "+", "-", "*", "/", "%", "^", "~", "(", ")", "[", "]", "{", "}",
+            "&", "&&", "|", "||", "=", "==", "!", "!=", ">", ">=", "<", "<=", "|<", "|>", "->", ".", "..", "...", "<b-int>", "<x-int>", "<d-int>", "<float>", "<string>", "<identifier>", "<eos>"};
         
         token_type type;
         String value;

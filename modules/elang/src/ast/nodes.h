@@ -10,6 +10,7 @@ namespace eokas
 	{
 		ast_category_t category;
 		ast_node_t* parent;
+		std::vector<ast_node_annotation_t*> annotations = {};
 
 		explicit ast_node_t(ast_category_t category, ast_node_t* parent)
 			: category(category), parent(parent)
@@ -19,6 +20,7 @@ namespace eokas
 		{
 			this->category = ast_category_t::NONE;
 			this->parent = nullptr;
+			this->annotations.clear();
 		}
 	};
 	
@@ -83,8 +85,11 @@ namespace eokas
 		{
 			String name = "";
 			ast_node_type_t* type = nullptr;
+			bool variable = false;
 		};
 
+		String name = "";
+		std::vector<String> typeParams = {};
 		ast_node_type_t* rtype = nullptr;
 		std::vector<arg_t> args = {};
 		std::vector<ast_node_stmt_t*> body = {};
@@ -116,6 +121,7 @@ namespace eokas
 	struct ast_node_func_ref_t : public ast_node_expr_t
 	{
 		ast_node_expr_t* func = nullptr;
+		std::vector<ast_node_type_t*> typeArgs = {};
 		std::vector<ast_node_expr_t*> args = {};
 
 		explicit ast_node_func_ref_t(ast_node_t* parent)
@@ -212,15 +218,6 @@ namespace eokas
 		{}
 	};
 
-	struct ast_node_array_def_t : public ast_node_expr_t
-	{
-		std::vector<ast_node_expr_t*> elements = {};
-
-		explicit ast_node_array_def_t(ast_node_t* parent)
-			: ast_node_expr_t(ast_category_t::ARRAY_DEF, parent)
-		{}
-	};
-
 	struct ast_node_array_ref_t : public ast_node_expr_t
 	{
 		ast_node_expr_t* obj = nullptr;
@@ -262,7 +259,10 @@ namespace eokas
 		};
 
 		String name = "";
+		std::vector<String> typeParams = {};
+		std::vector<ast_node_type_t*> schemas = {};
 		std::vector<member_t> members = {};
+		std::vector<ast_node_func_def_t*> methods = {};
 
 		explicit ast_node_struct_def_t(ast_node_t* parent)
 			: ast_node_stmt_t(ast_category_t::STRUCT_DEF, parent)
@@ -299,14 +299,91 @@ namespace eokas
 		{ }
 	};
 
-	struct ast_node_proc_def_t : public ast_node_stmt_t
+	struct ast_node_schema_def_t : public ast_node_stmt_t
+	{
+		struct member_t
+		{
+			String name = "";
+			ast_node_type_t* type = nullptr;
+			ast_node_expr_t* value = nullptr;
+			bool isConst = false;
+		};
+
+		String name = "";
+		std::vector<String> typeParams = {};
+		std::vector<ast_node_type_t*> bases = {};
+		std::vector<member_t> members = {};
+		std::vector<ast_node_func_def_t*> methods = {};
+
+		explicit ast_node_schema_def_t(ast_node_t* parent)
+			: ast_node_stmt_t(ast_category_t::SCHEMA_DEF, parent)
+		{ }
+
+		member_t* addMember(const String& name)
+		{
+			if(this->getMember(name) != nullptr)
+				return nullptr;
+
+			auto& m = this->members.emplace_back();
+			m.name = name;
+			return &m;
+		}
+
+		const member_t* getMember(const String& name) const
+		{
+			for(auto& m : members)
+			{
+				if(m.name == name)
+					return &m;
+			}
+			return nullptr;
+		}
+	};
+
+	struct ast_node_meta_def_t : public ast_node_stmt_t
+	{
+		struct field_t
+		{
+			String name = "";
+			ast_node_type_t* type = nullptr;
+			ast_node_expr_t* value = nullptr;
+		};
+
+		String name = "";
+		std::vector<field_t> fields = {};
+
+		explicit ast_node_meta_def_t(ast_node_t* parent)
+			: ast_node_stmt_t(ast_category_t::META_DEF, parent)
+		{ }
+
+		field_t* addField(const String& name)
+		{
+			if(this->getField(name) != nullptr)
+				return nullptr;
+
+			auto& f = this->fields.emplace_back();
+			f.name = name;
+			return &f;
+		}
+
+		const field_t* getField(const String& name) const
+		{
+			for(auto& f : fields)
+			{
+				if(f.name == name)
+					return &f;
+			}
+			return nullptr;
+		}
+	};
+
+	struct ast_node_annotation_t : public ast_node_t
 	{
 		String name = "";
-		ast_node_type_t* type = nullptr;
-		std::map<String, ast_node_type_t*> args = {};
+		std::map<String, ast_node_expr_t*> args = {};
 
-		explicit ast_node_proc_def_t(ast_node_t* parent)
-			: ast_node_stmt_t(ast_category_t::PROC_DEF, parent)
+		explicit ast_node_annotation_t(ast_node_t* parent)
+			: ast_node_t(ast_category_t::ANNOTATION, parent)
 		{ }
 	};
 
@@ -330,15 +407,42 @@ namespace eokas
 		{ }
 	};
 
-	struct ast_node_loop_t : public ast_node_stmt_t
+	struct ast_node_for_t : public ast_node_stmt_t
 	{
 		ast_node_stmt_t* init = nullptr;
 		ast_node_expr_t* cond = nullptr;
 		ast_node_stmt_t* step = nullptr;
 		ast_node_stmt_t* body = nullptr;
 
-		explicit ast_node_loop_t(ast_node_t* parent)
-			: ast_node_stmt_t(ast_category_t::LOOP, parent)
+		explicit ast_node_for_t(ast_node_t* parent)
+			: ast_node_stmt_t(ast_category_t::FOR, parent)
+		{ }
+	};
+
+	struct ast_node_while_t : public ast_node_stmt_t
+	{
+		ast_node_expr_t* cond = nullptr;
+		ast_node_stmt_t* body = nullptr;
+
+		explicit ast_node_while_t(ast_node_t* parent)
+			: ast_node_stmt_t(ast_category_t::WHILE, parent)
+		{ }
+	};
+
+	struct ast_node_switch_t : public ast_node_stmt_t
+	{
+		struct case_t
+		{
+			ast_node_expr_t* value = nullptr;
+			std::vector<ast_node_stmt_t*> body = {};
+		};
+
+		ast_node_expr_t* expr = nullptr;
+		std::vector<case_t> cases = {};
+		std::vector<ast_node_stmt_t*> default_body = {};
+
+		explicit ast_node_switch_t(ast_node_t* parent)
+			: ast_node_stmt_t(ast_category_t::SWITCH, parent)
 		{ }
 	};
 
@@ -359,6 +463,7 @@ namespace eokas
 	struct ast_node_block_t : public ast_node_stmt_t
 	{
 		std::vector<ast_node_stmt_t*> stmts = {};
+		bool breakable = false;
 
 		explicit ast_node_block_t(ast_node_t* parent)
 			: ast_node_stmt_t(ast_category_t::BLOCK, parent)

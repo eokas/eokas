@@ -20,9 +20,13 @@ namespace eokas
 		
 		ast_node_module_t* parse_module();
 		ast_node_import_t* parse_import(ast_node_t* p);
-		ast_node_export_t* parse_export(ast_node_t* p);
+		ast_node_export_t* parse_export(ast_node_t* p, ast_node_t** out_decl);
 		
 		ast_node_type_t* parse_type(ast_node_t* p);
+		bool parse_type_params(std::vector<String>& out);
+		bool parse_schema_clause(ast_node_t* p, std::vector<ast_node_type_t*>& out);
+		bool parse_generic_type_args(ast_node_t* p, std::vector<ast_node_type_t*>& out);
+		String parse_dotted_path(bool required = true);
 		
 		ast_node_expr_t* parse_expr(ast_node_t* p);
 		ast_node_expr_t* parse_expr_trinary(ast_node_t* p);
@@ -34,32 +38,41 @@ namespace eokas
 		ast_node_expr_t* parse_literal_float(ast_node_t* p);
 		ast_node_expr_t* parse_literal_bool(ast_node_t* p);
 		ast_node_expr_t* parse_literal_string(ast_node_t* p);
-		ast_node_expr_t* parse_func_def(ast_node_t* p);
+		ast_node_expr_t* parse_func_def(ast_node_t* p, bool require_body = true);
+		ast_node_func_def_t* parse_named_func_def(ast_node_t* p);
 		bool parse_func_params(ast_node_func_def_t* node);
 		bool parse_func_body(ast_node_func_def_t* node);
-		ast_node_expr_t* parse_object_def(ast_node_t* p);
-		ast_node_expr_t* parse_func_call(ast_node_t* p, ast_node_expr_t* primary);
-		ast_node_expr_t* parse_array_def(ast_node_t* p);
+		ast_node_expr_t* parse_object_def(ast_node_t* p, ast_node_type_t* type);
+		ast_node_expr_t* parse_func_call(ast_node_t* p, ast_node_expr_t* primary, const std::vector<ast_node_type_t*>& typeArgs);
 		ast_node_expr_t* parse_index_ref(ast_node_t* p, ast_node_expr_t* primary);
 		bool parse_object_field(ast_node_object_def_t* node);
 		ast_node_expr_t* parse_object_ref(ast_node_t* p, ast_node_expr_t* primary);
 		
 		ast_node_stmt_t* parse_stmt(ast_node_t* p);
+		ast_node_t* parse_exportable_decl(ast_node_t* p);
 		ast_node_struct_def_t* parse_stmt_struct_def(ast_node_t* p);
 		bool parse_stmt_struct_member(ast_node_struct_def_t* node);
 		ast_node_enum_def_t* parse_stmt_enum_def(ast_node_t* p);
-		ast_node_proc_def_t* parse_stmt_proc_def(ast_node_t* p);
+		ast_node_schema_def_t* parse_stmt_schema_def(ast_node_t* p);
+		bool parse_stmt_schema_member(ast_node_schema_def_t* node);
+		ast_node_meta_def_t* parse_stmt_meta_def(ast_node_t* p);
+		bool parse_stmt_meta_field(ast_node_meta_def_t* node);
 		ast_node_symbol_def_t* parse_stmt_symbol_def(ast_node_t* p);
 		ast_node_continue_t* parse_stmt_continue(ast_node_t* p);
 		ast_node_break_t* parse_stmt_break(ast_node_t* p);
 		ast_node_return_t* parse_stmt_return(ast_node_t* p);
 		ast_node_if_t* parse_stmt_if(ast_node_t* p);
-		ast_node_loop_t* parse_stmt_loop(ast_node_t* p);
-		ast_node_stmt_t* parse_stmt_loop_init(ast_node_t* p);
-		ast_node_expr_t* parse_stmt_loop_cond(ast_node_t* p);
-		ast_node_stmt_t* parse_stmt_loop_step(ast_node_t* p);
-		ast_node_block_t* parse_stmt_block(ast_node_t* p);
+		ast_node_for_t* parse_stmt_for(ast_node_t* p);
+		ast_node_while_t* parse_stmt_while(ast_node_t* p);
+		ast_node_switch_t* parse_stmt_switch(ast_node_t* p);
+		ast_node_block_t* parse_stmt_do(ast_node_t* p);
+		ast_node_block_t* parse_stmt_block(ast_node_t* p, bool breakable = false);
 		ast_node_stmt_t* parse_stmt_assign_or_call(ast_node_t* p);
+		
+		ast_node_annotation_t* parse_annotation(ast_node_t* p);
+		bool parse_annotations(ast_node_t* p, std::vector<ast_node_annotation_t*>& out);
+		void attach_annotations(ast_node_t* node, const std::vector<ast_node_annotation_t*>& anns);
+		String extract_export_name(ast_node_t* node);
 		
 		void next_token();
 		struct token_t& token();
