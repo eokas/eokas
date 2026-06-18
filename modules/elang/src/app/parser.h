@@ -16,6 +16,7 @@ namespace eokas
 	
 	public:
 		ast_node_module_t* parse(const char* source);
+		std::vector<ast_node_module_t*> parse_all(const char* source);
 		void clear();
 		
 		ast_node_module_t* parse_module();

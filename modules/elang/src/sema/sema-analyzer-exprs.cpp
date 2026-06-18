@@ -344,6 +344,59 @@ namespace eokas
         if (node->obj != nullptr && node->obj->category == ast_category_t::SYMBOL_REF)
         {
             auto* sref = static_cast<ast_node_symbol_ref_t*>(node->obj);
+
+            auto aliasIt = importAliases.find(sref->name);
+            if (aliasIt != importAliases.end())
+            {
+                sema_module_t* dep = program->get_module(aliasIt->second);
+                if (dep == nullptr)
+                {
+                    module->diagnostics().error(sref->name,
+                        "import alias '%s' refers to module '%s' which is not available.",
+                        sref->name.cstr(), aliasIt->second.cstr());
+                    out->type = registry->type_error();
+                    return out;
+                }
+
+                auto vIt = dep->exportedValues.find(node->key);
+                if (vIt != dep->exportedValues.end())
+                {
+                    out->obj = module->new_expr<sema_expr_symbol_ref_t>();
+                    auto* symRef = static_cast<sema_expr_symbol_ref_t*>(out->obj);
+                    symRef->name = node->key;
+                    symRef->symbol = vIt->second;
+                    symRef->type = vIt->second->type != nullptr ? vIt->second->type : registry->type_error();
+                    out->type = symRef->type;
+                    return out;
+                }
+
+                auto tIt = dep->exportedTypes.find(node->key);
+                if (tIt != dep->exportedTypes.end())
+                {
+                    out->obj = module->new_expr<sema_expr_symbol_ref_t>();
+                    auto* symRef = static_cast<sema_expr_symbol_ref_t*>(out->obj);
+                    symRef->name = node->key;
+                    symRef->type = tIt->second->type;
+                    out->type = tIt->second->type;
+                    return out;
+                }
+
+                module->diagnostics().error(node->key,
+                    "module '%s' has no exported symbol '%s'.",
+                    aliasIt->second.cstr(), node->key.cstr());
+                out->type = registry->type_error();
+                return out;
+            }
+
+            if (defaultImportSegments.find(sref->name) != defaultImportSegments.end())
+            {
+                module->diagnostics().error(sref->name,
+                    "default import must not use '%s.' qualifier; use unprefixed access or import Alias = ...",
+                    sref->name.cstr());
+                out->type = registry->type_error();
+                return out;
+            }
+
             if (scope->get_value(sref->name) == nullptr)
             {
                 sema_type_symbol_t* tsym = scope->get_type(sref->name);

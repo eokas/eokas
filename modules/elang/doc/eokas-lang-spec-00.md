@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.69
+# Eokas 语言规范 v0.1.70
 
 **分册导航**
 
@@ -8,7 +8,7 @@
 - [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §22
 - [04 示例代码](eokas-lang-spec-04-examples.md) — §23
 
-# Eokas 语言规范 v0.1.69
+# Eokas 语言规范 v0.1.70
 
 ## 规范结构说明
 

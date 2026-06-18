@@ -5,6 +5,8 @@
 #include "sema-module.h"
 #include "sema-builtins.h"
 
+#include <set>
+
 namespace eokas
 {
     /**
@@ -20,10 +22,11 @@ namespace eokas
         explicit sema_analyzer_t(sema_program_t* program);
         ~sema_analyzer_t() = default;
 
-        // Analyzes one module. Returns the analyzed module on success, or nullptr
+        // Analyzes one module (or merges a fragment into an existing module when
+        // `merge` is true). Returns the analyzed module on success, or nullptr
         // if it contained errors (the module is still registered in the program
         // for diagnostic aggregation).
-        sema_module_t* analyze(ast_node_module_t* node);
+        sema_module_t* analyze(ast_node_module_t* node, bool merge = false);
 
     private:
         // ---- passes ----
@@ -110,6 +113,10 @@ namespace eokas
         std::vector<ast_node_symbol_def_t*> pendingGlobals = {};
         std::vector<ast_node_meta_def_t*> pendingMetas = {};
         std::vector<sema_func_t*> pendingMethods = {};
+
+        std::map<String, String> importAliases = {};
+        std::set<String> defaultImportSegments = {};
+        bool merging = false;
     };
 }
 

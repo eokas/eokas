@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.69 — 第四部分：示例代码
+# Eokas 语言规范 v0.1.70 — 第四部分：示例代码
 
 **分册导航**
 
@@ -31,7 +31,7 @@ module app.fib {
 
     func main() -> void {
         val n = fib(10);
-        io.print("fib completed");
+        print("fib completed");
     }
 };
 ```
@@ -45,15 +45,15 @@ module app.calc {
     import eokas.core.result;
     import eokas.io;
 
-    func divide(var a: f32, var b: f32) -> result.Result<f32> {
+    func divide(var a: f32, var b: f32) -> Result<f32> {
         if (b == 0.0) {
-            return result.Result<f32> {
+            return Result<f32> {
                 code: 1001,
                 message: "Division by zero is not allowed.",
                 value: 0.0
             };
         }
-        return result.Result<f32> {
+        return Result<f32> {
             code: 0,
             message: "",
             value: a / b
@@ -63,9 +63,9 @@ module app.calc {
     func main() -> void {
         val res = divide(10.0, 2.0);
         if (res.code == 0) {
-            io.print("ok");
+            print("ok");
         } else {
-            io.print(res.message);
+            print(res.message);
         }
     }
 };

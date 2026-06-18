@@ -16,10 +16,23 @@ namespace eokas {
 	}
 
 	ast_node_module_t* parser_t::parse(const char* source) {
+		auto all = this->parse_all(source);
+		return all.empty() ? nullptr : all.front();
+	}
+
+	std::vector<ast_node_module_t*> parser_t::parse_all(const char* source) {
+		std::vector<ast_node_module_t*> out;
 		this->clear();
 		this->scanner->ready(source);
 		this->next_token();
-		return this->parse_module();
+
+		while(this->token().type != token_t::EOS) {
+			ast_node_module_t* mod = this->parse_module();
+			if(mod == nullptr)
+				return {};
+			out.push_back(mod);
+		}
+		return out;
 	}
 
 	void parser_t::clear() {
@@ -140,17 +153,18 @@ namespace eokas {
 	}
 
 	ast_node_module_t* parser_t::parse_module() {
+		if(!this->check_token(token_t::MODULE, true))
+			return nullptr;
+
 		auto* module = factory->create<ast_node_module_t>(nullptr);
 		module->entry = factory->create<ast_node_func_def_t>(module);
 
-		if(this->check_token(token_t::MODULE, false)) {
-			this->next_token();
-			module->name = this->parse_dotted_path();
-			if(module->name.empty())
-				return nullptr;
-			if(!this->check_token(token_t::LCB))
-				return nullptr;
-		}
+		this->next_token();
+		module->name = this->parse_dotted_path();
+		if(module->name.empty())
+			return nullptr;
+		if(!this->check_token(token_t::LCB))
+			return nullptr;
 
 		while(this->token().type != token_t::EOS) {
 			if(this->check_token(token_t::RCB, false)) {
@@ -159,13 +173,18 @@ namespace eokas {
 				break;
 			}
 
+			if(this->check_token(token_t::MODULE, false)) {
+				this->error("nested module definition is not allowed.");
+				return nullptr;
+			}
+
 			auto& token = this->token();
 			switch(token.type) {
 				case token_t::IMPORT: {
 					ast_node_import_t* _import = this->parse_import(module);
 					if(_import == nullptr)
 						return nullptr;
-					const String key = _import->target.empty() ? _import->name : _import->target;
+					const String key = !_import->alias.isEmpty() ? _import->alias : _import->target;
 					auto iter = module->imports.find(key);
 					if(iter != module->imports.end()) {
 						this->error_import_exists(key);
@@ -176,15 +195,19 @@ namespace eokas {
 				case token_t::EXPORT: {
 					ast_node_t* decl = nullptr;
 					ast_node_export_t* _export = this->parse_export(module, &decl);
-					if(_export == nullptr || decl == nullptr)
+					if(_export == nullptr)
 						return nullptr;
-					auto iter = module->exports.find(_export->name);
+					if(!_export->moduleReexport && decl == nullptr)
+						return nullptr;
+					const String key = _export->moduleReexport ? _export->modulePath : _export->name;
+					auto iter = module->exports.find(key);
 					if(iter != module->exports.end()) {
-						this->error_export_exists(_export->name);
+						this->error_export_exists(key);
 						return nullptr;
 					}
-					module->exports.insert(std::make_pair(_export->name, _export));
-					module->entry->body.push_back(reinterpret_cast<ast_node_stmt_t*>(decl));
+					module->exports.insert(std::make_pair(key, _export));
+					if(decl != nullptr)
+						module->entry->body.push_back(reinterpret_cast<ast_node_stmt_t*>(decl));
 				} break;
 				default: {
 					ast_node_stmt_t* stmt = this->parse_stmt(module->entry);
@@ -206,7 +229,27 @@ namespace eokas {
 			return nullptr;
 
 		auto node = factory->create<ast_node_import_t>(p);
-		node->target = this->parse_dotted_path();
+		if(!this->check_token(token_t::ID, true, false))
+			return nullptr;
+
+		String first = this->token().value;
+		this->next_token();
+
+		if(this->check_token(token_t::ASSIGN, false)) {
+			this->next_token();
+			node->alias = first;
+			node->target = this->parse_dotted_path();
+		} else {
+			node->target = first;
+			while(this->check_token(token_t::DOT, false)) {
+				this->next_token();
+				if(!this->check_token(token_t::ID, true, false))
+					return nullptr;
+				node->target = node->target + "." + this->token().value;
+				this->next_token();
+			}
+		}
+
 		if(node->target.empty())
 			return nullptr;
 
@@ -228,6 +271,24 @@ namespace eokas {
 
 		if(!this->check_token(token_t::EXPORT))
 			return nullptr;
+
+		auto* mod = dynamic_cast<ast_node_module_t*>(p);
+		const token_t::token_type next = this->token().type;
+		if(next == token_t::ID) {
+			auto node = factory->create<ast_node_export_t>(p);
+			node->moduleReexport = true;
+			node->modulePath = this->parse_dotted_path();
+			if(node->modulePath.empty())
+				return nullptr;
+			if(mod != nullptr && node->modulePath == mod->name) {
+				this->error("cannot re-export module '%s' from itself.", node->modulePath.cstr());
+				return nullptr;
+			}
+			node->name = node->modulePath;
+			if(!this->check_token(token_t::SEMICOLON))
+				return nullptr;
+			return node;
+		}
 
 		ast_node_t* decl = this->parse_exportable_decl(p);
 		if(decl == nullptr)
@@ -889,6 +950,9 @@ namespace eokas {
 		bool semicolon = false;
 
 		switch(this->token().type) {
+			case token_t::MODULE:
+				this->error("nested module definition is not allowed.");
+				return nullptr;
 			case token_t::STRUCT:
 				stmt = reinterpret_cast<ast_node_stmt_t*>(this->parse_stmt_struct_def(p));
 			break;

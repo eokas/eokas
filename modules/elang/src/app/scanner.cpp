@@ -285,6 +285,96 @@ namespace eokas
                     m_token.type = token_t::DOT;
                     return;
                 
+                case ',':
+                    this->save_and_read_char();
+                    m_token.type = token_t::COMMA;
+                    return;
+                
+                case ';':
+                    this->save_and_read_char();
+                    m_token.type = token_t::SEMICOLON;
+                    return;
+                
+                case ':':
+                    this->save_and_read_char();
+                    m_token.type = token_t::COLON;
+                    return;
+                
+                case '?':
+                    this->save_and_read_char();
+                    m_token.type = token_t::QUESTION;
+                    return;
+                
+                case '@':
+                    this->save_and_read_char();
+                    m_token.type = token_t::AT;
+                    return;
+                
+                case '#':
+                    this->save_and_read_char();
+                    m_token.type = token_t::POUND;
+                    return;
+                
+                case '$':
+                    this->save_and_read_char();
+                    m_token.type = token_t::DOLLAR;
+                    return;
+                
+                case '+':
+                    this->save_and_read_char();
+                    m_token.type = token_t::ADD;
+                    return;
+                
+                case '*':
+                    this->save_and_read_char();
+                    m_token.type = token_t::MUL;
+                    return;
+                
+                case '%':
+                    this->save_and_read_char();
+                    m_token.type = token_t::MOD;
+                    return;
+                
+                case '^':
+                    this->save_and_read_char();
+                    m_token.type = token_t::XOR;
+                    return;
+                
+                case '~':
+                    this->save_and_read_char();
+                    m_token.type = token_t::FLIP;
+                    return;
+                
+                case '(':
+                    this->save_and_read_char();
+                    m_token.type = token_t::LRB;
+                    return;
+                
+                case ')':
+                    this->save_and_read_char();
+                    m_token.type = token_t::RRB;
+                    return;
+                
+                case '[':
+                    this->save_and_read_char();
+                    m_token.type = token_t::LSB;
+                    return;
+                
+                case ']':
+                    this->save_and_read_char();
+                    m_token.type = token_t::RSB;
+                    return;
+                
+                case '{':
+                    this->save_and_read_char();
+                    m_token.type = token_t::LCB;
+                    return;
+                
+                case '}':
+                    this->save_and_read_char();
+                    m_token.type = token_t::RCB;
+                    return;
+                
                 case '0':
                 case '1':
                 case '2':
@@ -310,9 +400,8 @@ namespace eokas
                     }
                     else
                     {
-                        // single operator + - * / etc.
                         this->save_and_read_char();
-                        m_token.infer(token_t::UNKNOWN);
+                        m_token.type = token_t::UNKNOWN;
                         return;
                     }
             }

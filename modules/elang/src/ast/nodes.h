@@ -40,6 +40,7 @@ namespace eokas
 	{
 		String name = "";
 		String target = "";
+		String alias = "";       // non-empty when `import Alias = Target`
 
 		explicit ast_node_import_t(ast_node_t* parent)
 			: ast_node_t(ast_category_t::IMPORT, parent)
@@ -49,7 +50,9 @@ namespace eokas
 	struct ast_node_export_t : public ast_node_t
 	{
 		String name = "";
-		
+		bool moduleReexport = false;
+		String modulePath = "";
+
 		explicit ast_node_export_t(ast_node_t* parent)
 			: ast_node_t(ast_category_t::EXPORT, parent)
 		{}

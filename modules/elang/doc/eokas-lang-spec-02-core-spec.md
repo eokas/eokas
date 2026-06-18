@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.69 — 第二部分：语言核心规范
+# Eokas 语言规范 v0.1.70 — 第二部分：语言核心规范
 
 **分册导航**
 
@@ -569,14 +569,16 @@ val add: func(var a: i32, var b: i32) -> i32 = func(var a: i32, var b: i32) -> i
 
 #### 14.3  程序入口
 
-程序执行入口为标准 `main` 函数。控制台输出使用标准库 `eokas.io.print`（见 §20.4）：
+程序执行入口为标准 `main` 函数。控制台输出使用标准库 `eokas.io` 的 `print`（见 §20.4）；`import eokas.io` 后以无前缀 `print(...)` 调用（§16.2）：
 
 ```eok
-import eokas.io;
+module app.main {
+    import eokas.io;
 
-func main() -> void {
-    io.print("Hello Eokas");
-}
+    func main() -> void {
+        print("Hello Eokas");
+    }
+};
 ```
 
 **语义规则**
@@ -651,30 +653,220 @@ var v = Vec3<f32> {
 
 ### 16. 模块系统
 
-**定义。** 模块是各类值的命名空间容器，由 **Program** 加载并运行。本节给出模块的形式化语法及 export/import 规则。
+**定义。** 模块是各类值的命名空间容器，由 **Program** 加载并运行。逻辑模块由 `ModulePath` 标识；同一 `ModulePath` 的定义**可**分布在多个源文件的多个 `module` 片段中，编译器合并为单一逻辑模块。本节给出模块的形式化语法及 `import` / `export` 规则。
 
 **内存与句柄。** 堆所有权与句柄规则同 §7；模块不改变 Program 为堆空间所有者。
 
 #### 16.1  模块声明
 
+**语法**
+
+```eok
+module ModulePath {
+    // import / export / 顶层声明
+};
+```
+
+- `ModulePath`：`Identifier` 或 `Identifier '.' Identifier` 的重复（点分路径）。
+- 模块体为 `{ ... }`；每个 `module` 块以 `};` 结束。
+- **不得**省略 `module` 关键字或模块体（废除隐式 `<main>` 模块）。
+
+**语义规则**
+
+1. **源文件与 module 块**：源文件中所有顶层声明**必须**位于某个 `module` 块内；**不得**出现模块外的顶层声明。
+2. **单文件多 module / 同 Path 多片段**：一个源文件**可**包含多个顶层 `module ModulePath { ... };`（兄弟块）。**同一源文件内允许**重复相同 `ModulePath`（与跨文件片段一样参与合并）。
+3. **模块片段合并**：同一 `ModulePath` 在**任意**源文件中的**全部** `module` 块合并为一个逻辑模块。合并后顶层符号表与 export 表须满足唯一性（同名符号冲突为编译错误）。
+4. **禁止体内嵌套**：`module` 花括号内部**不得**再出现 `module` 定义子模块。
+5. 组织代码：单文件内多个 `module` 块（可同 Path）；跨文件同 Path 片段；或 `import` / `export ModulePath`。
+
+**反例（编译错误）**
+
+```eok
+// 体内嵌套 — 禁止
+module app.outer {
+    module app.inner {
+        func foo() -> void {}
+    };
+};
+
+// 合并后同名冲突 — 禁止
+module app.a { func f() -> void {} };
+module app.a { func f() -> void {} };
+```
+
+**示例：同文件同 Path 多片段（合法）**
+
+```eok
+module app.a { func f() -> void {} };
+module app.a { func g() -> void {} };
+```
+
+**示例：单文件多 module（不同 Path）**
+
+```eok
+module app.utils {
+    export func helper() -> void {}
+};
+
+module app.main {
+    import app.utils;
+
+    func main() -> void {
+        helper();
+    }
+};
+```
+
+**示例：跨文件 module 片段**
+
+文件 `io_print.eok`：
+
+```eok
+module eokas.io {
+    export func print(var str: String) -> void {}
+};
+```
+
+文件 `io_write.eok`：
+
+```eok
+module eokas.io {
+    export func write(var str: String) -> void {}
+};
+```
+
+合并后逻辑模块 `eokas.io` 同时导出 `print` 与 `write`。
+
+**示例**
+
 ```eok
 module eokas.core.math {
-    export val PI = 3.14159;
+    export val PI: f64 = 3.14159;
     export func distance_between(var a: Vec3<f32>, var b: Vec3<f32>) -> f32 {
         return 0.0;
     }
 };
 ```
 
-#### 16.2  导入模块
+#### 16.2  导入（import）
+
+**位置。** `import` 语句**必须**出现在模块体（`module` 花括号内）顶层，**不得**出现在模块外或其他作用域。
+
+**语法**
 
 ```eok
-import eokas.core.math;
+import TargetModulePath;
+import Alias = TargetModulePath;
+```
+
+- `TargetModulePath`：与 `ModulePath` 相同的点分路径，须解析为已存在（或同包内可解析）的模块。
+- **第一种形式** `import TargetModulePath;`：将目标模块**全部 export 符号**并入**当前模块顶层作用域**；在本模块体内以**无前缀**直接访问（如 `connect()`）。**不得**使用 `ModulePath` 末段或完整路径作限定名（如 **禁止** `net.connect()`、`eokas.net.connect()`）。
+- **第二种形式** `import Alias = TargetModulePath;`：符号通过显式别名 `Alias` 限定访问（如 `mynet.connect()`）。
+
+**语义规则**
+
+1. 仅导入依赖模块中经 `export` 导出的符号（值与类型）；未 export 符号不可见。
+2. 默认 `import` 将符号并入本模块作用域，访问时**不加限定名**；若需限定名访问，须使用 `import Alias = ...` 形式。
+3. 导入**不**自动将符号再 export 到本模块对外接口；若需对外暴露，须在本模块使用 `export`（§16.3）。
+4. 同一模块体内**不得**重复 `import` 同一 `TargetModulePath` 或同一 `Alias`。
+5. 导入符号与当前模块顶层同名时，为编译错误。
+6. `eokas.kernel` 的预导入堆操作（§22.1）**不**通过 `import` 语句引入；其行为不受本节约束。
+
+**示例**
+
+```eok
+module app.client {
+    import eokas.net;
+    import mynet = eokas.net;
+
+    func main() -> void {
+        connect();
+        mynet.connect();
+    }
+};
+```
+
+**反例（编译错误）**
+
+```eok
+import eokas.net;
+func main() -> void {
+    net.connect();
+    eokas.net.connect();
+}
+```
+
+#### 16.3  导出（export）
+
+**位置。** `export` 语句**必须**出现在模块体顶层，**不得**出现在模块外、函数体或 struct 体内（struct 成员函数不受 `export` 修饰，由 struct 是否 export 决定）。
+
+**语法**
+
+`export` 语句分为两类，由 `export` 之后的首个 token **消歧**：
+
+**（A）导出本模块定义** — `export` 后紧跟 `var` / `val` / `func` / `struct` / `schema`，且**必须**写出完整定义（**禁止**仅声明/原型）：
+
+```eok
+export var Name: Type = initializer;
+export val Name: Type = initializer;
+export func Name(...) -> RetType { ... }
+export struct Name<T> { ... }
+export schema Name<T> { ... }
+```
+
+- `export func` **不得**以分号结尾的签名形式（无 `{ ... }`）。
+- `export struct` / `export schema` **不得**以分号结尾的空声明（无 `{ ... }`）。
+- `export var` / `export val` **必须**带初始化器。
+
+**（B）再导出外部模块** — `export` 后**不**跟声明关键字，而为 `ModulePath`：
+
+```eok
+export TargetModulePath;
+```
+
+- `TargetModulePath`：语法上**解析为模块引用**，语义为再导出该模块的全部 export 符号。
+- **不得**使用 `export module TargetModulePath;` 形式。
+
+**语义规则**
+
+1. **（A）** `export` 与**完整顶层定义**连用（含 body 或初始化器）；编译器据定义注册到本模块导出表。
+2. **（A）** **禁止** export 前向声明：`export struct A;`、`export func foo() -> void;` 等为编译错误。
+3. **（B）** `export TargetModulePath`：再导出**其他**模块的全部 export；`TargetModulePath` **不得**与**当前** `module` 块的 `ModulePath` 相同（禁止自再导出）。
+4. **（B）** 若 `TargetModulePath` 无法解析为已存在模块，为编译错误。
+5. 未标记 `export` 的顶层声明仅在本模块内可见。
+6. §22 `eokas.kernel` 由工具链内置，其 `export` 声明可为规范级原型/形式化描述；**用户模块**须遵守本条完整定义规则。
+
+**示例**
+
+```eok
+module eokas.io {
+    export func print(var str: String) -> void {}
+};
+
+module app.api {
+    import eokas.io;
+    export eokas.io;
+    export func greet() -> void {
+        print("hello");
+    }
+};
+```
+
+**反例（编译错误）**
+
+```eok
+export struct A;
+export func foo() -> void;
+
+export module eokas.net;
+export eokas.unknown;
+
+module eokas.net {
+    export eokas.net;
+};
 ```
 
 ---
-
-
 
 本节定义编译期**泛型**（类型形参）、基于 Schema 的**编译期能力约束**（§17.5）及 Schema 契约（§18）。§7 中 `Heap<T>` 的 `T` 为使用处指定的元素类型；本节 `T` 在 `struct` / `func` / `schema` **定义处**声明，实例化时替换（§17.4）。
 
@@ -1191,59 +1383,53 @@ eokas build --meta=project.eokmeta main.eok -o app
 **模块声明**
 
 ```eok
-module eokas.meta;
-```
+module eokas.meta {
+    export func get_program_hash() -> u64 {}
+    export func load(var path: String) -> Heap<MetaContext> {}
+    export func is_matched(var ctx: Slot<MetaContext>) -> bool {}
+    export func get_type(var ctx: Slot<MetaContext>, var name: String) -> Slot<TypeInfo> {}
+    export func has_meta(var elem: Slot<AnnotatedElement>, var name: String) -> bool {}
+    export func get_meta(var elem: Slot<AnnotatedElement>, var name: String) -> Slot<MetaInfo> {}
 
-**核心接口**
+    struct AnnotatedElement {
+        var metas: Heap<MetaInfo>;
+    };
 
-```eok
-export func get_program_hash() -> u64;
-export func load(var path: String) -> Heap<MetaContext>;
-export func is_matched(var ctx: Slot<MetaContext>) -> bool;
-export func get_type(var ctx: Slot<MetaContext>, var name: String) -> Slot<TypeInfo>;
-export func has_meta(var elem: Slot<AnnotatedElement>, var name: String) -> bool;
-export func get_meta(var elem: Slot<AnnotatedElement>, var name: String) -> Slot<MetaInfo>;
-```
+    struct MetaParam {
+        var key: String;
+        var value: String;
+    };
 
-**数据结构**
+    struct MetaInfo {
+        var name: String;
+        var params: Heap<MetaParam>;
+    };
 
-```eok
-struct AnnotatedElement {
-    var metas: Heap<MetaInfo>;
-};
+    struct TypeInfo {
+        var metas: Heap<MetaInfo>;
+        var name: String;
+        var size: u64;
+        var alignment: u64;
+        var fields: Heap<FieldInfo>;
+        var functions: Heap<FunctionInfo>;
+    };
 
-struct MetaParam {
-    var key: String;
-    var value: String;
-};
+    struct FieldInfo {
+        var metas: Heap<MetaInfo>;
+        var name: String;
+        var offset: u64;
+        var type_name: String;
+    };
 
-struct MetaInfo {
-    var name: String;
-    var params: Heap<MetaParam>;
-};
-
-struct TypeInfo {
-    var metas: Heap<MetaInfo>;
-    var name: String;
-    var size: u64;
-    var alignment: u64;
-    var fields: Heap<FieldInfo>;
-    var functions: Heap<FunctionInfo>;
-};
-
-struct FieldInfo {
-    var metas: Heap<MetaInfo>;
-    var name: String;
-    var offset: u64;
-    var type_name: String;
-};
-
-struct FunctionInfo {
-    var metas: Heap<MetaInfo>;
-    var name: String;
-    var signature: String;
+    struct FunctionInfo {
+        var metas: Heap<MetaInfo>;
+        var name: String;
+        var signature: String;
+    };
 };
 ```
+
+**数据结构** — 上表 `struct` 定义于 `module eokas.meta` 体内，仅模块内可见（未 `export`）。
 
 | 边界 | 说明 |
 |------|------|
@@ -1300,22 +1486,22 @@ module app.meta_demo {
     import eokas.io;
 
     func main() -> void {
-        val ctx_heap = meta.load("project.eokmeta");
+        val ctx_heap = load("project.eokmeta");
         if (!ctx_heap.valid) {
-            io.print("Metadata load failed!");
+            print("Metadata load failed!");
             return;
         }
 
         val ctx = ctx_heap[0];
-        if (!meta.is_matched(ctx)) {
-            io.print("Metadata hash mismatch!");
+        if (!is_matched(ctx)) {
+            print("Metadata hash mismatch!");
             drop(ctx_heap);
             return;
         }
 
-        val type_info = meta.get_type(ctx, "app.game.Transform");
+        val type_info = get_type(ctx, "app.game.Transform");
         if (type_info.valid) {
-            io.print(type_info.name);
+            print(type_info.name);
         }
 
         drop(ctx_heap);
@@ -1363,14 +1549,15 @@ module eokas.core.result {
 
 ```eok
 module eokas.io {
-    export func print(var str: String) -> void;
+    export func print(var str: String) -> void {}
 };
 ```
 
 **语义说明**
 
 - `print` 向标准输出写入字符串，参数必须为 `String` 类型；
-- 完整限定名为 `eokas.io.print`；导入模块后以 `io.print(...)` 调用。
+- 说明性完整路径为 `eokas.io.print`；`import eokas.io` 后在本模块内以**无前缀** `print(...)` 调用（§16.2）；
+- **不得**在默认 `import` 后使用 `io.print` 等末段限定名。
 
 ### 21. 包管理器
 
@@ -1386,7 +1573,7 @@ Eokas 包（Package）是多个模块的集合单元，通过项目根目录下�
 {
     "name": "com.example.my_game_logic",
     "version": "1.4.2",
-    "eokas": "0.1.69",
+    "eokas": "0.1.70",
     "dependencies": {
         "eokas.core": "^1.0.0",
         "eokas.math": "~2.3.0",
@@ -1399,7 +1586,7 @@ Eokas 包（Package）是多个模块的集合单元，通过项目根目录下�
 
 - `name`：包唯一标识名称（字符串）；
 - `version`：包自身版本号，遵循 Semantic Versioning 2.0.0 规范（主版本.次版本.修订号）；
-- `eokas`：所依据的**语言规范版本号**（与本文档标题版本一致，如 `"0.1.69"`）；
+- `eokas`：所依据的**语言规范版本号**（与本文档标题版本一致，如 `"0.1.70"`）；
 - `dependencies`：依赖映射表，键为依赖包名，值为版本约束规则。
 
 #### 21.4  依赖解析

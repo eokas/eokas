@@ -14,15 +14,30 @@ namespace eokas
     ==== entry / passes
     ============================================================================
     */
-    sema_module_t* sema_analyzer_t::analyze(ast_node_module_t* node)
+    sema_module_t* sema_analyzer_t::analyze(ast_node_module_t* node, bool merge)
     {
         if (node == nullptr)
             return nullptr;
 
         String name = node->name.isEmpty() ? String("<main>") : node->name;
-        module = program->create_module(name);
+        merging = merge;
+        if (!merge)
+        {
+            importAliases.clear();
+            defaultImportSegments.clear();
+        }
 
-        builtins->inject(module);
+        bool isNew = program->get_module(name) == nullptr;
+        module = program->create_module(name);
+        if (isNew)
+            builtins->inject(module);
+        else if (!merge)
+        {
+            module->diagnostics().error(name,
+                "module '%s' has already been analyzed.", name.cstr());
+            merging = false;
+            return nullptr;
+        }
 
         this->resolve_imports(node);
         this->collect_decls(node);
@@ -32,6 +47,7 @@ namespace eokas
         this->build_toplevels(node);
         this->collect_exports(node);
 
+        merging = false;
         return module->ok() ? module : nullptr;
     }
 
@@ -43,7 +59,6 @@ namespace eokas
             if (imp == nullptr)
                 continue;
 
-            // Short alias = last dotted segment (e.g. eokas.io -> io).
             String fullName = imp->target;
             String alias = imp->name;
 
@@ -58,7 +73,14 @@ namespace eokas
                 continue;
             }
 
-            // Bring exported value / type symbols of the dependency in directly.
+            if (!imp->alias.isEmpty())
+            {
+                importAliases[imp->alias] = fullName;
+                continue;
+            }
+
+            defaultImportSegments.insert(alias);
+
             for (auto& v : dep->exportedValues)
                 module->get_root()->add_value(v.second);
             for (auto& t : dep->exportedTypes)
@@ -439,6 +461,40 @@ namespace eokas
     {
         for (auto& pair : node->exports)
         {
+            ast_node_export_t* exp = pair.second;
+            if (exp == nullptr)
+                continue;
+
+            if (exp->moduleReexport)
+            {
+                sema_module_t* dep = program->get_module(exp->modulePath);
+                if (dep == nullptr)
+                {
+                    module->diagnostics().error(exp->modulePath,
+                        "cannot re-export module '%s': module not found.",
+                        exp->modulePath.cstr());
+                    continue;
+                }
+
+                for (auto& v : dep->exportedValues)
+                {
+                    if (module->exportedValues.find(v.first) != module->exportedValues.end())
+                        module->diagnostics().error(v.first,
+                            "export '%s' conflicts with an existing export.", v.first.cstr());
+                    else
+                        module->exportedValues[v.first] = v.second;
+                }
+                for (auto& t : dep->exportedTypes)
+                {
+                    if (module->exportedTypes.find(t.first) != module->exportedTypes.end())
+                        module->diagnostics().error(t.first,
+                            "export '%s' conflicts with an existing export.", t.first.cstr());
+                    else
+                        module->exportedTypes[t.first] = t.second;
+                }
+                continue;
+            }
+
             const String& name = pair.first;
             auto* v = module->get_root()->get_value(name, false);
             if (v != nullptr)

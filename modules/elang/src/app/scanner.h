@@ -91,7 +91,8 @@ namespace eokas
             UNKNOWN
         };
         
-        constexpr static const char* const names[COUNT] = {"var", "val", "module", "import", "export", "func", "struct", "enum", "if", "else", "break", "continue", "return", "true", "false",
+        constexpr static const char* const names[COUNT] = {
+            "var", "val", "module", "import", "export", "func", "struct", "enum", "if", "else", "break", "continue", "return", "true", "false",
             "case", "default", "do", "for", "meta", "schema", "self", "switch", "this", "while", ",", ";", ":", "?", "@", "#", "$", "+", "-", "*", "/", "%", "^", "~", "(", ")", "[", "]", "{", "}",
             "&", "&&", "|", "||", "=", "==", "!", "!=", ">", ">=", "<", "<=", "|<", "|>", "->", ".", "..", "...", "<b-int>", "<x-int>", "<d-int>", "<float>", "<string>", "<identifier>", "<eos>"};
         

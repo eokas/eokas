@@ -6,6 +6,8 @@
 using namespace eokas;
 
 #include <stdio.h>
+#include <functional>
+#include <set>
 
 static void eokas_main(const String& fileName);
 static void about(void);
@@ -63,22 +65,19 @@ int main(int argc, char** argv) {
 }
 
 static void eokas_main(const String& file) {
-    std::map<String, ast_node_module_t*> modules;
-
-    // Keep the parsers (and therefore the AST nodes owned by their factories)
-    // alive until semantic analysis and code generation have finished.
     std::vector<std::unique_ptr<parser_t>> parsers;
+    std::map<String, std::vector<ast_node_module_t*>> moduleFragments;
+    std::map<String, std::vector<ast_node_module_t*>> fileModules;
 
     std::vector<String> filesToParse;
     filesToParse.push_back(file);
+    std::set<String> parsedFiles;
 
-    for(size_t index = 0; index < filesToParse.size(); index++) {
-        String& filePath = filesToParse[index];
-
-        // parsed already
-        if(modules.find(filePath) != modules.end()) {
+    for (size_t index = 0; index < filesToParse.size(); index++) {
+        String filePath = filesToParse[index];
+        if (parsedFiles.find(filePath) != parsedFiles.end())
             continue;
-        }
+        parsedFiles.insert(filePath);
 
         String source = read_text_file(filePath);
         printf("=> Source code:\n");
@@ -88,51 +87,74 @@ static void eokas_main(const String& file) {
 
         parsers.push_back(std::make_unique<parser_t>());
         parser_t& parser = *parsers.back();
-        ast_node_module_t* node = parser.parse(source.cstr());
-        if (node == nullptr) {
+        std::vector<ast_node_module_t*> mods = parser.parse_all(source.cstr());
+        if (mods.empty()) {
             const String& error = parser.error();
             printf("ERROR: %s\n", error.cstr());
             return;
         }
 
-        if(!node->imports.empty()) {
-            String fileHome = File::basePath(filePath);
-            for(auto& item : node->imports) {
-                String targetPath = item.second->target;
+        fileModules[filePath] = mods;
 
-                // If the target is a relative path, it refers to a
-                // location relative to the current file.
-                if(targetPath.startsWith(".")) {
-                    targetPath = File::combinePath(fileHome, targetPath);
-                    targetPath = File::absolutePath(targetPath);
-                }
+        for (ast_node_module_t* node : mods) {
+            moduleFragments[node->name].push_back(node);
 
-                auto iter = std::find(filesToParse.begin(), filesToParse.end(), targetPath);
-                if(iter == filesToParse.end()) {
-                    filesToParse.push_back(targetPath);
+            if (!node->imports.empty()) {
+                String fileHome = File::basePath(filePath);
+                for (auto& item : node->imports) {
+                    String targetPath = item.second->target;
+
+                    if (targetPath.startsWith(".")) {
+                        targetPath = File::combinePath(fileHome, targetPath);
+                        targetPath = File::absolutePath(targetPath);
+
+                        auto iter = std::find(filesToParse.begin(), filesToParse.end(), targetPath);
+                        if (iter == filesToParse.end())
+                            filesToParse.push_back(targetPath);
+                    }
                 }
             }
         }
-
-        modules.insert(std::make_pair(filePath, node));
     }
 
-    ast_node_module_t* mainNode = modules[file];
-    if (mainNode == nullptr) {
+    auto entryIter = fileModules.find(file);
+    if (entryIter == fileModules.end() || entryIter->second.empty()) {
         printf("ERROR: main module is not parsed.\n");
         return;
     }
 
-    // Semantic analysis works per-module. Analyze dependencies first (reverse
-    // parse order: imported modules are appended after their importer) so that
-    // imports can be resolved against already-analyzed modules.
+    ast_node_module_t* mainNode = entryIter->second.front();
+
+    std::vector<String> moduleOrder;
+    std::set<String> scheduled;
+
+    std::function<void(const String&)> scheduleModule = [&](const String& path) {
+        if (scheduled.find(path) != scheduled.end())
+            return;
+
+        auto fragIt = moduleFragments.find(path);
+        if (fragIt == moduleFragments.end())
+            return;
+
+        for (ast_node_module_t* m : fragIt->second) {
+            for (auto& imp : m->imports)
+                scheduleModule(imp.second->target);
+        }
+
+        moduleOrder.push_back(path);
+        scheduled.insert(path);
+    };
+
+    for (auto& kv : moduleFragments)
+        scheduleModule(kv.first);
+
     sema_program_t program;
-    for (size_t i = filesToParse.size(); i-- > 0;) {
-        ast_node_module_t* n = modules[filesToParse[i]];
-        if (n == nullptr)
-            continue;
-        sema_analyzer_t analyzer(&program);
-        analyzer.analyze(n);
+    for (const String& modPath : moduleOrder) {
+        std::vector<ast_node_module_t*>& frags = moduleFragments[modPath];
+        for (size_t i = 0; i < frags.size(); i++) {
+            sema_analyzer_t analyzer(&program);
+            analyzer.analyze(frags[i], i > 0);
+        }
     }
 
     String mainName = mainNode->name.isEmpty() ? String("<main>") : mainNode->name;
