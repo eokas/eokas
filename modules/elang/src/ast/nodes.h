@@ -58,13 +58,26 @@ namespace eokas
 		{}
 	};
 
-	struct ast_node_type_t : public ast_node_t
+	struct ast_node_generic_def_t : public ast_node_t
 	{
 		String name = "";
-		std::vector<ast_node_type_t*> args = {};
+		std::vector<ast_node_type_ref_t*> constraints = {};
 		
-		explicit ast_node_type_t(ast_node_t* parent)
-			: ast_node_t(ast_category_t::TYPE, parent)
+		explicit ast_node_generic_def_t(ast_node_t* parent)
+			: ast_node_t(ast_category_t::GENERIC_DEF, parent)
+		{}
+	};
+
+	struct ast_node_type_ref_t : public ast_node_t
+	{
+		String name = "";
+		std::vector<ast_node_generic_def_t*> generic_defs = {};
+		std::vector<ast_node_type_ref_t*> type_args = {};
+		std::vector<ast_node_type_ref_t*> func_args = {};
+		ast_node_type_ref_t* func_ret = nullptr;
+		
+		explicit ast_node_type_ref_t(ast_node_t* parent)
+			: ast_node_t(ast_category_t::TYPE_REF, parent)
 		{}
 	};
 
@@ -84,48 +97,22 @@ namespace eokas
 
 	struct ast_node_func_def_t : public ast_node_expr_t
 	{
-		struct arg_t
-		{
-			String name = "";
-			ast_node_type_t* type = nullptr;
-			bool variable = false;
-		};
-
 		String name = "";
-		std::vector<String> typeParams = {};
-		ast_node_type_t* rtype = nullptr;
-		std::vector<arg_t> args = {};
-		std::vector<ast_node_stmt_t*> body = {};
+		std::vector<ast_node_generic_def_t*> generic_defs = {};
+		std::vector<ast_node_symbol_def_t*> func_args = {};
+		ast_node_type_ref_t* func_ret = nullptr;
+		std::vector<ast_node_stmt_t*> func_body = {};
 
 		explicit ast_node_func_def_t(ast_node_t* parent)
 			: ast_node_expr_t(ast_category_t::FUNC_DEF, parent)
 		{}
-		
-		arg_t* addArg(const String& name)
-		{
-			if(this->getArg(name) != nullptr)
-				return nullptr;
-			auto& arg = this->args.emplace_back();
-			arg.name = name;
-			return &arg;
-		}
-		
-		const arg_t* getArg(const String& name) const
-		{
-			for(auto& arg : args)
-			{
-				if(arg.name == name)
-					return &arg;
-			}
-			return nullptr;
-		}
 	};
 
 	struct ast_node_func_ref_t : public ast_node_expr_t
 	{
 		ast_node_expr_t* func = nullptr;
-		std::vector<ast_node_type_t*> typeArgs = {};
-		std::vector<ast_node_expr_t*> args = {};
+		std::vector<ast_node_type_ref_t*> type_args = {};
+		std::vector<ast_node_expr_t*> func_args = {};
 
 		explicit ast_node_func_ref_t(ast_node_t* parent)
 			: ast_node_expr_t(ast_category_t::FUNC_REF, parent)
@@ -135,7 +122,7 @@ namespace eokas
 	struct ast_node_symbol_def_t : public ast_node_stmt_t
 	{
 		String name = "";
-		ast_node_type_t* type = nullptr;
+		ast_node_type_ref_t* type = nullptr;
 		ast_node_expr_t* value = nullptr;
 		bool variable = false;
 
@@ -233,7 +220,7 @@ namespace eokas
 
 	struct ast_node_object_def_t : public ast_node_expr_t
 	{
-		ast_node_type_t* type = nullptr;
+		ast_node_type_ref_t* type = nullptr;
 		std::map<String, ast_node_expr_t*> members = {};
 
 		explicit ast_node_object_def_t(ast_node_t* parent)
@@ -256,14 +243,14 @@ namespace eokas
 		struct member_t
 		{
 			String name = "";
-			ast_node_type_t* type = nullptr;
+			ast_node_type_ref_t* type = nullptr;
 			ast_node_expr_t* value = nullptr;
 			bool isConst = false;
 		};
 
 		String name = "";
 		std::vector<String> typeParams = {};
-		std::vector<ast_node_type_t*> schemas = {};
+		std::vector<ast_node_type_ref_t*> schemas = {};
 		std::vector<member_t> members = {};
 		std::vector<ast_node_func_def_t*> methods = {};
 
@@ -307,14 +294,14 @@ namespace eokas
 		struct member_t
 		{
 			String name = "";
-			ast_node_type_t* type = nullptr;
+			ast_node_type_ref_t* type = nullptr;
 			ast_node_expr_t* value = nullptr;
 			bool isConst = false;
 		};
 
 		String name = "";
 		std::vector<String> typeParams = {};
-		std::vector<ast_node_type_t*> bases = {};
+		std::vector<ast_node_type_ref_t*> bases = {};
 		std::vector<member_t> members = {};
 		std::vector<ast_node_func_def_t*> methods = {};
 
@@ -348,7 +335,7 @@ namespace eokas
 		struct field_t
 		{
 			String name = "";
-			ast_node_type_t* type = nullptr;
+			ast_node_type_ref_t* type = nullptr;
 			ast_node_expr_t* value = nullptr;
 		};
 

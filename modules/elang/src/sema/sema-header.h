@@ -35,10 +35,10 @@ namespace eokas
 
     enum class sema_primitive_kind_t
     {
-        VOID, BOOL, STRING,
-        I8, I16, I32, I64,
-        U8, U16, U32, U64,
-        F32, F64,
+        PRIM_VOID, PRIM_BOOL, PRIM_STRING,
+        PRIM_I8, PRIM_I16, PRIM_I32, PRIM_I64,
+        PRIM_U8, PRIM_U16, PRIM_U32, PRIM_U64,
+        PRIM_F32, PRIM_F64,
     };
 
     enum class sema_symbol_kind_t
@@ -73,7 +73,7 @@ namespace eokas
 
     enum class sema_diagnostic_level_t
     {
-        INFO, WARNING, ERROR,
+        INFO, WARNING, SEVERE,
     };
 
     // ---- forward declarations ----

@@ -37,8 +37,8 @@ namespace eokas
         bool gen_named_func(const String& name, ast_node_func_def_t* fn, bool asMain);
 
         // ---- types / operators ----
-        String gen_type(ast_node_type_t* node);
-        String gen_func_type(ast_node_type_t* node);
+        String gen_type(ast_node_type_ref_t* node);
+        String gen_func_type(ast_node_type_ref_t* node);
         String map_binary(ast_binary_oper_t op);
         String map_unary(ast_unary_oper_t op);
 

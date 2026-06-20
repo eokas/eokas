@@ -23,10 +23,11 @@ namespace eokas
 		ast_node_import_t* parse_import(ast_node_t* p);
 		ast_node_export_t* parse_export(ast_node_t* p, ast_node_t** out_decl);
 		
-		ast_node_type_t* parse_type(ast_node_t* p);
+		ast_node_type_ref_t* parse_type(ast_node_t* p);
 		bool parse_type_params(std::vector<String>& out);
-		bool parse_schema_clause(ast_node_t* p, std::vector<ast_node_type_t*>& out);
-		bool parse_generic_type_args(ast_node_t* p, std::vector<ast_node_type_t*>& out);
+		bool parse_generic_defs(ast_node_t* p, std::vector<ast_node_generic_def_t*>& out, bool allowConstraints);
+		bool parse_schema_clause(ast_node_t* p, std::vector<ast_node_type_ref_t*>& out);
+		bool parse_generic_type_args(ast_node_t* p, std::vector<ast_node_type_ref_t*>& out);
 		String parse_dotted_path(bool required = true);
 		
 		ast_node_expr_t* parse_expr(ast_node_t* p);
@@ -43,8 +44,8 @@ namespace eokas
 		ast_node_func_def_t* parse_named_func_def(ast_node_t* p);
 		bool parse_func_params(ast_node_func_def_t* node);
 		bool parse_func_body(ast_node_func_def_t* node);
-		ast_node_expr_t* parse_object_def(ast_node_t* p, ast_node_type_t* type);
-		ast_node_expr_t* parse_func_call(ast_node_t* p, ast_node_expr_t* primary, const std::vector<ast_node_type_t*>& typeArgs);
+		ast_node_expr_t* parse_object_def(ast_node_t* p, ast_node_type_ref_t* type);
+		ast_node_expr_t* parse_func_call(ast_node_t* p, ast_node_expr_t* primary, const std::vector<ast_node_type_ref_t*>& typeArgs);
 		ast_node_expr_t* parse_index_ref(ast_node_t* p, ast_node_expr_t* primary);
 		bool parse_object_field(ast_node_object_def_t* node);
 		ast_node_expr_t* parse_object_ref(ast_node_t* p, ast_node_expr_t* primary);

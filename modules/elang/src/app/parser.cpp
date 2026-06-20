@@ -109,7 +109,40 @@ namespace eokas {
 		return true;
 	}
 
-	bool parser_t::parse_schema_clause(ast_node_t* p, std::vector<ast_node_type_t*>& out) {
+	bool parser_t::parse_generic_defs(ast_node_t* p, std::vector<ast_node_generic_def_t*>& out, bool allowConstraints) {
+		if(!this->check_token(token_t::LT, false))
+			return true;
+
+		this->next_token();
+		do {
+			if(!out.empty() && !this->check_token(token_t::COMMA))
+				return false;
+
+			if(!this->check_token(token_t::ID, true, false))
+				return false;
+
+			auto* gd = factory->create<ast_node_generic_def_t>(p);
+			gd->name = this->token().value;
+			this->next_token();
+
+			if(allowConstraints && this->check_token(token_t::COLON, false)) {
+				this->next_token();
+				auto* constraint = this->parse_type(p);
+				if(constraint == nullptr)
+					return false;
+				gd->constraints.push_back(constraint);
+			}
+
+			out.push_back(gd);
+		} while(this->check_token(token_t::COMMA, false));
+
+		if(!this->check_token(token_t::GT))
+			return false;
+
+		return true;
+	}
+
+	bool parser_t::parse_schema_clause(ast_node_t* p, std::vector<ast_node_type_ref_t*>& out) {
 		out.clear();
 		if(!this->check_token(token_t::COLON, false))
 			return true;
@@ -125,7 +158,7 @@ namespace eokas {
 		return true;
 	}
 
-	bool parser_t::parse_generic_type_args(ast_node_t* p, std::vector<ast_node_type_t*>& out) {
+	bool parser_t::parse_generic_type_args(ast_node_t* p, std::vector<ast_node_type_ref_t*>& out) {
 		out.clear();
 		if(!this->check_token(token_t::LT, false))
 			return true;
@@ -159,9 +192,8 @@ namespace eokas {
 		auto* module = factory->create<ast_node_module_t>(nullptr);
 		module->entry = factory->create<ast_node_func_def_t>(module);
 
-		this->next_token();
 		module->name = this->parse_dotted_path();
-		if(module->name.empty())
+		if(module->name.isEmpty())
 			return nullptr;
 		if(!this->check_token(token_t::LCB))
 			return nullptr;
@@ -207,13 +239,13 @@ namespace eokas {
 					}
 					module->exports.insert(std::make_pair(key, _export));
 					if(decl != nullptr)
-						module->entry->body.push_back(reinterpret_cast<ast_node_stmt_t*>(decl));
+						module->entry->func_body.push_back(reinterpret_cast<ast_node_stmt_t*>(decl));
 				} break;
 				default: {
 					ast_node_stmt_t* stmt = this->parse_stmt(module->entry);
 					if(stmt == nullptr)
 						return nullptr;
-					module->entry->body.push_back(stmt);
+					module->entry->func_body.push_back(stmt);
 				} break;
 			}
 		}
@@ -250,7 +282,7 @@ namespace eokas {
 			}
 		}
 
-		if(node->target.empty())
+		if(node->target.isEmpty())
 			return nullptr;
 
 		const size_t dot = node->target.rfind('.');
@@ -278,7 +310,7 @@ namespace eokas {
 			auto node = factory->create<ast_node_export_t>(p);
 			node->moduleReexport = true;
 			node->modulePath = this->parse_dotted_path();
-			if(node->modulePath.empty())
+			if(node->modulePath.isEmpty())
 				return nullptr;
 			if(mod != nullptr && node->modulePath == mod->name) {
 				this->error("cannot re-export module '%s' from itself.", node->modulePath.cstr());
@@ -295,7 +327,7 @@ namespace eokas {
 			return nullptr;
 
 		const String name = this->extract_export_name(decl);
-		if(name.empty()) {
+		if(name.isEmpty()) {
 			this->error_token_unexpected();
 			return nullptr;
 		}
@@ -353,15 +385,14 @@ namespace eokas {
 		return node;
 	}
 
-	ast_node_type_t* parser_t::parse_type(ast_node_t* p) {
+	ast_node_type_ref_t* parser_t::parse_type(ast_node_t* p) {
 		if(this->check_token(token_t::FUNC, false)) {
 			this->next_token();
 
-			auto* node = factory->create<ast_node_type_t>(p);
+			auto* node = factory->create<ast_node_type_ref_t>(p);
 			node->name = "func";
 
-			std::vector<String> ignored;
-			if(!this->parse_type_params(ignored))
+			if(!this->parse_generic_defs(p, node->generic_defs, true))
 				return nullptr;
 
 			if(!this->check_token(token_t::LRB))
@@ -385,7 +416,7 @@ namespace eokas {
 				auto* argType = this->parse_type(node);
 				if(argType == nullptr)
 					return nullptr;
-				node->args.push_back(argType);
+				node->func_args.push_back(argType);
 			} while(this->check_token(token_t::COMMA, false));
 
 			if(!this->check_token(token_t::RRB))
@@ -394,10 +425,9 @@ namespace eokas {
 			if(!this->check_token(token_t::ARROW))
 				return nullptr;
 
-			auto* retType = this->parse_type(node);
-			if(retType == nullptr)
+			node->func_ret = this->parse_type(node);
+			if(node->func_ret == nullptr)
 				return nullptr;
-			node->args.push_back(retType);
 
 			return node;
 		}
@@ -406,27 +436,12 @@ namespace eokas {
 			return nullptr;
 
 		String name = this->token().value;
-		auto* node = factory->create<ast_node_type_t>(p);
+		auto* node = factory->create<ast_node_type_ref_t>(p);
 		node->name = name;
 		this->next_token();
 
-		if(this->check_token(token_t::LT, false)) {
-			this->next_token();
-			while(!this->check_token(token_t::GT, false)) {
-				if(!node->args.empty() && !this->check_token(token_t::COMMA))
-					return nullptr;
-
-				auto* arg = this->parse_type(node);
-				if(arg == nullptr)
-					return nullptr;
-				node->args.push_back(arg);
-			}
-
-			if(node->args.empty()) {
-				this->error("type arguments is empty.");
-				return nullptr;
-			}
-		}
+		if(!this->parse_generic_type_args(p, node->type_args))
+			return nullptr;
 
 		return node;
 	}
@@ -596,15 +611,15 @@ namespace eokas {
 			this->next_token();
 
 			if(this->check_token(token_t::LCB, false)) {
-				auto* typeNode = factory->create<ast_node_type_t>(p);
+				auto* typeNode = factory->create<ast_node_type_ref_t>(p);
 				typeNode->name = typeName;
 				return this->parse_object_def(p, typeNode);
 			}
 
 			if(this->check_token(token_t::LT, false)) {
-				auto* typeNode = factory->create<ast_node_type_t>(p);
+				auto* typeNode = factory->create<ast_node_type_ref_t>(p);
 				typeNode->name = typeName;
-				if(!this->parse_generic_type_args(p, typeNode->args))
+				if(!this->parse_generic_type_args(p, typeNode->type_args))
 					return nullptr;
 
 				if(this->check_token(token_t::LCB, false))
@@ -613,7 +628,7 @@ namespace eokas {
 				if(this->check_token(token_t::LRB, false)) {
 					auto* sym = factory->create<ast_node_symbol_ref_t>(p);
 					sym->name = typeName;
-					return this->parse_func_call(p, sym, typeNode->args);
+					return this->parse_func_call(p, sym, typeNode->type_args);
 				}
 
 				this->error_token_unexpected();
@@ -707,7 +722,7 @@ namespace eokas {
 			}
 		}
 
-		if(!this->parse_type_params(node->typeParams))
+		if(!this->parse_generic_defs(p, node->generic_defs, false))
 			return nullptr;
 
 		if(!this->parse_func_params(node))
@@ -716,8 +731,8 @@ namespace eokas {
 		if(!this->check_token(token_t::ARROW))
 			return nullptr;
 
-		node->rtype = this->parse_type(node);
-		if(node->rtype == nullptr)
+		node->func_ret = this->parse_type(node);
+		if(node->func_ret == nullptr)
 			return nullptr;
 
 		if(require_body) {
@@ -751,27 +766,26 @@ namespace eokas {
 			if(!this->check_token(token_t::ID, true, false))
 				return false;
 			const String name = this->token().value;
-			if(node->getArg(name) != nullptr) {
-				this->error_token_unexpected();
-				return false;
+			for(auto* existing : node->func_args) {
+				if(existing != nullptr && existing->name == name) {
+					this->error_token_unexpected();
+					return false;
+				}
 			}
 			this->next_token();
 
 			if(!this->check_token(token_t::COLON))
 				return false;
 
-			ast_node_type_t* type = this->parse_type(node);
+			ast_node_type_ref_t* type = this->parse_type(node);
 			if(type == nullptr)
 				return false;
 
-			auto* arg = node->addArg(name);
-			if(arg == nullptr) {
-				this->error_token_unexpected();
-				return false;
-			}
+			auto* arg = factory->create<ast_node_symbol_def_t>(node);
 			arg->name = name;
 			arg->type = type;
 			arg->variable = isVar;
+			node->func_args.push_back(arg);
 		} while(this->check_token(token_t::COMMA, false));
 
 		if(!this->check_token(token_t::RRB))
@@ -788,18 +802,18 @@ namespace eokas {
 			ast_node_stmt_t* stmt = this->parse_stmt(node);
 			if(stmt == nullptr)
 				return false;
-			node->body.push_back(stmt);
+			node->func_body.push_back(stmt);
 		}
 
 		return true;
 	}
 
-	ast_node_expr_t* parser_t::parse_func_call(ast_node_t* p, ast_node_expr_t* primary, const std::vector<ast_node_type_t*>& typeArgs) {
+	ast_node_expr_t* parser_t::parse_func_call(ast_node_t* p, ast_node_expr_t* primary, const std::vector<ast_node_type_ref_t*>& typeArgs) {
 		auto* node = factory->create<ast_node_func_ref_t>(p);
-		node->typeArgs = typeArgs;
+		node->type_args = typeArgs;
 
-		if(node->typeArgs.empty() && this->check_token(token_t::LT, false)) {
-			if(!this->parse_generic_type_args(p, node->typeArgs))
+		if(node->type_args.empty() && this->check_token(token_t::LT, false)) {
+			if(!this->parse_generic_type_args(p, node->type_args))
 				return nullptr;
 		}
 
@@ -807,13 +821,13 @@ namespace eokas {
 			return nullptr;
 
 		while(!this->check_token(token_t::RRB, false)) {
-			if(!node->args.empty() && !this->check_token(token_t::COMMA))
+			if(!node->func_args.empty() && !this->check_token(token_t::COMMA))
 				return nullptr;
 
 			ast_node_expr_t* arg = this->parse_expr(node);
 			if(arg == nullptr)
 				return nullptr;
-			node->args.push_back(arg);
+			node->func_args.push_back(arg);
 		}
 
 		node->func = primary;
@@ -821,7 +835,7 @@ namespace eokas {
 		return node;
 	}
 
-	ast_node_expr_t* parser_t::parse_object_def(ast_node_t* p, ast_node_type_t* type) {
+	ast_node_expr_t* parser_t::parse_object_def(ast_node_t* p, ast_node_type_ref_t* type) {
 		auto* node = factory->create<ast_node_object_def_t>(p);
 		node->type = type;
 		type->parent = node;
@@ -1323,12 +1337,16 @@ namespace eokas {
 				return nullptr;
 		}
 
-		if(!this->check_token(token_t::ASSIGN, true))
-			return nullptr;
+		if(this->check_token(token_t::ASSIGN, false)) {
+			node->value = this->parse_expr(node);
+			if(node->value == nullptr)
+				return nullptr;
+		}
 
-		node->value = this->parse_expr(node);
-		if(node->value == nullptr)
+		if(node->type == nullptr && node->value == nullptr) {
+			this->error("'%s' needs an explicit type or an initializer.", node->name.cstr());
 			return nullptr;
+		}
 
 		return node;
 	}

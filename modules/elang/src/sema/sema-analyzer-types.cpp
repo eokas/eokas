@@ -7,7 +7,7 @@ namespace eokas
     ==== type resolution
     ============================================================================
     */
-    sema_type_t* sema_analyzer_t::resolve_type(ast_node_type_t* node, sema_scope_t* scope)
+    sema_type_t* sema_analyzer_t::resolve_type(ast_node_type_ref_t* node, sema_scope_t* scope)
     {
         if (node == nullptr)
             return registry->type_void();
@@ -17,25 +17,49 @@ namespace eokas
         if (name == "func")
         {
             auto* ft = module->new_type<sema_type_func_t>("func");
-            size_t count = node->args.size();
-            if (count == 0)
+
+            sema_scope_t* typeScope = scope;
+            sema_scope_t* ownedScope = nullptr;
+            if (!node->generic_defs.empty())
             {
-                ft->ret = registry->type_void();
+                ownedScope = module->new_scope(sema_scope_kind_t::FUNCTION, scope);
+                typeScope = ownedScope;
+                for (auto* gd : node->generic_defs)
+                {
+                    if (gd == nullptr)
+                        continue;
+                    ft->typeParams.push_back(gd->name);
+                    auto* gp = module->new_type<sema_type_generic_param_t>(gd->name);
+                    auto* sym = module->new_type_symbol();
+                    sym->name = gd->name;
+                    sym->type = gp;
+                    typeScope->add_type(sym);
+
+                    for (auto* c : gd->constraints)
+                    {
+                        sema_type_t* constraint = this->resolve_type(c, typeScope);
+                        if (constraint != nullptr && !constraint->is_schema() && !constraint->is_error())
+                            module->diagnostics().error(gd->name,
+                                "generic constraint on '%s' must be a schema.", gd->name.cstr());
+                    }
+                }
             }
-            else
-            {
-                for (size_t i = 0; i + 1 < count; i++)
-                    ft->params.push_back(this->resolve_type(node->args[i], scope));
-                ft->ret = this->resolve_type(node->args[count - 1], scope);
-            }
+
+            for (auto* argType : node->func_args)
+                ft->params.push_back(this->resolve_type(argType, typeScope));
+
+            ft->ret = node->func_ret != nullptr
+                ? this->resolve_type(node->func_ret, typeScope)
+                : registry->type_void();
+
             return ft;
         }
 
         if (name == "Heap" || name == "Slot")
         {
-            sema_type_t* elem = node->args.empty()
+            sema_type_t* elem = node->type_args.empty()
                 ? registry->type_error()
-                : this->resolve_type(node->args[0], scope);
+                : this->resolve_type(node->type_args[0], scope);
             auto kind = name == "Heap" ? sema_type_kind_t::HEAP : sema_type_kind_t::SLOT;
             return module->new_type<sema_type_handle_t>(kind, name, elem);
         }
@@ -57,13 +81,13 @@ namespace eokas
             auto* st = static_cast<sema_type_struct_t*>(t);
             if (!st->typeParams.empty())
             {
-                if (node->args.empty())
+                if (node->type_args.empty())
                 {
                     module->diagnostics().error(name, "generic type '%s' requires type arguments.", name.cstr());
                     return registry->type_error();
                 }
                 std::vector<sema_type_t*> args;
-                for (auto* a : node->args)
+                for (auto* a : node->type_args)
                     args.push_back(this->resolve_type(a, scope));
                 if (args.size() != st->typeParams.size())
                     module->diagnostics().error(name, "type '%s' expects %d type arguments, got %d.",
@@ -71,7 +95,7 @@ namespace eokas
                 return this->instantiate_struct(st, args, scope);
             }
 
-            if (!node->args.empty())
+            if (!node->type_args.empty())
                 module->diagnostics().error(name, "type '%s' is not generic.", name.cstr());
             return t;
         }
@@ -151,6 +175,7 @@ namespace eokas
                 for (auto* p : f->params)
                     nf->params.push_back(this->substitute_type(p, binding));
                 nf->varg = f->varg;
+                nf->typeParams = f->typeParams;
                 return nf;
             }
             default:
@@ -169,44 +194,48 @@ namespace eokas
         func->name = name;
         func->node = node;
         func->isMain = asMain;
-        func->typeParams = node->typeParams;
 
         sema_scope_t* scope = module->new_scope(sema_scope_kind_t::FUNCTION, parentScope);
         func->scope = scope;
 
-        for (auto& tp : node->typeParams)
+        for (auto* gd : node->generic_defs)
         {
-            auto* gp = module->new_type<sema_type_generic_param_t>(tp);
+            if (gd == nullptr)
+                continue;
+            func->typeParams.push_back(gd->name);
+            auto* gp = module->new_type<sema_type_generic_param_t>(gd->name);
             auto* sym = module->new_type_symbol();
-            sym->name = tp;
+            sym->name = gd->name;
             sym->type = gp;
             scope->add_type(sym);
         }
 
         auto* ft = module->new_type<sema_type_func_t>("func");
-        ft->typeParams = node->typeParams;
+        ft->typeParams = func->typeParams;
 
-        for (auto& arg : node->args)
+        for (auto* arg : node->func_args)
         {
+            if (arg == nullptr)
+                continue;
             sema_func_t::param_t p;
-            p.name = arg.name;
-            p.type = this->resolve_type(arg.type, scope);
-            p.variable = arg.variable;
+            p.name = arg->name;
+            p.type = this->resolve_type(arg->type, scope);
+            p.variable = arg->variable;
             func->params.push_back(p);
             ft->params.push_back(p.type);
 
             if (this->is_schema_type(p.type))
-                module->diagnostics().error(name, "parameter '%s' may not have a schema type.", arg.name.cstr());
+                module->diagnostics().error(name, "parameter '%s' may not have a schema type.", arg->name.cstr());
 
             auto* vsym = module->new_value_symbol();
-            vsym->name = arg.name;
+            vsym->name = arg->name;
             vsym->type = p.type;
-            vsym->mutability = arg.variable;
+            vsym->mutability = arg->variable;
             vsym->scope = scope;
             scope->add_value(vsym);
         }
 
-        func->ret = node->rtype != nullptr ? this->resolve_type(node->rtype, scope) : registry->type_void();
+        func->ret = node->func_ret != nullptr ? this->resolve_type(node->func_ret, scope) : registry->type_void();
         ft->ret = func->ret;
         func->type = ft;
 
@@ -221,7 +250,7 @@ namespace eokas
         sema_type_t* savedRet = currentReturnType;
         currentReturnType = func->ret;
 
-        for (ast_node_stmt_t* stmt : func->node->body)
+        for (ast_node_stmt_t* stmt : func->node->func_body)
         {
             sema_stmt_t* s = this->analyze_stmt(stmt, func->scope);
             if (s != nullptr)

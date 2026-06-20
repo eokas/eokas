@@ -6,21 +6,21 @@ namespace eokas
     {
         if (kind != sema_type_kind_t::PRIMITIVE)
             return false;
-        return static_cast<const sema_type_primitive_t*>(this)->prim == sema_primitive_kind_t::VOID;
+        return static_cast<const sema_type_primitive_t*>(this)->prim == sema_primitive_kind_t::PRIM_VOID;
     }
 
     bool sema_type_t::is_bool() const
     {
         if (kind != sema_type_kind_t::PRIMITIVE)
             return false;
-        return static_cast<const sema_type_primitive_t*>(this)->prim == sema_primitive_kind_t::BOOL;
+        return static_cast<const sema_type_primitive_t*>(this)->prim == sema_primitive_kind_t::PRIM_BOOL;
     }
 
     bool sema_type_t::is_string() const
     {
         if (kind != sema_type_kind_t::PRIMITIVE)
             return false;
-        return static_cast<const sema_type_primitive_t*>(this)->prim == sema_primitive_kind_t::STRING;
+        return static_cast<const sema_type_primitive_t*>(this)->prim == sema_primitive_kind_t::PRIM_STRING;
     }
 
     bool sema_type_t::is_integer() const
@@ -29,14 +29,14 @@ namespace eokas
             return false;
         switch (static_cast<const sema_type_primitive_t*>(this)->prim)
         {
-            case sema_primitive_kind_t::I8:
-            case sema_primitive_kind_t::I16:
-            case sema_primitive_kind_t::I32:
-            case sema_primitive_kind_t::I64:
-            case sema_primitive_kind_t::U8:
-            case sema_primitive_kind_t::U16:
-            case sema_primitive_kind_t::U32:
-            case sema_primitive_kind_t::U64:
+            case sema_primitive_kind_t::PRIM_I8:
+            case sema_primitive_kind_t::PRIM_I16:
+            case sema_primitive_kind_t::PRIM_I32:
+            case sema_primitive_kind_t::PRIM_I64:
+            case sema_primitive_kind_t::PRIM_U8:
+            case sema_primitive_kind_t::PRIM_U16:
+            case sema_primitive_kind_t::PRIM_U32:
+            case sema_primitive_kind_t::PRIM_U64:
                 return true;
             default:
                 return false;
@@ -48,7 +48,7 @@ namespace eokas
         if (kind != sema_type_kind_t::PRIMITIVE)
             return false;
         auto p = static_cast<const sema_type_primitive_t*>(this)->prim;
-        return p == sema_primitive_kind_t::F32 || p == sema_primitive_kind_t::F64;
+        return p == sema_primitive_kind_t::PRIM_F32 || p == sema_primitive_kind_t::PRIM_F64;
     }
 
     bool sema_type_t::is_numeric() const
@@ -81,19 +81,19 @@ namespace eokas
     */
     sema_type_registry_t::sema_type_registry_t()
     {
-        prim_void = new sema_type_primitive_t(sema_primitive_kind_t::VOID, "void");
-        prim_bool = new sema_type_primitive_t(sema_primitive_kind_t::BOOL, "bool");
-        prim_string = new sema_type_primitive_t(sema_primitive_kind_t::STRING, "String");
-        prim_i8 = new sema_type_primitive_t(sema_primitive_kind_t::I8, "i8");
-        prim_i16 = new sema_type_primitive_t(sema_primitive_kind_t::I16, "i16");
-        prim_i32 = new sema_type_primitive_t(sema_primitive_kind_t::I32, "i32");
-        prim_i64 = new sema_type_primitive_t(sema_primitive_kind_t::I64, "i64");
-        prim_u8 = new sema_type_primitive_t(sema_primitive_kind_t::U8, "u8");
-        prim_u16 = new sema_type_primitive_t(sema_primitive_kind_t::U16, "u16");
-        prim_u32 = new sema_type_primitive_t(sema_primitive_kind_t::U32, "u32");
-        prim_u64 = new sema_type_primitive_t(sema_primitive_kind_t::U64, "u64");
-        prim_f32 = new sema_type_primitive_t(sema_primitive_kind_t::F32, "f32");
-        prim_f64 = new sema_type_primitive_t(sema_primitive_kind_t::F64, "f64");
+        prim_void = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_VOID, "void");
+        prim_bool = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_BOOL, "bool");
+        prim_string = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_STRING, "String");
+        prim_i8 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_I8, "i8");
+        prim_i16 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_I16, "i16");
+        prim_i32 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_I32, "i32");
+        prim_i64 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_I64, "i64");
+        prim_u8 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_U8, "u8");
+        prim_u16 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_U16, "u16");
+        prim_u32 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_U32, "u32");
+        prim_u64 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_U64, "u64");
+        prim_f32 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_F32, "f32");
+        prim_f64 = new sema_type_primitive_t(sema_primitive_kind_t::PRIM_F64, "f64");
         error_type = new sema_type_t(sema_type_kind_t::ERROR_TYPE, "<error>");
 
         owned = {

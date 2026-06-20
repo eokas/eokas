@@ -39,7 +39,7 @@ namespace eokas
         void collect_exports(ast_node_module_t* node);
 
         // ---- type resolution ----
-        sema_type_t* resolve_type(ast_node_type_t* node, sema_scope_t* scope);
+        sema_type_t* resolve_type(ast_node_type_ref_t* node, sema_scope_t* scope);
         sema_type_struct_t* instantiate_struct(sema_type_struct_t* tpl, const std::vector<sema_type_t*>& args, sema_scope_t* scope);
 
         // ---- declarations ----

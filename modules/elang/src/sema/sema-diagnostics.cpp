@@ -7,7 +7,7 @@ namespace eokas
     {
         String message;
         _FormatVA(message, fmt);
-        this->push(sema_diagnostic_level_t::ERROR, context, message);
+        this->push(sema_diagnostic_level_t::SEVERE, context, message);
     }
 
     void sema_diagnostics_t::warning(const String& context, const char* fmt, ...)
@@ -31,7 +31,7 @@ namespace eokas
         d.context = context;
         d.message = message;
         this->diagnostics.push_back(d);
-        if (level == sema_diagnostic_level_t::ERROR)
+        if (level == sema_diagnostic_level_t::SEVERE)
             this->errorCount += 1;
     }
 
@@ -43,7 +43,7 @@ namespace eokas
             const char* tag = "info";
             switch (d.level)
             {
-                case sema_diagnostic_level_t::ERROR: tag = "error"; break;
+                case sema_diagnostic_level_t::SEVERE: tag = "error"; break;
                 case sema_diagnostic_level_t::WARNING: tag = "warning"; break;
                 case sema_diagnostic_level_t::INFO: tag = "info"; break;
             }

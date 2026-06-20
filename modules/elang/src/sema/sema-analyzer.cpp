@@ -98,7 +98,7 @@ namespace eokas
 
         sema_scope_t* root = module->get_root();
 
-        for (ast_node_stmt_t* stmt : node->entry->body)
+        for (ast_node_stmt_t* stmt : node->entry->func_body)
         {
             if (stmt == nullptr)
                 continue;
@@ -163,7 +163,7 @@ namespace eokas
                 }
                 case ast_category_t::FUNC_DEF:
                 {
-                    // A top-level func is stored in entry->body via reinterpret
+                    // A top-level func is stored in entry->func_body via reinterpret
                     // (it is an expr sibling of stmt, see parser_t::parse_module).
                     auto* fd = reinterpret_cast<ast_node_func_def_t*>(stmt);
                     auto* sym = module->new_value_symbol();
@@ -391,7 +391,7 @@ namespace eokas
         if (node->entry == nullptr)
             return;
 
-        for (ast_node_stmt_t* stmt : node->entry->body)
+        for (ast_node_stmt_t* stmt : node->entry->func_body)
         {
             if (stmt == nullptr)
                 continue;

@@ -302,19 +302,19 @@ namespace eokas
                 auto p = static_cast<sema_type_primitive_t*>(type)->prim;
                 switch (p)
                 {
-                    case sema_primitive_kind_t::VOID: return "void";
-                    case sema_primitive_kind_t::BOOL: return "bool";
-                    case sema_primitive_kind_t::STRING: return "std::string";
-                    case sema_primitive_kind_t::I8: return "std::int8_t";
-                    case sema_primitive_kind_t::I16: return "std::int16_t";
-                    case sema_primitive_kind_t::I32: return "std::int32_t";
-                    case sema_primitive_kind_t::I64: return "std::int64_t";
-                    case sema_primitive_kind_t::U8: return "std::uint8_t";
-                    case sema_primitive_kind_t::U16: return "std::uint16_t";
-                    case sema_primitive_kind_t::U32: return "std::uint32_t";
-                    case sema_primitive_kind_t::U64: return "std::uint64_t";
-                    case sema_primitive_kind_t::F32: return "float";
-                    case sema_primitive_kind_t::F64: return "double";
+                    case sema_primitive_kind_t::PRIM_VOID: return "void";
+                    case sema_primitive_kind_t::PRIM_BOOL: return "bool";
+                    case sema_primitive_kind_t::PRIM_STRING: return "std::string";
+                    case sema_primitive_kind_t::PRIM_I8: return "std::int8_t";
+                    case sema_primitive_kind_t::PRIM_I16: return "std::int16_t";
+                    case sema_primitive_kind_t::PRIM_I32: return "std::int32_t";
+                    case sema_primitive_kind_t::PRIM_I64: return "std::int64_t";
+                    case sema_primitive_kind_t::PRIM_U8: return "std::uint8_t";
+                    case sema_primitive_kind_t::PRIM_U16: return "std::uint16_t";
+                    case sema_primitive_kind_t::PRIM_U32: return "std::uint32_t";
+                    case sema_primitive_kind_t::PRIM_U64: return "std::uint64_t";
+                    case sema_primitive_kind_t::PRIM_F32: return "float";
+                    case sema_primitive_kind_t::PRIM_F64: return "double";
                 }
                 return "void";
             }

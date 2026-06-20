@@ -63,8 +63,8 @@ namespace eokas
             return "";
         }
 
-        // The parser stores all top-level declarations inside entry->body.
-        for (ast_node_stmt_t* stmt : node->entry->body)
+        // The parser stores all top-level declarations inside entry->func_body.
+        for (ast_node_stmt_t* stmt : node->entry->func_body)
         {
             if (!this->gen_toplevel(stmt))
                 return "";
@@ -219,11 +219,12 @@ namespace eokas
             if (method == nullptr)
                 continue;
             String call = String::format("self.%s(", method->name.cstr());
-            for (size_t i = 0; i < method->args.size(); i++)
+            for (size_t i = 0; i < method->func_args.size(); i++)
             {
                 if (i > 0) call += ", ";
+                auto* arg = method->func_args[i];
                 call += String::format("std::declval<%s>()",
-                    method->args[i].type != nullptr ? this->gen_type(method->args[i].type).cstr() : "auto");
+                    arg != nullptr && arg->type != nullptr ? this->gen_type(arg->type).cstr() : "auto");
             }
             call += ")";
             this->line(String::format("{ %s };", call.cstr()));
@@ -295,7 +296,7 @@ namespace eokas
         {
             this->line("int main(int argc, char** argv) {");
             m_indent++;
-            for (auto* stmt : fn->body)
+            for (auto* stmt : fn->func_body)
             {
                 if (!this->gen_stmt(stmt))
                     return false;
@@ -318,7 +319,7 @@ namespace eokas
     ==== types and operators
     ============================================================================
     */
-    String cpp_coder_t::gen_type(ast_node_type_t* node)
+    String cpp_coder_t::gen_type(ast_node_type_ref_t* node)
     {
         if (node == nullptr)
             return "void";
@@ -344,39 +345,37 @@ namespace eokas
 
         if (name == "array")
         {
-            String inner = node->args.empty() ? String("void") : this->gen_type(node->args[0]);
+            String inner = node->type_args.empty() ? String("void") : this->gen_type(node->type_args[0]);
             return String::format("std::vector<%s>", inner.cstr());
         }
 
         // User-defined type, possibly generic.
-        if (node->args.empty())
+        if (node->type_args.empty())
             return name;
 
         String result = name;
         result += "<";
-        for (size_t i = 0; i < node->args.size(); i++)
+        for (size_t i = 0; i < node->type_args.size(); i++)
         {
             if (i > 0) result += ", ";
-            result += this->gen_type(node->args[i]);
+            result += this->gen_type(node->type_args[i]);
         }
         result += ">";
         return result;
     }
 
-    String cpp_coder_t::gen_func_type(ast_node_type_t* node)
+    String cpp_coder_t::gen_func_type(ast_node_type_ref_t* node)
     {
-        // node->args = [param types..., return type]
-        if (node->args.empty())
+        if (node->func_args.empty() && node->func_ret == nullptr)
             return "std::function<void()>";
 
-        size_t count = node->args.size();
-        String ret = this->gen_type(node->args[count - 1]);
+        String ret = node->func_ret != nullptr ? this->gen_type(node->func_ret) : String("void");
 
         String params;
-        for (size_t i = 0; i + 1 < count; i++)
+        for (size_t i = 0; i < node->func_args.size(); i++)
         {
             if (i > 0) params += ", ";
-            params += this->gen_type(node->args[i]);
+            params += this->gen_type(node->func_args[i]);
         }
         return String::format("std::function<%s(%s)>", ret.cstr(), params.cstr());
     }
@@ -426,16 +425,16 @@ namespace eokas
     */
     String cpp_coder_t::gen_func_signature(const String& name, ast_node_func_def_t* fn)
     {
-        String ret = fn->rtype != nullptr ? this->gen_type(fn->rtype) : "void";
+        String ret = fn->func_ret != nullptr ? this->gen_type(fn->func_ret) : "void";
 
         String params;
-        for (size_t i = 0; i < fn->args.size(); i++)
+        for (size_t i = 0; i < fn->func_args.size(); i++)
         {
             if (i > 0) params += ", ";
-            const auto& arg = fn->args[i];
-            params += arg.type != nullptr ? this->gen_type(arg.type) : String("auto");
+            auto* arg = fn->func_args[i];
+            params += arg != nullptr && arg->type != nullptr ? this->gen_type(arg->type) : String("auto");
             params += " ";
-            params += arg.name;
+            params += arg != nullptr ? arg->name : String("");
         }
 
         return String::format("%s %s(%s) {", ret.cstr(), name.cstr(), params.cstr());
@@ -444,7 +443,7 @@ namespace eokas
     bool cpp_coder_t::gen_func_body(ast_node_func_def_t* fn)
     {
         m_indent++;
-        for (auto* stmt : fn->body)
+        for (auto* stmt : fn->func_body)
         {
             if (!this->gen_stmt(stmt))
                 return false;
@@ -802,16 +801,16 @@ namespace eokas
             return "";
 
         String params;
-        for (size_t i = 0; i < node->args.size(); i++)
+        for (size_t i = 0; i < node->func_args.size(); i++)
         {
             if (i > 0) params += ", ";
-            const auto& arg = node->args[i];
-            params += arg.type != nullptr ? this->gen_type(arg.type) : String("auto");
+            auto* arg = node->func_args[i];
+            params += arg != nullptr && arg->type != nullptr ? this->gen_type(arg->type) : String("auto");
             params += " ";
-            params += arg.name;
+            params += arg != nullptr ? arg->name : String("");
         }
 
-        String ret = node->rtype != nullptr ? this->gen_type(node->rtype) : String("");
+        String ret = node->func_ret != nullptr ? this->gen_type(node->func_ret) : String("");
 
         String head = ret.isEmpty()
             ? String::format("[=](%s) {", params.cstr())
@@ -827,7 +826,7 @@ namespace eokas
 
         m_out << head.cstr() << "\n";
         m_indent++;
-        for (auto* stmt : node->body)
+        for (auto* stmt : node->func_body)
         {
             this->gen_stmt(stmt);
         }
@@ -847,22 +846,22 @@ namespace eokas
         String callee = this->gen_expr(node->func);
 
         String targs;
-        if (!node->typeArgs.empty())
+        if (!node->type_args.empty())
         {
             targs += "<";
-            for (size_t i = 0; i < node->typeArgs.size(); i++)
+            for (size_t i = 0; i < node->type_args.size(); i++)
             {
                 if (i > 0) targs += ", ";
-                targs += this->gen_type(node->typeArgs[i]);
+                targs += this->gen_type(node->type_args[i]);
             }
             targs += ">";
         }
 
         String args;
-        for (size_t i = 0; i < node->args.size(); i++)
+        for (size_t i = 0; i < node->func_args.size(); i++)
         {
             if (i > 0) args += ", ";
-            args += this->gen_expr(node->args[i]);
+            args += this->gen_expr(node->func_args[i]);
         }
 
         return String::format("%s%s(%s)", callee.cstr(), targs.cstr(), args.cstr());

@@ -161,9 +161,9 @@ namespace eokas
     {
         auto* out = module->new_expr<sema_expr_func_ref_t>();
         out->callee = this->analyze_expr(node->func, scope);
-        for (auto* t : node->typeArgs)
+        for (auto* t : node->type_args)
             out->typeArgs.push_back(this->resolve_type(t, scope));
-        for (auto* a : node->args)
+        for (auto* a : node->func_args)
             out->args.push_back(this->analyze_expr(a, scope));
 
         // kernel builtin functions

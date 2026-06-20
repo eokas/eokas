@@ -14,7 +14,7 @@ namespace eokas
      */
     struct sema_diagnostic_t
     {
-        sema_diagnostic_level_t level = sema_diagnostic_level_t::ERROR;
+        sema_diagnostic_level_t level = sema_diagnostic_level_t::SEVERE;
         String context = "";
         String message = "";
     };
