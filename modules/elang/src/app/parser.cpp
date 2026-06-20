@@ -634,19 +634,19 @@ namespace eokas {
 		switch(token.type) {
 			case token_t::INT_B: {
 				auto* node = factory->create<ast_node_literal_int_t>(p);
-				node->value = String::binstrToValue<i32_t>(token.value);
+				node->value = String::binstrToValue<i64_t>(token.value);
 				this->next_token();
 				return node;
 			}
 			case token_t::INT_X: {
 				auto* node = factory->create<ast_node_literal_int_t>(p);
-				node->value = String::hexstrToValue<i32_t>(token.value);
+				node->value = String::hexstrToValue<i64_t>(token.value);
 				this->next_token();
 				return node;
 			}
 			case token_t::INT_D: {
 				auto* node = factory->create<ast_node_literal_int_t>(p);
-				node->value = String::stringToValue<i32_t>(token.value);
+				node->value = String::stringToValue<i64_t>(token.value);
 				this->next_token();
 				return node;
 			}
