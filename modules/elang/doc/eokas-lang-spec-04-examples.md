@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.70 — 第四部分：示例代码
+# Eokas 语言规范 v0.1.71 — 第四部分：示例代码
 
 **分册导航**
 
@@ -29,9 +29,10 @@ module app.fib {
         return self(n - 1) + self(n - 2);
     }
 
-    func main() -> void {
+    func main() -> i32 {
         val n = fib(10);
         print("fib completed");
+        return 0;
     }
 };
 ```
@@ -60,13 +61,14 @@ module app.calc {
         };
     }
 
-    func main() -> void {
+    func main() -> i32 {
         val res = divide(10.0, 2.0);
         if (res.code == 0) {
             print("ok");
         } else {
             print(res.message);
         }
+        return 0;
     }
 };
 ```
@@ -110,7 +112,7 @@ module app.list {
         return v;
     }
 
-    func main() -> void {
+    func main() -> i32 {
         val lh = make<IntList>(1);
         if (lh.valid) {
             val list = lh[0];
@@ -122,6 +124,44 @@ module app.list {
             }
             drop(lh);
         }
+        return 0;
     }
 };
+```
+
+#### 23.4  包目录与模块元数据
+
+*说明规范节：§19.6, §21.2, §21.2.1*
+
+以下为开发包（`src/` + `meta/`）的最小布局示例。模块 `app.fib`（§23.1）须有对应**模块元数据文件** `meta/app.fib.json`；编译前内容可为空对象 `{}`，编译后由工具链写入反射元数据（§19.5）。运行时 `eokas.meta.load("meta/app.fib.json")` **可**加载该文件（§19.6、§19.8）。
+
+**目录布局**
+
+```
+package-root/
+    eokas.pkg
+    src/
+        fib.eokas          // 含 module app.fib { ... }
+    meta/
+        app.fib.json
+    bin/
+    eokas-modules/
+```
+
+**`eokas.pkg`**
+
+```json
+{
+    "name": "fib-demo",
+    "version": "1.0.0",
+    "entry": "app.fib",
+    "eokas": "0.1.71",
+    "dependencies": {}
+}
+```
+
+**`meta/app.fib.json`**
+
+```json
+{}
 ```

@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.70 — 第二部分：语言核心规范
+# Eokas 语言规范 v0.1.71 — 第二部分：语言核心规范
 
 **分册导航**
 
@@ -14,6 +14,7 @@
 
 | 类别 | 内容 |
 |------|------|
+| 源文件 | 扩展名 **`.eokas`**；含一个或多个 `module` 块（§16.1） |
 | 关键字 | `break`, `case`, `continue`, `default`, `do`, `else`, `enum`, `export`, `for`, `func`, `if`, `import`, `meta`, `module`, `return`, `schema`, `self`, `struct`, `switch`, `this`, `val`, `var`, `while` |
 | 基础类型 | `i8`…`i64`, `u8`…`u64`, `f32`, `f64`, `bool`, `void`, `String`, `func` |
 | 字面量 | 整数、浮点、字符串、布尔、结构体字面量（见下文） |
@@ -47,10 +48,11 @@
 
 **语义规则**
 
-1. `self` 在函数体内指代函数自身，用于递归调用（语法见 §14）。
-2. `this` 为关键字，**仅**可在 struct **成员函数**体（§18.3）内使用；指代调用该成员函数时的接收者实例。
-3. 成员函数体内，`this` 的类型为**具体** struct 类型（该 struct 在声明处写 `: SchemaName` 并满足相应 Schema 契约）；`this.field` 访问当前实例的数据字段（§12.9）。
-4. `this` 不得作为普通标识符（变量名、参数名等）使用。
+1. Eokas 源文件**必须**使用扩展名 `.eokas`；其他扩展名**不得**作为语言源文件参与编译。
+2. `self` 在函数体内指代函数自身，用于递归调用（语法见 §14）。
+3. `this` 为关键字，**仅**可在 struct **成员函数**体（§18.3）内使用；指代调用该成员函数时的接收者实例。
+4. 成员函数体内，`this` 的类型为**具体** struct 类型（该 struct 在声明处写 `: SchemaName` 并满足相应 Schema 契约）；`this.field` 访问当前实例的数据字段（§12.9）。
+5. `this` 不得作为普通标识符（变量名、参数名等）使用。
 
 ---
 
@@ -569,24 +571,36 @@ val add: func(var a: i32, var b: i32) -> i32 = func(var a: i32, var b: i32) -> i
 
 #### 14.3  程序入口
 
-程序执行入口为标准 `main` 函数。控制台输出使用标准库 `eokas.io` 的 `print`（见 §20.4）；`import eokas.io` 后以无前缀 `print(...)` 调用（§16.2）：
+**定义。** 任意模块**可**定义名为 `main` 的函数；`main` 的参数列表与返回类型由用户自行定义，与普通顶层 `func` 相同（须满足 §14 语义规则）。
+
+**模块入口。** 当模块作为包的可执行入口（`eokas.pkg` 的 `entry`，§21.4）被加载为 **Program**（§16）时，该模块**必须**定义且**仅**定义一个符合下列签名的 `main`：
+
+```eok
+func main() -> i32;
+```
+
+其返回值作为进程退出码传递给宿主环境。
+
+**示例。** 控制台输出使用标准库 `eokas.io` 的 `print`（见 §20.4）；`import eokas.io` 后以无前缀 `print(...)` 调用（§16.2）：
 
 ```eok
 module app.main {
     import eokas.io;
 
-    func main() -> void {
+    func main() -> i32 {
         print("Hello Eokas");
+        return 0;
     }
 };
 ```
 
 **语义规则**
 
-1. **函数不支持重载**：同一声明域内不得存在多个同名函数定义，即使参数列表、类型形参列表或返回类型不同，亦为编译错误。
-2. 此规则适用于顶层 `func` 定义、`eokas.kernel` 导出的 `export func`（§22.1）、struct 实现 Schema 时声明的成员函数（§18.3），以及顶层 **schema** 中的成员函数原型：同一 struct 内、或同一 schema 内不得重复声明同名成员函数。
-3. 泛型函数以调用处的类型实参区分实例化，不属于重载；类型形参的名称不影响函数身份。
-4. 函数参数与返回类型**不得**为 Schema 名（§18 定位 1；含 schema 定义内签名）；须为具体类型或类型形参。
+1. 非入口模块内的 `main` 签名**不受**上述模块入口约束；**可**作为普通顶层函数存在，由用户自行决定参数与返回类型。
+2. **函数不支持重载**：同一声明域内不得存在多个同名函数定义，即使参数列表、类型形参列表或返回类型不同，亦为编译错误。
+3. 此规则适用于顶层 `func` 定义、`eokas.kernel` 导出的 `export func`（§22.1）、struct 实现 Schema 时声明的成员函数（§18.3），以及顶层 **schema** 中的成员函数原型：同一 struct 内、或同一 schema 内不得重复声明同名成员函数。
+4. 泛型函数以调用处的类型实参区分实例化，不属于重载；类型形参的名称不影响函数身份。
+5. 函数参数与返回类型**不得**为 Schema 名（§18 定位 1；含 schema 定义内签名）；须为具体类型或类型形参。
 
 ### 15. 结构体字面量
 
@@ -653,7 +667,9 @@ var v = Vec3<f32> {
 
 ### 16. 模块系统
 
-**定义。** 模块是各类值的命名空间容器，由 **Program** 加载并运行。逻辑模块由 `ModulePath` 标识；同一 `ModulePath` 的定义**可**分布在多个源文件的多个 `module` 片段中，编译器合并为单一逻辑模块。本节给出模块的形式化语法及 `import` / `export` 规则。
+**定义。** 模块是各类值的命名空间容器，由 **Program** 加载并运行。逻辑模块由 `ModulePath`（点分**模块名**）标识；同一 `ModulePath` 的定义**可**分布在多个 `.eokas` 源文件的多个 `module` 片段中，编译器合并为单一逻辑模块。逻辑模块同时是 Eokas 的**编译单元**（§16.4）。本节给出模块的形式化语法及 `import` / `export` 规则。
+
+**模块名与文件路径。** `ModulePath` 虽为以 `.` 分隔的多段标识，但**仅**作助记命名；与 `src/` 内具体源文件路径**无任何对应关系。**不得**将模块名理解为文件系统路径，**不存在**相对模块名、基于目录层级的模块解析，或「模块名 ↔ 文件路径」的映射规则。开发包中 `.eokas` 源文件**必须**位于 `src/` 目录下（§21.2）；工具链通过包 `meta/` 目录下的模块元数据文件（§21.2.1）解析 `import` / `export` 中的 `ModulePath`。
 
 **内存与句柄。** 堆所有权与句柄规则同 §7；模块不改变 Program 为堆空间所有者。
 
@@ -667,7 +683,7 @@ module ModulePath {
 };
 ```
 
-- `ModulePath`：`Identifier` 或 `Identifier '.' Identifier` 的重复（点分路径）。
+- `ModulePath`：`Identifier` 或 `Identifier '.' Identifier` 的重复（点分**模块名**）；**不得**按文件路径或相对路径语义解析。
 - 模块体为 `{ ... }`；每个 `module` 块以 `};` 结束。
 - **不得**省略 `module` 关键字或模块体（废除隐式 `<main>` 模块）。
 
@@ -711,15 +727,16 @@ module app.utils {
 module app.main {
     import app.utils;
 
-    func main() -> void {
+    func main() -> i32 {
         helper();
+        return 0;
     }
 };
 ```
 
 **示例：跨文件 module 片段**
 
-文件 `io_print.eok`：
+文件 `io_print.eokas`：
 
 ```eok
 module eokas.io {
@@ -727,7 +744,7 @@ module eokas.io {
 };
 ```
 
-文件 `io_write.eok`：
+文件 `io_write.eokas`：
 
 ```eok
 module eokas.io {
@@ -759,13 +776,13 @@ import TargetModulePath;
 import Alias = TargetModulePath;
 ```
 
-- `TargetModulePath`：与 `ModulePath` 相同的点分路径，须解析为已存在（或同包内可解析）的模块。
-- **第一种形式** `import TargetModulePath;`：将目标模块**全部 export 符号**并入**当前模块顶层作用域**；在本模块体内以**无前缀**直接访问（如 `connect()`）。**不得**使用 `ModulePath` 末段或完整路径作限定名（如 **禁止** `net.connect()`、`eokas.net.connect()`）。
+- `TargetModulePath`：与 `ModulePath` 相同的点分模块名，须由包 `meta/` 中的模块元数据文件（§21.2.1）解析为已存在模块；**不得**按相对路径或文件位置解析。
+- **第一种形式** `import TargetModulePath;`：将目标模块**全部 export 符号**（§16.3）并入**当前模块顶层作用域**；在本模块体内以**无前缀**直接访问（如 `connect()`）。**不得**使用模块名末段或完整 `ModulePath` 作限定名（如 **禁止** `net.connect()`、`eokas.net.connect()`）。
 - **第二种形式** `import Alias = TargetModulePath;`：符号通过显式别名 `Alias` 限定访问（如 `mynet.connect()`）。
 
 **语义规则**
 
-1. 仅导入依赖模块中经 `export` 导出的符号（值与类型）；未 export 符号不可见。
+1. **export / import 对称。** 凡依赖模块经 `export` 注册的符号**均可**被 `import` 引入，与 §16.3（A）可 export 的顶层声明种类一一对应：`var`、`val`、`func`、`struct`、`schema`、`enum`、`meta`。未 export 的符号不可见。
 2. 默认 `import` 将符号并入本模块作用域，访问时**不加限定名**；若需限定名访问，须使用 `import Alias = ...` 形式。
 3. 导入**不**自动将符号再 export 到本模块对外接口；若需对外暴露，须在本模块使用 `export`（§16.3）。
 4. 同一模块体内**不得**重复 `import` 同一 `TargetModulePath` 或同一 `Alias`。
@@ -804,7 +821,7 @@ func main() -> void {
 
 `export` 语句分为两类，由 `export` 之后的首个 token **消歧**：
 
-**（A）导出本模块定义** — `export` 后紧跟 `var` / `val` / `func` / `struct` / `schema`，且**必须**写出完整定义（**禁止**仅声明/原型）：
+**（A）导出本模块定义** — `export` 后紧跟 `var` / `val` / `func` / `struct` / `schema` / `enum` / `meta`（模块可 export 的**全部**顶层符号类别），且**必须**写出完整定义（**禁止**仅声明/原型）：
 
 ```eok
 export var Name: Type = initializer;
@@ -812,10 +829,12 @@ export val Name: Type = initializer;
 export func Name(...) -> RetType { ... }
 export struct Name<T> { ... }
 export schema Name<T> { ... }
+export enum Name { ... }
+export meta MetaName { ... }
 ```
 
 - `export func` **不得**以分号结尾的签名形式（无 `{ ... }`）。
-- `export struct` / `export schema` **不得**以分号结尾的空声明（无 `{ ... }`）。
+- `export struct` / `export schema` / `export enum` / `export meta` **不得**以分号结尾的空声明（无 `{ ... }`）。
 - `export var` / `export val` **必须**带初始化器。
 
 **（B）再导出外部模块** — `export` 后**不**跟声明关键字，而为 `ModulePath`：
@@ -829,8 +848,8 @@ export TargetModulePath;
 
 **语义规则**
 
-1. **（A）** `export` 与**完整顶层定义**连用（含 body 或初始化器）；编译器据定义注册到本模块导出表。
-2. **（A）** **禁止** export 前向声明：`export struct A;`、`export func foo() -> void;` 等为编译错误。
+1. **（A）** `export` 与**完整顶层定义**连用（含 body 或初始化器）；编译器据定义注册到本模块导出表。凡注册于导出表的符号**均可**被其他模块 `import`（§16.2）。
+2. **（A）** **禁止** export 前向声明：`export struct A;`、`export enum E;`、`export meta M;`、`export func foo() -> void;` 等为编译错误。
 3. **（B）** `export TargetModulePath`：再导出**其他**模块的全部 export；`TargetModulePath` **不得**与**当前** `module` 块的 `ModulePath` 相同（禁止自再导出）。
 4. **（B）** 若 `TargetModulePath` 无法解析为已存在模块，为编译错误。
 5. 未标记 `export` 的顶层声明仅在本模块内可见。
@@ -843,8 +862,21 @@ module eokas.io {
     export func print(var str: String) -> void {}
 };
 
+module app.types {
+    export enum Status {
+        Idle,
+        Running,
+        Stopped
+    };
+
+    export meta Component {
+        val name: String;
+    }
+};
+
 module app.api {
     import eokas.io;
+    import app.types;
     export eokas.io;
     export func greet() -> void {
         print("hello");
@@ -856,6 +888,8 @@ module app.api {
 
 ```eok
 export struct A;
+export enum E;
+export meta M;
 export func foo() -> void;
 
 export module eokas.net;
@@ -865,6 +899,20 @@ module eokas.net {
     export eokas.net;
 };
 ```
+
+#### 16.4  模块编译
+
+**定义。** 逻辑模块（§16.1 片段合并后的 `ModulePath`）为 Eokas 的编译单元：工具链将每个逻辑模块独立编译为一个目标文件（object file）。
+
+**语义规则**
+
+1. 同一 `ModulePath` 的全部源文件片段须先合并为单一逻辑模块，再作为整体编译；**不得**按源文件或 `module` 片段单独产出可链接的目标文件。
+2. 每个逻辑模块对应**恰好一个**目标文件，扩展名为 `.o`（或与目标平台等价的 object 格式）。
+3. 目标文件包含该模块内全部符号的定义及 `export` 符号的导出信息，供包级链接使用（§21.6）。
+
+**示例**
+
+包内逻辑模块 `eokas.io`（§16.1 跨文件片段示例）编译为单个 `eokas.io.o`；同文件内的 `app.utils` 与 `app.main` 分别编译为 `app.utils.o` 与 `app.main.o`。
 
 ---
 
@@ -1228,11 +1276,13 @@ struct Box<T> : Equals {
 
 **定位。** 元数据系统为编译期扩展机制，依赖 §18 Schema 所描述的**编译期**能力约束。本节统合元数据相关的全部定义：`meta` 关键字（注解规范）、`@` 注解、编译器生成与校验、运行时模块 `eokas.meta` 及使用示例。
 
+**说明。** 本节 `meta` 关键字指源码中的**注解元数据**规范，与 §21 包目录 `meta/` 中的 **`{ModulePath}.json` 模块元数据文件**（§21.2.1）为**不同概念**；后者为模块的反射元数据载体，扩展名**必须**为 **`.json`**。
+
 #### 19.1  整体架构
 
-1. **结构元数据（自动）**：编译器为所有类型、变量、字段生成结构信息（名称、大小、对齐、偏移、类型签名等），写入 `.eokmeta`；无需 `@` 标注。
+1. **模块元数据（包 `meta/`）**：包根目录 `meta/` 下每个 `{ModulePath}.json` 为对应逻辑模块的**模块元数据文件**（§21.2.1）；兼作包内模块注册表与**反射元数据**载体；扩展名**必须**为 **`.json`**。编译器为模块内所有类型、变量、字段生成结构信息（名称、大小、对齐、偏移、类型签名等）及用户 `@` 注解条目，写入 `meta/{ModulePath}.json`（§19.5）；无需 `@` 标注即可生成结构元数据。
 2. **注解元数据（用户 `meta`）**：开发者以 `meta` 定义注解规范，以 `@` 绑定目标；编译器按 §19.2 校验用法。
-3. **运行时查询（可选）**：`eokas.meta`（§19.6）加载与查询元数据；可不链接，无强制运行时开销。
+3. **运行时查询（可选）**：`eokas.meta`（§19.6）**可**加载包 `meta/` 中的 `{ModulePath}.json` 模块元数据文件；可不链接，无强制运行时开销。
 
 #### 19.2  meta 关键字
 
@@ -1252,7 +1302,7 @@ meta MetaName {
 2. 字段类型（`FieldType`）仅可为：**基础类型**（§5）、**`String`**（§6）、**枚举**（§9）、**结构体**（§10）；不得为 `Heap`、`Slot`、`func` 及其他类型；
 3. 有默认值的字段在 `@MetaName(...)` 中可省略；无默认值的字段必须显式传入；
 4. `meta` 体内仅可含字段声明，不得含控制流；
-5. 在任意编译单元以 `meta` 声明即完成注册；同一编译单元内 `meta` 名不得重复。
+5. `meta` 在本模块内注册；未 `export` 的 `meta` 仅本模块内可用于 `@` 注解；经 `export` 的 `meta` 可被其他模块 `import` 后使用；同一逻辑模块内 `meta` 名不得重复。
 
 #### 19.3  用户 meta 定义示例
 
@@ -1332,26 +1382,30 @@ struct Transform {
 
 #### 19.5  编译器元数据生成
 
+**定位。** 编译器按逻辑模块（§16.4 编译单元）将反射元数据写入包 `meta/` 目录下对应的 **`meta/{ModulePath}.json`** 模块元数据文件；**不存在**独立的 `.eokmeta` 扩展名或其他并列元数据文件格式。
+
 **编译命令**
 
 ```bash
-eokas build --meta=project.eokmeta main.eok -o app
+eokas build -o app
 ```
+
+包构建时，工具链**必须**为每个已编译逻辑模块生成或更新 `meta/{ModulePath}.json`（§21.2.1）。
 
 | 项 | 说明 |
 |----|------|
-| 结构元数据 | 编译单元内所有类型、变量、字段的结构信息（自动） |
+| 结构元数据 | 模块内所有类型、变量、字段的结构信息（自动） |
 | 注解元数据 | 用户 `@` 绑定的 meta 字段（附加条目） |
-| 哈希 | 由编译单元内所有类型的结构信息计算；函数体修改不改变哈希 |
-| 校验 | 元数据文件与二进制内置统一哈希，供运行时合法性校验 |
+| 哈希 | 由模块内所有类型的结构信息计算；函数体修改不改变哈希 |
+| 校验 | 模块元数据文件与二进制内置统一哈希，供运行时合法性校验 |
 
-**元数据文件格式（JSON）**
+**模块元数据文件格式（JSON）**
 
-`version` 字段为生成该文件时所依据的**语言规范版本号**（与本文档标题版本一致，如 `0.1.69`）。
+`meta/{ModulePath}.json` 为 JSON 格式。`version` 字段为生成该文件时所依据的**语言规范版本号**（与本文档标题版本一致，如 `0.1.71`）。编译前或未执行元数据生成时，文件内容**可**为空对象 `{}`（§21.2.1）；编译器生成反射元数据后**必须**写入下列结构：
 
 ```json
 {
-    "version": "0.1.69",
+    "version": "0.1.71",
     "hash": "0xDEADBEEF",
     "types": [
         {
@@ -1378,7 +1432,7 @@ eokas build --meta=project.eokmeta main.eok -o app
 
 #### 19.6  运行时模块 (eokas.meta)
 
-`eokas.meta` 为标准库中的可选模块，默认不链接进程序；仅提供元数据加载、校验、静态信息查询能力；不支持直接读写对象内存；不支持函数动态调用。
+`eokas.meta` 为标准库中的可选模块，默认不链接进程序；提供元数据加载、校验、静态信息查询能力；**可**加载包 `meta/` 目录下的 **`meta/{ModulePath}.json` 模块元数据文件**（§21.2.1）；不支持直接读写对象内存；不支持函数动态调用。
 
 **模块声明**
 
@@ -1430,6 +1484,10 @@ module eokas.meta {
 ```
 
 **数据结构** — 上表 `struct` 定义于 `module eokas.meta` 体内，仅模块内可见（未 `export`）。
+
+**`load` 语义**
+
+`load(path)` 从 `path` 指定的文件路径加载模块元数据，返回 `Heap<MetaContext>`。`path` **必须**指向包 `meta/` 目录下的 **`{ModulePath}.json`** 文件（扩展名 **`.json`**）。模块身份由文件名 stem（即 `ModulePath`）决定；未编译时内容**可**为空对象 `{}`，编译后**可**含 §19.5 规定的反射元数据字段。加载失败时返回无效 `Heap<MetaContext>`。
 
 | 边界 | 说明 |
 |------|------|
@@ -1485,33 +1543,34 @@ module app.meta_demo {
     import eokas.meta;
     import eokas.io;
 
-    func main() -> void {
-        val ctx_heap = load("project.eokmeta");
+    func main() -> i32 {
+        val ctx_heap = load("meta/app.game.json");
         if (!ctx_heap.valid) {
-            print("Metadata load failed!");
-            return;
+            print("Module metadata load failed!");
+            return 1;
         }
 
         val ctx = ctx_heap[0];
         if (!is_matched(ctx)) {
             print("Metadata hash mismatch!");
             drop(ctx_heap);
-            return;
+            return 1;
         }
 
-        val type_info = get_type(ctx, "app.game.Transform");
+        val type_info = get_type(ctx, "Transform");
         if (type_info.valid) {
             print(type_info.name);
         }
 
         drop(ctx_heap);
+        return 0;
     }
 };
 ```
 
 ### 20. 标准库
 
-初始规划四大一级模块；`eokas.meta` 见 §19.6。内核模块 `eokas.kernel` 见 §22（非本节标准库）；用户包**宜**在 `eokas.pkg` 中声明对标准库的依赖，**不得**将 `eokas.kernel` 当作可替换的第三方包版本化发布。
+初始规划四大一级模块；`eokas.meta` 见 §19.6。内核模块 `eokas.kernel` 见 §22（非本节标准库）；用户包**宜**在 `eokas.pkg` 中声明对标准库的依赖，**不得**将 `eokas.kernel` 当作可替换的第三方包版本化发布。本节全部模块名列入包管理器 **Standard Module Names** 保留列表（§21.7）；用户包**不得**声明同名 `module`。
 
 #### 20.0  eokas.kernel（内核，见 §22）
 
@@ -1563,34 +1622,170 @@ module eokas.io {
 
 #### 21.1  包的定义
 
-Eokas 包（Package）是多个模块的集合单元，通过项目根目录下的配置文件描述包信息与依赖关系。
+Eokas 包（Package）是多个模块的集合单元，通过包根目录（§21.2）下的 `eokas.pkg` 描述包信息与依赖关系。包内各逻辑模块按 §16.4 编译为 `.o` 目标文件，再链接为 §21.6 规定的原生二进制产物，输出至 `bin/`（§21.2）。
 
-#### 21.2  包描述文件
+包名（`eokas.pkg` 中的 `name`）、模块名（`ModulePath`，§16.1）与 `src/` 内源文件路径为**相互独立**的标识：包名用于依赖解析与发布命名；模块名用于源码中的逻辑命名与 `import` / `export`；包 `meta/` 目录下的模块元数据文件（§21.2.1）以 `ModulePath` 为键登记包内逻辑模块。**不得**假设包名、模块名与 `src/` 内文件路径之间存在映射、前缀、包含或相对路径关系。
+
+#### 21.2  包目录结构
+
+**定义。** 每个 Eokas 包**必须**采用下列标准目录布局；`package-root` 为包根目录（含 `eokas.pkg` 的目录）：
+
+```
+package-root/
+    src/              源代码目录（`.eokas` 源文件；开发包必须，二进制包可省略）
+    meta/             模块元数据目录（每模块一个 `{ModulePath}.json`，§21.2.1）
+    bin/              二进制编译产物
+    eokas-modules/    依赖包目录
+    eokas.pkg         包描述文件
+```
+
+**说明。** `meta/` 存放包级**模块元数据文件**（`{ModulePath}.json`，§21.2.1），兼作**模块注册表**与**反射元数据**载体；**非** §19 注解元数据。
+
+**语义规则**
+
+1. 本包 `meta/` 目录**必须**存在，且构成包内模块注册表（§21.2.1）。
+2. 开发包（存在 `src/`）中，全部 `.eokas` 源文件**必须**位于 `src/` 下；工具链扫描 `src/` 解析 `module` 块，并与 `meta/` 注册表进行一致性校验（§21.2.1）。
+3. 二进制包（无 `src/`、有 `bin/`）以 `meta/` 为模块的**唯一权威**列表（§21.2.1）。
+4. 包构建产生的可执行文件、静态库、动态库等原生二进制产物**必须**写入 `bin/`。
+5. 包管理器解析 `dependencies`（§21.4）后，将依赖包安装至 `eokas-modules/`；该目录**宜**加入版本控制忽略列表（如 `.gitignore`），**不得**作为本包源码的一部分提交。
+6. `eokas.pkg`**必须**位于包根目录，**不得**置于 `src/`、`meta/` 或 `bin/` 内。
+
+#### 21.2.1  模块元数据与注册表（`meta/`）
+
+**定义。** 包根目录 `meta/` 下每个 `{ModulePath}.json` 文件为对应逻辑模块的**模块元数据文件**；扩展名**必须**为 **`.json`**。模块元数据文件兼作**模块注册表**（包内模块注册表）与**反射元数据**载体：编译期间工具链**必须**可搜索该目录以解析 `import` / `export`；编译器**必须**将模块反射元数据（§19.5）写入对应 `meta/{ModulePath}.json`；运行时 `eokas.meta`（§19.6）**可**通过 `load` 加载这些文件。每个逻辑模块（§16.1 片段合并后的 `ModulePath`）**恰好**对应一个模块元数据文件；模块身份以**文件名**为准，**不得**将文件名 stem 理解为文件系统路径或目录层级。
+
+**文件名规则**
+
+1. 模块元数据文件名 stem **必须**等于完整 `ModulePath`（含 `.`），扩展名 **必须**为 **`.json`**。
+2. 示例：逻辑模块 `app.main` → `meta/app.main.json`（**不得**写作 `meta/app/main.json`）。
+3. `meta/` 内**不得**包含非 `{ModulePath}.json` 形式的文件（违反为编译错误）。
+
+**JSON 格式**
+
+模块元数据文件为合法 JSON 对象；模块身份由文件名决定。编译前或未生成反射元数据时，内容**可**为空对象：
+
+```json
+{}
+```
+
+编译器生成反射元数据后，**必须**按 §19.5 写入 `version`、`hash`、`types` 等字段。**可**含下列可选扩展字段（工具链**不得**因缺少而报错）：`"description"`（字符串）。
+
+**包形态与一致性**
+
+**开发包（`src/` 存在）**
+
+1. `meta/` **必须**存在。
+2. 工具链扫描 `src/` 下全部 `.eokas` 源文件，合并片段后得到 ModulePath 集合 `S_src`。
+3. 读取 `meta/*.json` 文件名 stem 得到集合 `S_meta`。
+4. `S_src` 与 `S_meta` **必须**完全一致（双向往返校验）；下列情形均为编译错误：
+   - `src/` 中存在某 `ModulePath` 的定义，但 `meta/` 中无对应 `{ModulePath}.json`；
+   - `meta/` 中存在 `{ModulePath}.json`，但 `src/` 中无该 `ModulePath` 的任何 `module` 块。
+
+**二进制包（无 `src/`，有 `bin/`）**
+
+1. `meta/*.json` 为包内模块的**唯一权威**列表。
+2. `import` 解析时，工具链在本包及 `eokas-modules/` 下各依赖包的 `meta/` 中查找 `{ModulePath}.json`。
+3. 链接阶段，`bin/` 中**必须**存在与各 `ModulePath` 对应的目标文件；命名遵循 §16.4、§21.6（如 `app.main.o` 或平台等价 object 格式）。
+
+**非法布局**
+
+1. 既无 `src/` 又无 `meta/` → 编译错误。
+2. 有 `src/` 无 `meta/` → 编译错误。
+
+**编译期搜索范围**
+
+解析 `TargetModulePath`（§16.2）时，工具链按下列顺序判定模块是否存在：
+
+1. Standard Module Names（§21.7）— 由工具链内置提供；
+2. 本包 `meta/` 注册表；
+3. `eokas-modules/` 下各已安装依赖包的 `meta/` 注册表。
+
+**示例**
+
+包内逻辑模块 `app.main`、`app.utils` 的注册表布局：
+
+```
+meta/
+    app.main.json
+    app.utils.json
+```
+
+`meta/app.main.json` 内容可为：
+
+```json
+{}
+```
+
+#### 21.3  包描述文件
 
 每个包必须包含 `eokas.pkg` 配置文件，语法类 JSON：
 
 ```json
 {
-    "name": "com.example.my_game_logic",
+    "name": "my-game-logic",
     "version": "1.4.2",
-    "eokas": "0.1.70",
+    "entry": "app.main",
+    "eokas": "0.1.71",
     "dependencies": {
         "eokas.core": "^1.0.0",
         "eokas.math": "~2.3.0",
-        "com.thirdparty.network": ">=3.1.0 <4.0.0"
+        "network-lib": ">=3.1.0 <4.0.0"
     }
 }
 ```
 
-#### 21.3  依赖项与语义化版本
+#### 21.4  字段说明与语义化版本
 
-- `name`：包唯一标识名称（字符串）；
+- `name`：包唯一标识名称（字符串）；与包内任意 `ModulePath` **无**关联；
 - `version`：包自身版本号，遵循 Semantic Versioning 2.0.0 规范（主版本.次版本.修订号）；
-- `eokas`：所依据的**语言规范版本号**（与本文档标题版本一致，如 `"0.1.70"`）；
-- `dependencies`：依赖映射表，键为依赖包名，值为版本约束规则。
+- `entry`：入口模块的 `ModulePath`（字符串，模块名而非文件路径）；构建可执行程序时，工具链从该模块加载 **Program**（§16），并调用其 `main`（§14.3）；`entry` 所标识的模块**必须**在本包 `meta/` 注册表中存在对应 `{ModulePath}.json`（§21.2.1）；开发包中该模块**必须**在 `src/` 源码中定义 `func main() -> i32;`（§14.3）；
+- `eokas`：所依据的**语言规范版本号**（与本文档标题版本一致，如 `"0.1.71"`）；
+- `dependencies`：依赖映射表，键为依赖**包名**（`name`，非 `ModulePath`），值为版本约束规则。
 
-#### 21.4  依赖解析
+#### 21.5  依赖解析
 
-构建项目时，包管理器自动解析 `eokas.pkg`，校验 `eokas` 字段与工具链语言规范版本的兼容性，拉取对应版本依赖包，并校验依赖项版本约束。
+构建项目时，包管理器自动解析 `eokas.pkg`，校验 `eokas` 字段与工具链语言规范版本的兼容性，校验 `entry` 所标识的模块在本包 `meta/` 注册表中存在且满足入口 `main` 签名（§14.3、§21.4），校验本包模块名未占用 Standard Module Names（§21.7），将依赖包安装至 `eokas-modules/`（§21.2），校验各依赖包 `meta/` 注册表可解析，并校验依赖项版本约束。
+
+#### 21.6  包构建产物
+
+**定义。** 包在依赖解析（§21.5）与模块编译（§16.4）完成后，工具链**可**将本包内全部模块目标文件及依赖包产物链接为下列**一种**原生二进制产物，并写入 `bin/`（§21.2）：
+
+| 产物类型 | 典型扩展名 | 说明 |
+|----------|------------|------|
+| 静态库 | `.a`、`.lib` | Unix 静态库 / MSVC 静态库 |
+| 动态库 | `.dylib`、`.so`、`.dll` | macOS / Linux / Windows 动态库 |
+| 可执行文件 | `.exe`（Windows）等 | 须配置 `entry`（§21.4）；从入口模块加载 **Program**（§16）并调用 `main`（§14.3） |
+
+**语义规则**
+
+1. 单次包构建**至多**产出上述类型中的一种产物；具体类型由构建配置（工具链命令或项目设置）指定。
+2. 构建可执行文件时，`eokas.pkg` 中的 `entry` **必须**指向本包 `meta/` 注册表中存在的模块（§21.4），且该模块的 `main` **必须**为 `func main() -> i32;`（§14.3）。
+3. 构建库产物时，`entry` **可**省略或不参与链接入口解析。
+4. 静态库与动态库产物**应**仅暴露各模块 `export` 符号（§16.3）；具体 ABI 与符号命名由工具链定义。
+5. 每个逻辑模块（§16.4）编译或预置的目标文件，在 `bin/` 中的基名**必须**为 `{ModulePath}.o`（或与目标平台等价的 object 扩展名）；示例：模块 `app.main` → `bin/app.main.o`。二进制包链接时，工具链**必须**能在 `bin/` 中按此规则找到与 `meta/` 注册表条目对应的目标文件。
+
+#### 21.7  Standard Module Names（保留模块名）
+
+**定义。** 包管理器维护 **Standard Module Names** 列表：收录 Eokas 工具链提供的全部标准模块名（§20 标准库及 §22 `eokas.kernel`）。该列表随语言规范版本发布，由工具链内置；用户包**不得**在源码中声明列表内的 `ModulePath`。
+
+**语义规则**
+
+1. 用户包内任意 `module ModulePath { ... }` 的 `ModulePath`**不得**与 Standard Module Names 中任一项相同；违反为编译错误。
+2. 标准库模块由工具链或官方标准库包提供实现；用户**不得**覆盖、再定义或占用保留名。
+3. 包管理器在解析 `eokas.pkg` 与编译包内模块时**必须**校验上述保留名约束（§21.5）。
+
+**当前版本（v0.1.71）保留模块名**
+
+| 模块名 | 说明 |
+|--------|------|
+| `eokas.kernel` | 内核模块（§22；工具链内置） |
+| `eokas.core` | 标准库：运行时底层（§20.1） |
+| `eokas.core.result` | 标准库：`Result` 等（§20.1） |
+| `eokas.math` | 标准库：数学（§20.2） |
+| `eokas.net` | 标准库：网络（§20.3） |
+| `eokas.io` | 标准库：I/O（§20.4） |
+| `eokas.meta` | 标准库：元数据运行时（§19.6） |
+
+后续规范版本扩展标准库时，**须**同步更新本表；新增保留名对用户包即时生效。
 
 ---
