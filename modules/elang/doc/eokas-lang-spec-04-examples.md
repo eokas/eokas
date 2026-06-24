@@ -1,4 +1,4 @@
-# Eokas 语言规范 v0.1.71 — 第四部分：示例代码
+# Eokas 语言规范 v0.1.72 — 第四部分：示例代码
 
 **分册导航**
 
@@ -129,7 +129,45 @@ module app.list {
 };
 ```
 
-#### 23.4  包目录与模块元数据
+#### 23.4  for 循环
+
+*说明规范节：§13.5, §22.3, §22.4*
+
+基于 `Heap<i32>` 的三种 `for` 形态：
+
+**计数/通用三段式（§13.5.1）**
+
+```eok
+for (var i = 0; i < 10; i = i + 1) {
+    // 使用 i
+}
+```
+
+**游标三段式（§13.5.2）**
+
+```eok
+val h = make<i32>(100);
+if (h.valid) {
+    for (var i = h.begin(); i.is_valid(); i = i.next(1)) {
+        i.set_value(0);
+    }
+    drop(h);
+}
+```
+
+**范围 for-in（§13.5.3）**
+
+```eok
+val h = make<i32>(100);
+if (h.valid) {
+    for (var i : h) {
+        i.set_value(0);
+    }
+    drop(h);
+}
+```
+
+#### 23.5  包目录与模块元数据
 
 *说明规范节：§19.6, §21.2, §21.2.1*
 
@@ -155,7 +193,7 @@ package-root/
     "name": "fib-demo",
     "version": "1.0.0",
     "entry": "app.fib",
-    "eokas": "0.1.71",
+    "eokas": "0.1.72",
     "dependencies": {}
 }
 ```
