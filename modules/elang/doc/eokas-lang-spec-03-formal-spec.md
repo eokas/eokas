@@ -4,9 +4,294 @@
 
 - [总览](eokas-lang-spec-00.md)
 - [01 设计原则](eokas-lang-spec-01-design-principles.md) — §1–§3
-- [02 语言核心规范](eokas-lang-spec-02-core-spec.md) — §4–§21
-- [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §22
+- [02 语言核心规范](eokas-lang-spec-02-core-spec.md) — §4–§6, §8–§21
+- [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §7, §22
 - [04 示例代码](eokas-lang-spec-04-examples.md) — §23
+
+---
+
+### 7. 堆内存模型
+
+由 §1 内存公理，本节统一定义堆内存相关的类型与操作。操作语义受 §1 公理约束，推论见 §2。其形式化声明见 §22.4（`Heap` / `Slot`）与 §22.5（`make` / `drop` 等内核 `export func`）。
+
+**元素类型。** `Heap<T>`、`Slot<T>` 中的 `T` 为**元素类型**，由使用处指定（如 `make<i32>(n)`）。此 `T` 非 §17 的类型形参。
+
+**所有权说明**（详述，公理 A1 摘要见 §1）
+
+- **堆内存空间**（`Heap<T>` 所指向的存储）归 **Program** 所有；`make` 申请、`drop` 释放。
+- **句柄**（`Heap<T>`、`Slot<T>` 变量或字段）为访问凭证，所有权归属所在作用域；作用域结束时句柄变量销毁，**不自动**调用 `drop`。
+- 模块内 `make` / `drop` 操作 Program 名下堆内存；模块不改变堆所有者（见 §16）。
+
+**无效状态。** 无效 `Heap<T>` / 无效 `Slot<T>` 指 `is_valid(x) == false`（与公理 A2「失效」等价）。
+
+#### 7.1  堆句柄 (`Heap<T>`)
+
+**定义：** `Heap<T>` 为对 Program 名下、元素类型为 `T` 的堆内存的访问权限（句柄），值类型，具备失效特性。所有权见上文。
+
+**文法**
+
+```ebnf
+HeapType ::= 'Heap' '<' Type '>'
+```
+
+**语义**
+
+1. `HeapType` 并入通用 `Type` 文法（§8）。
+2. 下标访问获取 `Slot<T>`（§7.5、§12.8 IndexOp）。
+3. 创建：`make<T>(count: u32)`（§7.3）；释放：`drop`（§7.4）。
+
+**示例**
+
+```eokas
+val arr: Heap<i32> = make<i32>(1024);
+drop(arr);
+```
+
+#### 7.2  槽位 (`Slot<T>`)
+
+**定义：** `Slot<T>` 标识元素类型为 `T` 的堆容器内具体位置，值类型，具备失效特性。所有权见上文。
+
+**文法**
+
+```ebnf
+SlotType ::= 'Slot' '<' Type '>'
+```
+
+**语义**
+
+1. `SlotType` 并入通用 `Type` 文法（§8）。
+2. 位置遍历：`next` / `last`（§7.6），调用返回新 `Slot<T>`，原槽位不变。
+
+**示例**
+
+```eokas
+val arr = make<i32>(8);
+val s: Slot<i32> = arr[0];
+val s2 = s.next(1);
+drop(arr);
+```
+
+#### 7.3  make
+
+**定义：** `make` 为 `eokas.kernel` 的 `export func`（§22.5），预导入后全局可见，分配可容纳 `count` 个 `T` 类型元素的堆内存。
+
+**文法**
+
+```eokas
+make<T>(val count: u32) -> Heap<T>
+```
+
+**语义**
+
+1. `count` 表示分配的 **`T` 类型元素数量**；
+2. 在 Program 名下分配堆内存，并返回可访问 `[0, count)` 的 `Heap<T>` 句柄；句柄绑定于调用方作用域；
+3. `count` 为 `0` 时返回无效 `Heap<T>`。
+
+**示例**
+
+```eokas
+val arr = make<i32>(1024);
+var buf = make<u8>(256);
+```
+
+#### 7.4  drop
+
+**定义：** `drop` 为 `eokas.kernel` 的 `export func`（§22.5），预导入后全局可见，释放堆内存；`<T>` 由实参类型推导。
+
+**文法**
+
+```ebnf
+DropStmt ::= 'drop' '(' Expression ')' ';'
+```
+
+签名：
+
+```eokas
+drop<T>(val x: Heap<T>) -> void
+```
+
+**语义**
+
+1. `DropStmt` 为 `Statement` 的一种（§13）；其本质是对预导入 `export func drop`（§22.5）的调用语句，等价于以 `expr` 为实参调用 `drop`。
+2. `expr` 类型必须为 `Heap<T>`；仅接受 `Heap<T>` 实参，传入 `Slot<T>` 或其他类型为编译错误。
+3. 执行 `drop` 后，Program 释放对应堆内存，该堆上所有 `Heap<T>` 句柄及关联 `Slot<T>` 变为无效（§2 R5）。
+
+**示例**
+
+```eokas
+val arr = make<i32>(64);
+// ... 使用 arr ...
+drop(arr);
+```
+
+#### 7.5  下标访问
+
+**定义：** 下标访问以 `expr[index]` 形式获取 `Heap<T>` 中指定位置的 `Slot<T>`。
+
+**文法**
+
+```ebnf
+IndexExpr ::= PostfixExpr '[' Expression ']'
+```
+
+**语义**
+
+`IndexExpr` 为 `PostfixExpr` 的一种（§12）。下标运算符的通用语义见 §12.8（`IndexOp`）。`Heap<T>` 满足 `IndexOp<u32, Slot<T>>`（§22.4），特例规则如下：
+
+1. `expr` 类型必须为 `Heap<T>`；`index` 必须为整数类型，并转换为 `u32` 参与索引；结果类型为 `Slot<T>`。
+2. 等价于 `expr.get_by_index(index)`（§22.2 IndexOp）。
+3. 下标必须在 `[0, count)` 内（`count` 见 §7.3）：在范围内返回有效 `Slot<T>`；**越界返回无效 `Slot<T>`**（非 UB，§2 R4）。
+4. `expr` 为无效 `Heap<T>` 时，返回无效 `Slot<T>`。
+5. 读写 **`T` 值**须通过返回的 `Slot<T>`（§7.9 成员访问、`set_value` 或 §7.7 赋值）；**不得**写 `heap[index] = x`（`x: T`）。
+
+**示例**
+
+```eokas
+val arr = make<i32>(8);
+val s = arr[0];        // Slot<i32>
+val bad = arr[100];    // 越界，返回无效 Slot<i32>
+drop(arr);
+```
+
+#### 7.6  槽位遍历
+
+**定义：** 通过 `next` / `last` 在堆内沿位置前后移动，返回新的 `Slot<T>`。
+
+**文法**
+
+```eokas
+next<T>(val s: Slot<T>, val offset: u32) -> Slot<T>
+last<T>(val s: Slot<T>, val offset: u32) -> Slot<T>
+```
+
+**语义**
+
+1. `next(slot, offset)` / `last(slot, offset)`（UFCS：`next(slot, offset)` 等价于 `slot.next(offset)`，`last(slot, offset)` 等价于 `slot.last(offset)`，§12.11）：`offset` 为相对偏移；分别向堆后方/前方移动，返回新 `Slot<T>`，原槽位不变。
+2. 偏移后超出所属 `Heap<T>` 索引范围，或原槽位已无效：返回无效 `Slot<T>`（§2 R4）。
+3. 对无效槽位调用时行为见 §7.8 语义规则 5。
+
+**示例**
+
+```eokas
+val arr = make<i32>(8);
+val s0 = arr[0];
+val s1 = s0.next(1);   // 后移一位
+val sx = next(s0, 1);  // UFCS，等价
+drop(arr);
+```
+
+#### 7.7  赋值
+
+**定义：** 经由 `Slot<T>` 成员访问左值向堆上结构体实例字段写入值。
+
+**文法**
+
+```ebnf
+SlotAssignStmt ::= SlotMemberAccess '=' Expression ';'
+```
+
+`SlotMemberAccess` 见 §7.9。
+
+**语义**
+
+1. 左操作数可为 `Slot` 成员访问表达式（§7.9）。
+2. 左右两侧类型必须一致。
+
+**示例**
+
+```eokas
+struct P { var x: i32; var y: i32; };
+val arr = make<P>(4);
+arr[0].x = 10;
+arr[0].y = 20;
+drop(arr);
+```
+
+#### 7.8  有效性校验 (is_valid)
+
+**定义：** `is_valid` 为 `eokas.kernel` 的 `export func`（§22.5），预导入后全局可见，用于查询 `Heap<T>` 或 `Slot<T>` 是否处于有效状态；`<T>` 由实参类型推导。
+
+**文法**
+
+```eokas
+is_valid<T, H>(val x: H) -> bool
+```
+
+`H` 为 `Heap<T>` 或 `Slot<T>`；`<T>` 由实参类型推导。
+
+**语义**
+
+1. 返回 `true` 表示句柄/槽位有效，可安全执行 §7 规定的相关操作；返回 `false` 表示已失效。
+2. 仅接受 `Heap<T>` 与 `Slot<T>` 实参；传入其他类型为编译错误。
+3. 因 `eokas.kernel` 预导入（§22.1），全局可用，无需 `import`。
+4. **宜**在不确定有效性时调用（公理 A3、§2 R1、R2）；编译器不强制、不产生警告。
+5. **未校验后果**：对无效 `Heap<T>` 或 `Slot<T>` 执行遍历、`drop`、字段读写等 §7 相关操作时，行为未定义（UB）；编译器不作运行时检测。另有明确规定的操作（如 §2 R4 下标越界、`next` / `last` 返回值）从其规定。
+
+**示例**
+
+```eokas
+val arr = make<i32>(8);
+val s = arr[0];
+if (is_valid(s)) {
+    s.set_value(42);
+}
+drop(arr);
+```
+
+#### 7.9  槽位解引用（成员访问）
+
+**定义：** 当 `Slot<T>` 的 `T` 为结构体类型时，以 `slot.field` 读写堆上实例字段。
+
+**文法**
+
+```ebnf
+SlotMemberAccess ::= PostfixExpr '.' Identifier
+```
+
+`SlotMemberAccess` 与通用成员访问共用 `PostfixExpr '.' Identifier` 文法（§12.9）；此处特指 `PostfixExpr` 类型为 `Slot<T>` 的情形。
+
+**语义**
+
+1. `slot_expr` 类型必须为 `Slot<T>`，且 `T` 为结构体类型。
+2. `field` 为 `T` 的已声明字段；结果类型为该字段类型。
+3. 作为右值时，读取该 `Slot<T>` 所指位置处结构体实例的对应字段。
+4. 作为赋值左值时，写入该 `Slot<T>` 所指位置处结构体实例的对应字段（见 §7.7、§12.10）。
+5. 对无效 `Slot<T>` 读写字段的行为未定义（UB）；宜先调用 `is_valid`（§2 R1）。
+
+**示例**
+
+```eokas
+struct P { var x: i32; var y: i32; };
+val arr = make<P>(4);
+val s = arr[0];
+s.x = 1;            // 写
+val vx = s.x;       // 读
+drop(arr);
+```
+
+#### 7.10  所属堆句柄 (space_of)
+
+**定义：** `space_of` 为 `eokas.kernel` 的 `export func`（§22.5），预导入后全局可见，获取包含指定 `Slot<T>` 的堆句柄；`<T>` 由实参类型推导。
+
+**文法**
+
+```eokas
+space_of<T>(val s: Slot<T>) -> Heap<T>
+```
+
+**语义**
+
+1. 返回 `s` 所属的那块 `Heap<T>` 句柄。
+2. 对无效 `Slot<T>` 调用时，返回无效 `Heap<T>`；宜先调用 `is_valid`（§2 R1）。
+
+**示例**
+
+```eokas
+val arr = make<i32>(8);
+val s = arr[3];
+val owner = space_of(s);   // 取回 s 所属的 Heap<i32>
+drop(arr);
+```
 
 ---
 
@@ -16,9 +301,9 @@
 
 #### 22.1  模块定义与语义
 
-**定义。** `eokas.kernel` 为工具链**内置**的内核模块，封装 §22.2–§22.5 的全部 `export` 声明；由编译器提供实现，用户**不得**修改或覆盖其定义，**不得**在其他模块中重复声明同名 `schema` / `struct` / `export func`。`eokas.kernel` 遵循 §16.1 显式 `module` 声明；其 `export` 为工具链形式化描述，**不受**用户模块「export 须有 body」约束（§16.3 语义规则 6）。
+**定义：** `eokas.kernel` 为工具链**内置**的内核模块，封装 §22.2–§22.5 的全部 `export` 声明；由编译器提供实现，用户**不得**修改或覆盖其定义，**不得**在其他模块中重复声明同名 `schema` / `struct` / `export func`。`eokas.kernel` 遵循 §16.1 显式 `module` 声明；其 `export` 为工具链形式化描述，**不受**用户模块「export 须有 body」约束（§16.3 语义规则 6）。
 
-```eok
+```eokas
 module eokas.kernel {
     // §22.2–§22.5 所列 export schema、export struct、export func 的规范性汇总
 };
@@ -52,9 +337,9 @@ module eokas.kernel {
 
 **Add\<T\> — 可相加约束**
 
-**定义。** `Add<T>` 描述**具体 struct 实例**之间可执行加法运算并返回同类型结果的形态约束。
+**定义：** `Add<T>` 描述**具体 struct 实例**之间可执行加法运算并返回同类型结果的形态约束。
 
-```eok
+```eokas
 export schema Add<T> {
     func add(val rhs: T) -> T;
 };
@@ -73,9 +358,9 @@ export schema Add<T> {
 
 **Sub\<T\> — 可相减约束**
 
-**定义。** `Sub<T>` 描述**具体 struct 实例**之间可执行减法运算并返回同类型结果的形态约束。
+**定义：** `Sub<T>` 描述**具体 struct 实例**之间可执行减法运算并返回同类型结果的形态约束。
 
-```eok
+```eokas
 export schema Sub<T> {
     func sub(val rhs: T) -> T;
 };
@@ -94,9 +379,9 @@ export schema Sub<T> {
 
 **Mul\<T\> — 可相乘约束**
 
-**定义。** `Mul<T>` 描述**具体 struct 实例**之间可执行乘法运算并返回同类型结果的形态约束。
+**定义：** `Mul<T>` 描述**具体 struct 实例**之间可执行乘法运算并返回同类型结果的形态约束。
 
-```eok
+```eokas
 export schema Mul<T> {
     func mul(val rhs: T) -> T;
 };
@@ -115,9 +400,9 @@ export schema Mul<T> {
 
 **Div\<T\> — 可相除约束**
 
-**定义。** `Div<T>` 描述**具体 struct 实例**之间可执行除法运算并返回同类型结果的形态约束。
+**定义：** `Div<T>` 描述**具体 struct 实例**之间可执行除法运算并返回同类型结果的形态约束。
 
-```eok
+```eokas
 export schema Div<T> {
     func div(val rhs: T) -> T;
 };
@@ -136,9 +421,9 @@ export schema Div<T> {
 
 **Mod\<T\> — 可取余约束**
 
-**定义。** `Mod<T>` 描述**具体 struct 实例**之间可执行取余运算并返回同类型结果的形态约束。
+**定义：** `Mod<T>` 描述**具体 struct 实例**之间可执行取余运算并返回同类型结果的形态约束。
 
-```eok
+```eokas
 export schema Mod<T> {
     func mod(val rhs: T) -> T;
 };
@@ -157,9 +442,9 @@ export schema Mod<T> {
 
 **Neg\<T\> — 可取负约束**
 
-**定义。** `Neg<T>` 描述**具体 struct 实例**可执行一元取负运算并返回同类型结果的形态约束。
+**定义：** `Neg<T>` 描述**具体 struct 实例**可执行一元取负运算并返回同类型结果的形态约束。
 
-```eok
+```eokas
 export schema Neg<T> {
     func neg() -> T;
 };
@@ -178,9 +463,9 @@ export schema Neg<T> {
 
 **Equals — 可相等约束**
 
-**定义。** `Equals<T>` 描述**具体 struct 实例**之间可执行相等性判断的形态约束。
+**定义：** `Equals<T>` 描述**具体 struct 实例**之间可执行相等性判断的形态约束。
 
-```eok
+```eokas
 export schema Equals<T> {
     func equals(val other: T) -> bool;
 };
@@ -199,9 +484,9 @@ export schema Equals<T> {
 
 **Compare — 可比较约束**
 
-**定义。** `Compare<T>` 描述**具体 struct 实例**之间可执行全序比较操作的形态约束；Schema 继承（§18.2）`Equals<T>` 契约。
+**定义：** `Compare<T>` 描述**具体 struct 实例**之间可执行全序比较操作的形态约束；Schema 继承（§18.2）`Equals<T>` 契约。
 
-```eok
+```eokas
 export schema Compare<T> : Equals<T> {
     func compare(val other: T) -> i32;
 };
@@ -230,9 +515,9 @@ export schema Compare<T> : Equals<T> {
 
 **Assign — 可赋值约束**
 
-**定义。** `Assign<T>` 描述**具体 struct 实例**可从同类型 `other` 接收赋值并更新 `this` 的形态约束。
+**定义：** `Assign<T>` 描述**具体 struct 实例**可从同类型 `other` 接收赋值并更新 `this` 的形态约束。
 
-```eok
+```eokas
 export schema Assign<T> {
     func assign(val other: T) -> void;
 };
@@ -251,9 +536,9 @@ export schema Assign<T> {
 
 **Predicate\<T\> — 可谓词运算约束**
 
-**定义。** `Predicate<T>` 描述**具体 struct 实例**可执行逻辑非、逻辑与、逻辑或并返回同类型结果，并可转换为内置 `bool` 的形态约束。
+**定义：** `Predicate<T>` 描述**具体 struct 实例**可执行逻辑非、逻辑与、逻辑或并返回同类型结果，并可转换为内置 `bool` 的形态约束。
 
-```eok
+```eokas
 export schema Predicate<T> {
     func not() -> T;
     func and(val rhs: T) -> T;
@@ -281,9 +566,9 @@ export schema Predicate<T> {
 
 **BitOp\<T\> — 可按位运算约束**
 
-**定义。** `BitOp<T>` 描述**具体 struct 实例**可执行按位与、或、异或、取反及移位运算并返回同类型结果的形态约束。
+**定义：** `BitOp<T>` 描述**具体 struct 实例**可执行按位与、或、异或、取反及移位运算并返回同类型结果的形态约束。
 
-```eok
+```eokas
 export schema BitOp<T> {
     func bit_and(val rhs: T) -> T;
     func bit_or(val rhs: T) -> T;
@@ -313,9 +598,9 @@ export schema BitOp<T> {
 
 **IndexOp\<Index, Item\> — 可下标访问约束**
 
-**定义。** `IndexOp<Index, Item>` 描述**具体 struct 实例**可通过下标读取与写入元素的形态约束；`Index` 为下标类型，`Item` 为元素类型（读返回值与写实参须一致）。
+**定义：** `IndexOp<Index, Item>` 描述**具体 struct 实例**可通过下标读取与写入元素的形态约束；`Index` 为下标类型，`Item` 为元素类型（读返回值与写实参须一致）。
 
-```eok
+```eokas
 export schema IndexOp<Index, Item> {
     func get_by_index(val index: Index) -> Item;
     func set_by_index(val index: Index, val item: Item) -> void;
@@ -338,9 +623,9 @@ export schema IndexOp<Index, Item> {
 
 #### 22.3  Iterator — 迭代器约束
 
-**定义。** `Iterator<T, C>` 描述游标类型 `C` 可沿序列方向移动（前进 / 后退）并读写元素类型 `T` 的形态约束，是游标 `for`（§13.5.2）与范围 for-in（§13.5.3）的必要前提。
+**定义：** `Iterator<T, C>` 描述游标类型 `C` 可沿序列方向移动（前进 / 后退）并读写元素类型 `T` 的形态约束，是游标 `for`（§13.5.2）与范围 for-in（§13.5.3）的必要前提。
 
-```eok
+```eokas
 export schema Iterator<T, C> {
     func has_next(val offset: u32) -> bool;
     func has_last(val offset: u32) -> bool;
@@ -369,9 +654,9 @@ export schema Iterator<T, C> {
 
 **Range\<T, C\> — 范围约束**
 
-**定义。** `Range<T, C>` 描述容器/序列类型可通过 `begin()`/`end()` 界定可遍历游标区间 `[begin(), end())`。
+**定义：** `Range<T, C>` 描述容器/序列类型可通过 `begin()`/`end()` 界定可遍历游标区间 `[begin(), end())`。
 
-```eok
+```eokas
 export schema Range<T, C> {
     func begin() -> C;
     func end() -> C;
@@ -395,9 +680,9 @@ export schema Range<T, C> {
 
 #### 22.4  Heap 与 Slot — 堆句柄
 
-**定义。** `Heap<T>` 与 `Slot<T>` 为 `eokas.kernel` 导出的 struct，分别描述堆内存空间与其内槽位的状态形态。数据字段由 struct 定义，**非** Schema。
+**定义：** `Heap<T>` 与 `Slot<T>` 为 `eokas.kernel` 导出的 struct，分别描述堆内存空间与其内槽位的状态形态。数据字段由 struct 定义，**非** Schema。
 
-```eok
+```eokas
 export struct Heap<T> : IndexOp<u32, Slot<T>>, Range<T, Slot<T>> {
     val count: u32;
     var valid: bool;
@@ -460,9 +745,9 @@ export struct Slot<T> : Iterator<T, Slot<T>> {
 
 #### 22.5  堆内存操作 — 全局 export func
 
-**定义。** 下列 `export func` 声明于 `eokas.kernel`，代表当前进程（公理 A1）的堆生命周期管理操作；由编译器绑定运行时实现，并按 §22.1 语义规则 1 **预导入**为全局自由函数风格。
+**定义：** 下列 `export func` 声明于 `eokas.kernel`，代表当前进程（公理 A1）的堆生命周期管理操作；由编译器绑定运行时实现，并按 §22.1 语义规则 1 **预导入**为全局自由函数风格。
 
-```eok
+```eokas
 export func make<T>(val count: u32) -> Heap<T>;
 export func drop<T>(val heap: Heap<T>) -> void;
 ```
@@ -480,7 +765,7 @@ export func drop<T>(val heap: Heap<T>) -> void;
 
 **示例**
 
-```eok
+```eokas
 val arr = make<i32>(1024);   // 等价于 eokas.kernel.make<i32>(1024)
 if (arr.valid) {
     drop(arr);               // 等价于 eokas.kernel.drop(arr)
@@ -501,7 +786,7 @@ if (arr.valid) {
 
 #### 22.7  示例
 
-```eok
+```eokas
 val arr = make<i32>(1024);
 
 val s = arr[0];
@@ -527,7 +812,7 @@ drop(arr);
 
 **遍历模式**
 
-```eok
+```eokas
 val h = make<i32>(100);
 for (var i : h) {
     i.set_value(0);
@@ -537,7 +822,7 @@ drop(h);
 
 等价替代写法（显式游标与有效性检查）：
 
-```eok
+```eokas
 val h = make<i32>(100);
 var cur = h.begin();
 while (cur.valid) {

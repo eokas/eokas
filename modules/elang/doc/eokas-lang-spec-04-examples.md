@@ -4,8 +4,8 @@
 
 - [总览](eokas-lang-spec-00.md)
 - [01 设计原则](eokas-lang-spec-01-design-principles.md) — §1–§3
-- [02 语言核心规范](eokas-lang-spec-02-core-spec.md) — §4–§21
-- [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §22
+- [02 语言核心规范](eokas-lang-spec-02-core-spec.md) — §4–§6, §8–§21
+- [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §7, §22
 - [04 示例代码](eokas-lang-spec-04-examples.md) — §23
 
 ---
@@ -18,7 +18,7 @@
 
 *说明规范节：§14*
 
-```eok
+```eokas
 module app.fib {
     import eokas.io;
 
@@ -41,7 +41,7 @@ module app.fib {
 
 *说明规范节：§10, §15, §16, §20*
 
-```eok
+```eokas
 module app.calc {
     import eokas.core.result;
     import eokas.io;
@@ -77,7 +77,7 @@ module app.calc {
 
 *说明规范节：§7, §2, §3, §18*
 
-```eok
+```eokas
 module app.list {
     struct Node {
         var value: i32;
@@ -137,7 +137,7 @@ module app.list {
 
 **计数/通用三段式（§13.5.1）**
 
-```eok
+```eokas
 for (var i = 0; i < 10; i = i + 1) {
     // 使用 i
 }
@@ -145,7 +145,7 @@ for (var i = 0; i < 10; i = i + 1) {
 
 **游标三段式（§13.5.2）**
 
-```eok
+```eokas
 val h = make<i32>(100);
 if (h.valid) {
     for (var i = h.begin(); i.is_valid(); i = i.next(1)) {
@@ -157,7 +157,7 @@ if (h.valid) {
 
 **范围 for-in（§13.5.3）**
 
-```eok
+```eokas
 val h = make<i32>(100);
 if (h.valid) {
     for (var i : h) {

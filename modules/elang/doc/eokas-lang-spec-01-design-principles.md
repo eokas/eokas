@@ -4,8 +4,8 @@
 
 - [总览](eokas-lang-spec-00.md)
 - [01 设计原则](eokas-lang-spec-01-design-principles.md) — §1–§3
-- [02 语言核心规范](eokas-lang-spec-02-core-spec.md) — §4–§21
-- [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §22
+- [02 语言核心规范](eokas-lang-spec-02-core-spec.md) — §4–§6, §8–§21
+- [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §7, §22
 - [04 示例代码](eokas-lang-spec-04-examples.md) — §23
 
 ---

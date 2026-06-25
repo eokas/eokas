@@ -4,8 +4,8 @@
 
 - [总览](eokas-lang-spec-00.md)
 - [01 设计原则](eokas-lang-spec-01-design-principles.md) — §1–§3
-- [02 语言核心规范](eokas-lang-spec-02-core-spec.md) — §4–§21
-- [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §22
+- [02 语言核心规范](eokas-lang-spec-02-core-spec.md) — §4–§6, §8–§21
+- [03 语言形式规范](eokas-lang-spec-03-formal-spec.md) — §7, §22
 - [04 示例代码](eokas-lang-spec-04-examples.md) — §23
 
 # Eokas 语言规范 v0.1.72
@@ -22,13 +22,13 @@
 | **推论 / 规则** | 由公理、定义与操作导出的强制约束 |
 | **示例** | 说明性片段；附录示例不引入新定义 |
 
-章节依四部分、§1–§23 连续编号：
+章节按 §1–§23 全局统一编号；其中 §7（堆内存模型）现归第三部分，故各分册内的节号区间非严格连续：
 
 | 部分 | 分册 | 节号 | 标题 |
 |------|------|------|------|
 | 第一部分 | [eokas-lang-spec-01-design-principles.md](eokas-lang-spec-01-design-principles.md) | §1–§3 | 设计原则 |
-| 第二部分 | [eokas-lang-spec-02-core-spec.md](eokas-lang-spec-02-core-spec.md) | §4–§21 | 语言核心规范 |
-| 第三部分 | [eokas-lang-spec-03-formal-spec.md](eokas-lang-spec-03-formal-spec.md) | §22 | 语言形式规范 |
+| 第二部分 | [eokas-lang-spec-02-core-spec.md](eokas-lang-spec-02-core-spec.md) | §4–§6, §8–§21 | 语言核心规范 |
+| 第三部分 | [eokas-lang-spec-03-formal-spec.md](eokas-lang-spec-03-formal-spec.md) | §7, §22 | 语言形式规范 |
 | 第四部分 | [eokas-lang-spec-04-examples.md](eokas-lang-spec-04-examples.md) | §23 | 示例代码 |
 
 **各部分概要**
@@ -36,8 +36,8 @@
 | 部分 | 内容 |
 |------|------|
 | 设计原则 | 设计约束、内存公理（§1）及由其导出的安全规则与闭包策略（§2–§3） |
-| 语言核心规范 | 词法、类型系统、堆内存模型、语法与语义、泛型与 Schema、元数据、标准库、模块编译与包构建（含包目录布局，§4–§21） |
-| 语言形式规范 | `eokas.kernel` 内核模块的形式化声明（§22） |
+| 语言核心规范 | 词法、类型系统、语法与语义、泛型与 Schema、元数据、标准库、模块编译与包构建（含包目录布局，§4–§6, §8–§21） |
+| 语言形式规范 | 堆内存模型（§7）、`eokas.kernel` 内核模块的形式化声明（§22） |
 | 示例代码 | 综合示例，不引入新定义（§23） |
 
 ### 编辑约定
