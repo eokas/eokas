@@ -147,6 +147,11 @@ namespace eokas
     DX12DynamicBuffer::DX12DynamicBuffer(const DX12Device& device, uint32_t length, uint32_t usage)
     {
         auto& mDevice = device.mDevice;
+
+        if (usage == (uint32_t)BufferUsage::UniformBuffer)
+        {
+            length = (length + 255u) & ~255u;
+        }
         
         D3D12_RESOURCE_DESC bufferDesc = {};
         bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -280,38 +285,48 @@ namespace eokas
         return 0;
     }
     
-    DX12PipelineState::DX12PipelineState(const DX12Device& device)
+    DX12PipelineObject::DX12PipelineObject(const DX12Device& device)
         : mDevice(device)
     {
     }
     
-    void DX12PipelineState::begin()
+    void DX12PipelineObject::begin()
     {
     
     }
     
-    void DX12PipelineState::setVertexElements(std::vector<VertexElement>& vElements)
+    void DX12PipelineObject::setVertexElements(std::vector<VertexElement>& vElements)
     {
+        mVertexSemanticNames.clear();
         mVertexElements.clear();
+        mVertexSemanticNames.reserve(vElements.size());
+        mVertexElements.reserve(vElements.size());
         for (size_t index = 0; index < vElements.size(); index++)
         {
             const VertexElement& ve = vElements.at(index);
-            
-            mVertexElements.push_back({ve.semanticName.c_str(), ve.semanticIndex, DX12Utils::transferFormat(ve.format), 0, ve.offset, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0});
+            mVertexSemanticNames.push_back(ve.semanticName);
+            mVertexElements.push_back({
+                nullptr,
+                ve.semanticIndex,
+                DX12Utils::transferFormat(ve.format),
+                0,
+                ve.offset,
+                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                0
+            });
+        }
+        for (size_t index = 0; index < mVertexElements.size(); index++)
+        {
+            mVertexElements[index].SemanticName = mVertexSemanticNames[index].c_str();
         }
     }
     
-    void DX12PipelineState::setProgram(ProgramType type, Program::Ref program)
+    void DX12PipelineObject::setProgram(ProgramType type, Program::Ref program)
     {
         mPrograms[type] = program;
     }
     
-    void DX12PipelineState::setTexture(uint32_t index, Texture::Ref texture)
-    {
-        mTextures[index] = texture;
-    }
-    
-    void DX12PipelineState::setFillMode(FillMode fillMode)
+    void DX12PipelineObject::setFillMode(FillMode fillMode)
     {
         switch(fillMode)
         {
@@ -320,7 +335,7 @@ namespace eokas
         }
     }
     
-    void DX12PipelineState::setCullMode(CullMode cullMode)
+    void DX12PipelineObject::setCullMode(CullMode cullMode)
     {
         switch(cullMode)
         {
@@ -330,7 +345,7 @@ namespace eokas
         }
     }
     
-    void DX12PipelineState::end()
+    void DX12PipelineObject::end()
     {
         auto& dxDevice = mDevice.mDevice;
         
@@ -360,41 +375,56 @@ namespace eokas
             
             D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
             rootSignatureDesc.Version = featureData.HighestVersion;
+
+            D3D12_DESCRIPTOR_RANGE1 descriptorRanges1[1] = {};
+            D3D12_ROOT_PARAMETER1 parameters1[2] = {};
+            D3D12_DESCRIPTOR_RANGE descriptorRanges0[1] = {};
+            D3D12_ROOT_PARAMETER parameters0[2] = {};
+
             if (rootSignatureDesc.Version == D3D_ROOT_SIGNATURE_VERSION_1_1)
             {
-                D3D12_DESCRIPTOR_RANGE1 descriptorRanges[1] = {};
-                descriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                descriptorRanges[0].NumDescriptors = 1;
-                descriptorRanges[0].BaseShaderRegister = 0;
-                descriptorRanges[0].RegisterSpace = 0;
-                descriptorRanges[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC;
+                descriptorRanges1[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                descriptorRanges1[0].NumDescriptors = 1;
+                descriptorRanges1[0].BaseShaderRegister = 0;
+                descriptorRanges1[0].RegisterSpace = 0;
+                descriptorRanges1[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
                 
-                D3D12_ROOT_PARAMETER1 parameters[1] = {};
-                parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-                parameters[0].DescriptorTable.NumDescriptorRanges = 1;
-                parameters[0].DescriptorTable.pDescriptorRanges = (const D3D12_DESCRIPTOR_RANGE1*) descriptorRanges;
+                parameters1[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+                parameters1[0].Descriptor.ShaderRegister = 0;
+                parameters1[0].Descriptor.RegisterSpace = 0;
+                parameters1[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+                parameters1[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
                 
-                rootSignatureDesc.Desc_1_1.NumParameters = 1;
-                rootSignatureDesc.Desc_1_1.pParameters = parameters;
+                parameters1[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                parameters1[1].DescriptorTable.NumDescriptorRanges = 1;
+                parameters1[1].DescriptorTable.pDescriptorRanges = descriptorRanges1;
+                parameters1[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+                
+                rootSignatureDesc.Desc_1_1.NumParameters = 2;
+                rootSignatureDesc.Desc_1_1.pParameters = parameters1;
                 rootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
                 rootSignatureDesc.Desc_1_1.pStaticSamplers = samplers;
                 rootSignatureDesc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
             }
             else
             {
-                D3D12_DESCRIPTOR_RANGE descriptorRanges[1] = {};
-                descriptorRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                descriptorRanges[0].NumDescriptors = 1;
-                descriptorRanges[0].BaseShaderRegister = 0;
-                descriptorRanges[0].RegisterSpace = 0;
+                descriptorRanges0[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                descriptorRanges0[0].NumDescriptors = 1;
+                descriptorRanges0[0].BaseShaderRegister = 0;
+                descriptorRanges0[0].RegisterSpace = 0;
                 
-                D3D12_ROOT_PARAMETER parameters[1] = {};
-                parameters[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-                parameters[0].DescriptorTable.NumDescriptorRanges = 1;
-                parameters[0].DescriptorTable.pDescriptorRanges = (const D3D12_DESCRIPTOR_RANGE*) descriptorRanges;
+                parameters0[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+                parameters0[0].Descriptor.ShaderRegister = 0;
+                parameters0[0].Descriptor.RegisterSpace = 0;
+                parameters0[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
                 
-                rootSignatureDesc.Desc_1_0.NumParameters = 1;
-                rootSignatureDesc.Desc_1_0.pParameters = parameters;
+                parameters0[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                parameters0[1].DescriptorTable.NumDescriptorRanges = 1;
+                parameters0[1].DescriptorTable.pDescriptorRanges = descriptorRanges0;
+                parameters0[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+                
+                rootSignatureDesc.Desc_1_0.NumParameters = 2;
+                rootSignatureDesc.Desc_1_0.pParameters = parameters0;
                 rootSignatureDesc.Desc_1_0.NumStaticSamplers = 1;
                 rootSignatureDesc.Desc_1_0.pStaticSamplers = samplers;
                 rootSignatureDesc.Desc_1_0.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -442,40 +472,60 @@ namespace eokas
             
             _ThrowIfFailed(dxDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPipelineState)));
         }
-        
-        // Create SRV Heap
-        {
-            mSRVHeap = std::make_shared<DX12DescriptorHeap>(
-                mDevice,
-                DX12DescriptorHeap::Usage::SRV,
-                mTextures.size());
-            
-            for (auto& node: mTextures)
-            {
-                auto index = node.first;
-                auto texture = node.second;
-                auto dxResource = dynamic_cast<DX12Texture*>(texture.get())->mResource;
-                
-                // 确定 SRV 描述符堆的偏移量
-                D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mSRVHeap->acquire();
-                
-                // 创建 SRV 描述符并将其绑定到纹理资源
-                D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-                srvDesc.Format = DX12Utils::transferFormat(texture->getOptions().format);
-                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-                srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                srvDesc.Texture2D.MipLevels = 1;
-                dxDevice->CreateShaderResourceView(dxResource.Get(), &srvDesc, srvHandle);
-            }
-        }
     }
     
-    DX12CommandBuffer::DX12CommandBuffer(const DX12Device& device, const DX12PipelineState& pso)
+    DX12PipelineBindings::DX12PipelineBindings(const DX12Device& device, PipelineObject::Ref pipeline)
+        : mDevice(device)
+        , mPipelineObject(pipeline)
+    {
+    }
+
+    PipelineObject::Ref DX12PipelineBindings::getPipelineObject() const
+    {
+        return mPipelineObject;
+    }
+
+    void DX12PipelineBindings::begin()
+    {
+    }
+
+    void DX12PipelineBindings::setUniformBuffer(uint32_t index, DynamicBuffer::Ref buffer)
+    {
+        mUniformBuffers[index] = buffer;
+    }
+
+    void DX12PipelineBindings::setTexture(uint32_t index, Texture::Ref texture)
+    {
+        mTextures[index] = texture;
+    }
+
+    void DX12PipelineBindings::end()
+    {
+        auto& dxDevice = mDevice.mDevice;
+        uint32_t srvCount = mTextures.empty() ? 1 : (uint32_t)mTextures.size();
+        mSRVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::SRV, srvCount);
+
+        for (auto& node : mTextures)
+        {
+            auto texture = node.second;
+            auto dxResource = dynamic_cast<DX12Texture*>(texture.get())->mResource;
+            D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mSRVHeap->acquire();
+
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Format = DX12Utils::transferFormat(texture->getOptions().format);
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Texture2D.MipLevels = 1;
+            dxDevice->CreateShaderResourceView(dxResource.Get(), &srvDesc, srvHandle);
+        }
+    }
+
+    DX12CommandBuffer::DX12CommandBuffer(const DX12Device& device, const DX12PipelineBindings& bindings)
         : mDevice(device)
     {
-        
         auto& dxDevice = device.mDevice;
-        auto& dxPSO = pso.mPipelineState;
+        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(bindings.mPipelineObject.get());
+        auto& dxPSO = pipelineObject->mPipelineState;
         auto& dxCommandAllocator = device.mCommandAllocators[device.mFrameBufferIndex];
         
         _ThrowIfFailed(dxDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, dxCommandAllocator.Get(), dxPSO.Get(), IID_PPV_ARGS(&mCommandList)));
@@ -483,27 +533,32 @@ namespace eokas
         //_ThrowIfFailed(mCommandList->Close());
     }
     
-    void DX12CommandBuffer::reset(PipelineState::Ref pso)
+    void DX12CommandBuffer::reset(PipelineBindings::Ref bindings)
     {
         auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameBufferIndex];
-        auto* pipelineState = dynamic_cast<DX12PipelineState*>(pso.get());
-        
-        auto& dxPipelineState = pipelineState->mPipelineState;
+        auto* pipelineBindings = dynamic_cast<DX12PipelineBindings*>(bindings.get());
+        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(pipelineBindings->mPipelineObject.get());
+
         _ThrowIfFailed(dxCommandAllocator->Reset());
-        _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), dxPipelineState.Get()));
-        
-        auto& dxRootSignature = pipelineState->mRootSignature;
-        mCommandList->SetGraphicsRootSignature(dxRootSignature.Get());
-        
-        std::vector<ID3D12DescriptorHeap*> dxSRVHeapList(pipelineState->mSRVHeap->mHeaps.size());
-        for(size_t i = 0; i < dxSRVHeapList.size(); i++)
+        _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), pipelineObject->mPipelineState.Get()));
+        mCommandList->SetGraphicsRootSignature(pipelineObject->mRootSignature.Get());
+
+        auto ubIt = pipelineBindings->mUniformBuffers.find(0);
+        if (ubIt != pipelineBindings->mUniformBuffers.end() && ubIt->second)
         {
-            dxSRVHeapList[i] = pipelineState->mSRVHeap->mHeaps[i].Get();
+            auto* dxUB = dynamic_cast<DX12DynamicBuffer*>(ubIt->second.get());
+            mCommandList->SetGraphicsRootConstantBufferView(0, dxUB->mResource->GetGPUVirtualAddress());
         }
-        mCommandList->SetDescriptorHeaps(dxSRVHeapList.size(), dxSRVHeapList.data());
-        for(size_t i = 0; i < dxSRVHeapList.size(); i++)
+
+        if (pipelineBindings->mSRVHeap != nullptr && !pipelineBindings->mSRVHeap->mHeaps.empty())
         {
-            mCommandList->SetGraphicsRootDescriptorTable(i, dxSRVHeapList[i]->GetGPUDescriptorHandleForHeapStart());
+            std::vector<ID3D12DescriptorHeap*> dxSRVHeapList(pipelineBindings->mSRVHeap->mHeaps.size());
+            for (size_t i = 0; i < dxSRVHeapList.size(); i++)
+            {
+                dxSRVHeapList[i] = pipelineBindings->mSRVHeap->mHeaps[i].Get();
+            }
+            mCommandList->SetDescriptorHeaps((UINT)dxSRVHeapList.size(), dxSRVHeapList.data());
+            mCommandList->SetGraphicsRootDescriptorTable(1, dxSRVHeapList[0]->GetGPUDescriptorHandleForHeapStart());
         }
     }
     
@@ -807,15 +862,20 @@ namespace eokas
         return std::make_shared<DX12Program>(*this, options);
     }
     
-    PipelineState::Ref DX12Device::createPipelineState()
+    PipelineObject::Ref DX12Device::createPipelineObject()
     {
-        return std::make_shared<DX12PipelineState>(*this);
+        return std::make_shared<DX12PipelineObject>(*this);
     }
-    
-    CommandBuffer::Ref DX12Device::createCommandBuffer(const PipelineState::Ref pso)
+
+    PipelineBindings::Ref DX12Device::createPipelineBindings(PipelineObject::Ref pipeline)
     {
-        const DX12PipelineState& mPSO = dynamic_cast<const DX12PipelineState&>(*pso.get());
-        return std::make_shared<DX12CommandBuffer>(*this, mPSO);
+        return std::make_shared<DX12PipelineBindings>(*this, pipeline);
+    }
+
+    CommandBuffer::Ref DX12Device::createCommandBuffer(PipelineBindings::Ref bindings)
+    {
+        const DX12PipelineBindings& dxBindings = dynamic_cast<const DX12PipelineBindings&>(*bindings.get());
+        return std::make_shared<DX12CommandBuffer>(*this, dxBindings);
     }
     
     void DX12Device::commitCommandBuffer(const CommandBuffer::Ref commandBuffer)

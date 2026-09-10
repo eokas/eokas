@@ -184,18 +184,34 @@ namespace eokas
         BlendFactor destination = BlendFactor::Zero;
     };
     
-    struct PipelineState
+    // 长期管线：Shader / InputLayout / 光栅状态 / RootSignature
+    // DX12 对应 ID3D12RootSignature + ID3D12PipelineState
+    struct PipelineObject
     {
-        using Ref = std::shared_ptr<PipelineState>;
+        using Ref = std::shared_ptr<PipelineObject>;
 
-        virtual ~PipelineState() = default;
+        virtual ~PipelineObject() = default;
 
         virtual void begin() = 0;
         virtual void setVertexElements(std::vector<VertexElement>& vElements) = 0;
         virtual void setProgram(ProgramType type, Program::Ref program) = 0;
-        virtual void setTexture(uint32_t index, Texture::Ref texture) = 0;
         virtual void setFillMode(FillMode fillMode) = 0;
         virtual void setCullMode(CullMode cullMode) = 0;
+        virtual void end() = 0;
+    };
+
+    // 绘制绑定：引用 PipelineObject，绑定 UniformBuffer / Texture
+    // DX12 对应 descriptor heap / root CBV，不是 ID3D12PipelineState
+    struct PipelineBindings
+    {
+        using Ref = std::shared_ptr<PipelineBindings>;
+
+        virtual ~PipelineBindings() = default;
+
+        virtual PipelineObject::Ref getPipelineObject() const = 0;
+        virtual void begin() = 0;
+        virtual void setUniformBuffer(uint32_t index, DynamicBuffer::Ref buffer) = 0;
+        virtual void setTexture(uint32_t index, Texture::Ref texture) = 0;
         virtual void end() = 0;
     };
     
@@ -223,7 +239,7 @@ namespace eokas
 
         virtual ~CommandBuffer() = default;
         
-        virtual void reset(PipelineState::Ref pso) = 0;
+        virtual void reset(PipelineBindings::Ref bindings) = 0;
         virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets) = 0;
         virtual void clearRenderTarget(RenderTarget::Ref renderTarget, float(& color)[4]) = 0;
         virtual void setViewport(const Viewport& viewport) = 0;
@@ -244,8 +260,9 @@ namespace eokas
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length, uint32_t usage) = 0;
         virtual Texture::Ref createTexture(const TextureOptions& options) = 0;
         virtual Program::Ref createProgram(const ProgramOptions& options) = 0;
-        virtual PipelineState::Ref createPipelineState() = 0;
-        virtual CommandBuffer::Ref createCommandBuffer(PipelineState::Ref pso) = 0;
+        virtual PipelineObject::Ref createPipelineObject() = 0;
+        virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) = 0;
+        virtual CommandBuffer::Ref createCommandBuffer(PipelineBindings::Ref bindings) = 0;
         virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) = 0;
         virtual void present() = 0;
         virtual void waitForGPU() = 0;

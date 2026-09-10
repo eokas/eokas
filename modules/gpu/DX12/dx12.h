@@ -96,30 +96,44 @@ namespace eokas
         virtual uint32_t getTextureCount() const override;
     };
     
-    struct DX12PipelineState : public PipelineState
+    struct DX12PipelineObject : public PipelineObject
     {
         const DX12Device& mDevice;
         
         ComPtr <ID3D12RootSignature> mRootSignature;
+        std::vector<std::string> mVertexSemanticNames;
         std::vector<D3D12_INPUT_ELEMENT_DESC> mVertexElements;
         std::map<ProgramType, DX12Program::Ref> mPrograms;
-        std::map<uint32_t, DX12Texture::Ref> mTextures;
-        
-        std::shared_ptr<DX12DescriptorHeap> mSRVHeap;
         
         D3D12_FILL_MODE mFillMode = D3D12_FILL_MODE_SOLID;
         D3D12_CULL_MODE mCullMode = D3D12_CULL_MODE_BACK;
         
         ComPtr <ID3D12PipelineState> mPipelineState;
         
-        DX12PipelineState(const DX12Device& device);
+        DX12PipelineObject(const DX12Device& device);
         
         virtual void begin() override;
         virtual void setVertexElements(std::vector<VertexElement>& vElements) override;
         virtual void setProgram(ProgramType type, Program::Ref program) override;
-        virtual void setTexture(uint32_t index, Texture::Ref texture) override;
         virtual void setFillMode(FillMode fillMode) override;
         virtual void setCullMode(CullMode cullMode) override;
+        virtual void end() override;
+    };
+
+    struct DX12PipelineBindings : public PipelineBindings
+    {
+        const DX12Device& mDevice;
+        PipelineObject::Ref mPipelineObject;
+        std::map<uint32_t, DynamicBuffer::Ref> mUniformBuffers;
+        std::map<uint32_t, DX12Texture::Ref> mTextures;
+        std::shared_ptr<DX12DescriptorHeap> mSRVHeap;
+
+        DX12PipelineBindings(const DX12Device& device, PipelineObject::Ref pipeline);
+
+        virtual PipelineObject::Ref getPipelineObject() const override;
+        virtual void begin() override;
+        virtual void setUniformBuffer(uint32_t index, DynamicBuffer::Ref buffer) override;
+        virtual void setTexture(uint32_t index, Texture::Ref texture) override;
         virtual void end() override;
     };
     
@@ -130,9 +144,9 @@ namespace eokas
         
         ComPtr <ID3D12Resource> uploadBuffer;
         
-        DX12CommandBuffer(const DX12Device& device, const DX12PipelineState& pso);
+        DX12CommandBuffer(const DX12Device& device, const DX12PipelineBindings& bindings);
         
-        virtual void reset(PipelineState::Ref pso) override;
+        virtual void reset(PipelineBindings::Ref bindings) override;
         virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets) override;
         virtual void clearRenderTarget(RenderTarget::Ref renderTarget, float(& color)[4]) override;
         virtual void setViewport(const Viewport& viewport) override;
@@ -172,8 +186,9 @@ namespace eokas
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length, uint32_t usage) override;
         virtual Texture::Ref createTexture(const TextureOptions& options) override;
         virtual Program::Ref createProgram(const ProgramOptions& options) override;
-        virtual PipelineState::Ref createPipelineState() override;
-        virtual CommandBuffer::Ref createCommandBuffer(PipelineState::Ref pso) override;
+        virtual PipelineObject::Ref createPipelineObject() override;
+        virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) override;
+        virtual CommandBuffer::Ref createCommandBuffer(PipelineBindings::Ref bindings) override;
         virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) override;
         virtual void present() override;
         virtual void waitForGPU() override;

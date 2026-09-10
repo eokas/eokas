@@ -67,6 +67,10 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
         eokas::gpu::Graphics graphics;
         graphics.init(hWnd, windowWidth, windowHeight);
 
+        LARGE_INTEGER freq, last, now;
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&last);
+
         MSG msg;
         msg.message = static_cast<UINT>(~WM_QUIT);
         while (msg.message != WM_QUIT)
@@ -78,7 +82,10 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
             }
             else
             {
-                graphics.tick(0);
+                QueryPerformanceCounter(&now);
+                float delta = (float)(now.QuadPart - last.QuadPart) / (float)freq.QuadPart;
+                last = now;
+                graphics.tick(delta);
             }
         }
 
