@@ -265,13 +265,17 @@ namespace eokas
     }
     
     DX12DynamicBuffer::DX12DynamicBuffer(const DX12Device& device, uint32_t length, uint32_t usage)
+        : mDevice(device)
+        , mUsage(usage)
     {
-        auto& mDevice = device.mDevice;
-
+        auto& dxDevice = device.mDevice;
+        uint32_t slice = length;
         if (usage == (uint32_t)BufferUsage::UniformBuffer)
         {
-            length = (length + 255u) & ~255u;
+            slice = (length + 255u) & ~255u;
+            length = slice * kFrameBufferCount;
         }
+        mSlice = slice;
         
         D3D12_RESOURCE_DESC bufferDesc = {};
         bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -289,7 +293,7 @@ namespace eokas
         D3D12_HEAP_PROPERTIES bufferHeapProps = {};
         bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
         
-        _ThrowIfFailed(mDevice->CreateCommittedResource(
+        _ThrowIfFailed(dxDevice->CreateCommittedResource(
             &bufferHeapProps,
             D3D12_HEAP_FLAG_NONE,
             &bufferDesc,
@@ -307,12 +311,34 @@ namespace eokas
     {
         UINT8* ptr = nullptr;
         _ThrowIfFailed(mResource->Map(0, nullptr, (void**) &ptr));
+        if (mUsage == (uint32_t)BufferUsage::UniformBuffer)
+        {
+            return ptr + mDevice.mFrameBufferIndex * mSlice;
+        }
         return ptr;
     }
     
     void DX12DynamicBuffer::unmap()
     {
+        if (mUsage == (uint32_t)BufferUsage::UniformBuffer)
+        {
+            D3D12_RANGE written;
+            written.Begin = (SIZE_T)mDevice.mFrameBufferIndex * mSlice;
+            written.End = written.Begin + mSlice;
+            mResource->Unmap(0, &written);
+            return;
+        }
         mResource->Unmap(0, nullptr);
+    }
+
+    D3D12_GPU_VIRTUAL_ADDRESS DX12DynamicBuffer::getGPUVirtualAddress() const
+    {
+        D3D12_GPU_VIRTUAL_ADDRESS va = mResource->GetGPUVirtualAddress();
+        if (mUsage == (uint32_t)BufferUsage::UniformBuffer)
+        {
+            va += (D3D12_GPU_VIRTUAL_ADDRESS)mDevice.mFrameBufferIndex * mSlice;
+        }
+        return va;
     }
     
     DX12Texture::DX12Texture(const DX12Device& device, const TextureOptions& options)
@@ -704,7 +730,7 @@ namespace eokas
         if (ubIt != pipelineBindings->mUniformBuffers.end() && ubIt->second)
         {
             auto* dxUB = dynamic_cast<DX12DynamicBuffer*>(ubIt->second.get());
-            mCommandList->SetGraphicsRootConstantBufferView(0, dxUB->mResource->GetGPUVirtualAddress());
+            mCommandList->SetGraphicsRootConstantBufferView(0, dxUB->getGPUVirtualAddress());
         }
 
         if (pipelineBindings->mSRVHeap != nullptr && !pipelineBindings->mSRVHeap->mHeaps.empty())
@@ -993,7 +1019,8 @@ namespace eokas
             mDevice->CreateRenderTargetView(dxRT->mResource.Get(), nullptr, dxRT->mView);
         }
 
-        mDSVHeap = std::make_shared<DX12DescriptorHeap>(*this, DX12DescriptorHeap::Usage::DSV, 1);
+        mDSVHeap = std::make_shared<DX12DescriptorHeap>(*this, DX12DescriptorHeap::Usage::DSV, kFrameBufferCount);
+        for (UINT i = 0; i < kFrameBufferCount; i++)
         {
             D3D12_RESOURCE_DESC depthDesc = {};
             depthDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -1013,8 +1040,8 @@ namespace eokas
             D3D12_HEAP_PROPERTIES heapProps = {};
             heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-            mDepthTarget = std::make_shared<DX12RenderTarget>();
-            DX12RenderTarget* dxDS = dynamic_cast<DX12RenderTarget*>(mDepthTarget.get());
+            mDepthTargets[i] = std::make_shared<DX12RenderTarget>();
+            DX12RenderTarget* dxDS = dynamic_cast<DX12RenderTarget*>(mDepthTargets[i].get());
             _ThrowIfFailed(mDevice->CreateCommittedResource(
                 &heapProps,
                 D3D12_HEAP_FLAG_NONE,
@@ -1060,7 +1087,7 @@ namespace eokas
 
     RenderTarget::Ref DX12Device::getActiveDepthTarget()
     {
-        return mDepthTarget;
+        return mDepthTargets[mFrameBufferIndex];
     }
     
     DynamicBuffer::Ref DX12Device::createDynamicBuffer(uint32_t length, uint32_t usage)

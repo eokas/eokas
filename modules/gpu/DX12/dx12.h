@@ -72,13 +72,17 @@ namespace eokas
     
     struct DX12DynamicBuffer : public DynamicBuffer
     {
+        const DX12Device& mDevice;
         ComPtr <ID3D12Resource> mResource;
+        uint32_t mUsage = 0;
+        uint32_t mSlice = 0;
 
         DX12DynamicBuffer(const DX12Device& device, uint32_t length, uint32_t usage);
         
         virtual void* getNativeResource() const override;
         virtual void* map() override;
         virtual void unmap() override;
+        D3D12_GPU_VIRTUAL_ADDRESS getGPUVirtualAddress() const;
     };
     
     struct DX12Texture : public Texture
@@ -190,7 +194,7 @@ namespace eokas
         std::shared_ptr<DX12DescriptorHeap> mRTVHeap;
         std::shared_ptr<DX12DescriptorHeap> mDSVHeap;
         DX12RenderTarget::Ref mRenderTargets[kFrameBufferCount];
-        DX12RenderTarget::Ref mDepthTarget;
+        DX12RenderTarget::Ref mDepthTargets[kFrameBufferCount];
         ComPtr <ID3D12CommandAllocator> mCommandAllocators[kFrameBufferCount];
         
         ComPtr <ID3D12Fence> mFence;
