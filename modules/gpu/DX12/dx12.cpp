@@ -148,6 +148,37 @@ namespace eokas
         desc.RegisterSpace = 0;
         desc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     }
+
+    D3D12_BLEND DX12Utils::transferBlendFactor(BlendFactor factor)
+    {
+        switch (factor)
+        {
+            case BlendFactor::Zero: return D3D12_BLEND_ZERO;
+            case BlendFactor::One: return D3D12_BLEND_ONE;
+            case BlendFactor::SrcColor: return D3D12_BLEND_SRC_COLOR;
+            case BlendFactor::OneMinusSrcColor: return D3D12_BLEND_INV_SRC_COLOR;
+            case BlendFactor::DstColor: return D3D12_BLEND_DEST_COLOR;
+            case BlendFactor::OneMinusDstColor: return D3D12_BLEND_INV_DEST_COLOR;
+            case BlendFactor::SrcAlpha: return D3D12_BLEND_SRC_ALPHA;
+            case BlendFactor::OneMinusSrcAlpha: return D3D12_BLEND_INV_SRC_ALPHA;
+            case BlendFactor::DstAlpha: return D3D12_BLEND_DEST_ALPHA;
+            case BlendFactor::OneMinusDstAlpha: return D3D12_BLEND_INV_DEST_ALPHA;
+        }
+        return D3D12_BLEND_ONE;
+    }
+
+    D3D12_BLEND_OP DX12Utils::transferBlendOp(BlendOp op)
+    {
+        switch (op)
+        {
+            case BlendOp::Add: return D3D12_BLEND_OP_ADD;
+            case BlendOp::Subtract: return D3D12_BLEND_OP_SUBTRACT;
+            case BlendOp::ReverseSubtract: return D3D12_BLEND_OP_REV_SUBTRACT;
+            case BlendOp::Min: return D3D12_BLEND_OP_MIN;
+            case BlendOp::Max: return D3D12_BLEND_OP_MAX;
+        }
+        return D3D12_BLEND_OP_ADD;
+    }
     
     D3D12_PRIMITIVE_TOPOLOGY DX12Utils::transferTopology(Topology topology)
     {
@@ -444,6 +475,11 @@ namespace eokas
     {
         mSamplers[index] = state;
     }
+
+    void DX12PipelineObject::setBlendState(const BlendState& state)
+    {
+        mBlend = state;
+    }
     
     void DX12PipelineObject::end()
     {
@@ -563,7 +599,17 @@ namespace eokas
             
             psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
             psoDesc.BlendState.IndependentBlendEnable = FALSE;
-            psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+            auto& rt0 = psoDesc.BlendState.RenderTarget[0];
+            rt0.BlendEnable = mBlend.enabled ? TRUE : FALSE;
+            rt0.LogicOpEnable = FALSE;
+            rt0.SrcBlend = DX12Utils::transferBlendFactor(mBlend.srcColor);
+            rt0.DestBlend = DX12Utils::transferBlendFactor(mBlend.dstColor);
+            rt0.BlendOp = DX12Utils::transferBlendOp(mBlend.colorOp);
+            rt0.SrcBlendAlpha = DX12Utils::transferBlendFactor(mBlend.srcAlpha);
+            rt0.DestBlendAlpha = DX12Utils::transferBlendFactor(mBlend.dstAlpha);
+            rt0.BlendOpAlpha = DX12Utils::transferBlendOp(mBlend.alphaOp);
+            rt0.LogicOp = D3D12_LOGIC_OP_NOOP;
+            rt0.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
             
             const bool depthEnable = mDepthStencilSet && mDepthStencil.depthTest;
             psoDesc.DepthStencilState.DepthEnable = depthEnable ? TRUE : FALSE;

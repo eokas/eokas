@@ -29,7 +29,7 @@ void Utilities::createImage(std::vector<uint8_t>& image, uint32_t textureWidth, 
             pData[n + 0] = 0xff;    // R
             pData[n + 1] = 0xff;    // G
             pData[n + 2] = 0xff;    // B
-            pData[n + 3] = 0xff;    // A
+            pData[n + 3] = 0x80;    // A
         }
     }
 }

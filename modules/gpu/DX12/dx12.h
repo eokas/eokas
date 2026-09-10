@@ -35,6 +35,8 @@ namespace eokas
         static D3D12_FILTER transferFilter(SamplerFilterMode minFilter, SamplerFilterMode magFilter, SamplerFilterMode mipFilter);
         static D3D12_TEXTURE_ADDRESS_MODE transferAddressMode(SamplerAddressMode mode);
         static void fillStaticSampler(D3D12_STATIC_SAMPLER_DESC& desc, uint32_t shaderRegister, const SamplerState& state);
+        static D3D12_BLEND transferBlendFactor(BlendFactor factor);
+        static D3D12_BLEND_OP transferBlendOp(BlendOp op);
     };
     
     struct DX12DescriptorHeap
@@ -116,6 +118,7 @@ namespace eokas
         DepthStencilState mDepthStencil;
         bool mDepthStencilSet = false;
         std::map<uint32_t, SamplerState> mSamplers;
+        BlendState mBlend;
         
         ComPtr <ID3D12PipelineState> mPipelineState;
         
@@ -128,6 +131,7 @@ namespace eokas
         virtual void setCullMode(CullMode cullMode) override;
         virtual void setDepthStencilState(const DepthStencilState& state) override;
         virtual void setSamplerState(uint32_t index, const SamplerState& state) override;
+        virtual void setBlendState(const BlendState& state) override;
         virtual void end() override;
     };
 

@@ -99,6 +99,15 @@ namespace eokas::gpu {
             sampler.addressV = SamplerAddressMode::Clamp;
             sampler.addressW = SamplerAddressMode::Clamp;
             mPipelineObject->setSamplerState(0, sampler);
+            BlendState blend;
+            blend.enabled = true;
+            blend.srcColor = BlendFactor::SrcAlpha;
+            blend.dstColor = BlendFactor::OneMinusSrcAlpha;
+            blend.colorOp = BlendOp::Add;
+            blend.srcAlpha = BlendFactor::One;
+            blend.dstAlpha = BlendFactor::OneMinusSrcAlpha;
+            blend.alphaOp = BlendOp::Add;
+            mPipelineObject->setBlendState(blend);
             mPipelineObject->end();
 
             mPipelineBindings = mDevice->createPipelineBindings(mPipelineObject);

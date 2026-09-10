@@ -170,7 +170,11 @@ namespace eokas
 
     enum class BlendFactor
     {
-        Zero, One, Color, Alpha, OneMinusColor, OneMinusAlpha,
+        Zero, One,
+        SrcColor, OneMinusSrcColor,
+        DstColor, OneMinusDstColor,
+        SrcAlpha, OneMinusSrcAlpha,
+        DstAlpha, OneMinusDstAlpha
     };
 
     enum class BlendOp {
@@ -180,8 +184,12 @@ namespace eokas
     struct BlendState
     {
         bool enabled = false;
-        BlendFactor source = BlendFactor::One;
-        BlendFactor destination = BlendFactor::Zero;
+        BlendFactor srcColor = BlendFactor::One;
+        BlendFactor dstColor = BlendFactor::Zero;
+        BlendOp colorOp = BlendOp::Add;
+        BlendFactor srcAlpha = BlendFactor::One;
+        BlendFactor dstAlpha = BlendFactor::Zero;
+        BlendOp alphaOp = BlendOp::Add;
     };
     
     // 长期管线：Shader / InputLayout / 光栅状态 / RootSignature
@@ -199,6 +207,7 @@ namespace eokas
         virtual void setCullMode(CullMode cullMode) = 0;
         virtual void setDepthStencilState(const DepthStencilState& state) = 0;
         virtual void setSamplerState(uint32_t index, const SamplerState& state) = 0;
+        virtual void setBlendState(const BlendState& state) = 0;
         virtual void end() = 0;
     };
 
