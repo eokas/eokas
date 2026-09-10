@@ -198,6 +198,7 @@ namespace eokas
         virtual void setFillMode(FillMode fillMode) = 0;
         virtual void setCullMode(CullMode cullMode) = 0;
         virtual void setDepthStencilState(const DepthStencilState& state) = 0;
+        virtual void setSamplerState(uint32_t index, const SamplerState& state) = 0;
         virtual void end() = 0;
     };
 

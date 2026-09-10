@@ -32,6 +32,9 @@ namespace eokas
         static D3D12_PRIMITIVE_TOPOLOGY transferTopology(Topology topology);
         static D3D12_COMPARISON_FUNC transferCompareOp(CompareOp op);
         static D3D12_RESOURCE_STATES transferResourceState(ResourceState state);
+        static D3D12_FILTER transferFilter(SamplerFilterMode minFilter, SamplerFilterMode magFilter, SamplerFilterMode mipFilter);
+        static D3D12_TEXTURE_ADDRESS_MODE transferAddressMode(SamplerAddressMode mode);
+        static void fillStaticSampler(D3D12_STATIC_SAMPLER_DESC& desc, uint32_t shaderRegister, const SamplerState& state);
     };
     
     struct DX12DescriptorHeap
@@ -112,6 +115,7 @@ namespace eokas
         D3D12_CULL_MODE mCullMode = D3D12_CULL_MODE_BACK;
         DepthStencilState mDepthStencil;
         bool mDepthStencilSet = false;
+        std::map<uint32_t, SamplerState> mSamplers;
         
         ComPtr <ID3D12PipelineState> mPipelineState;
         
@@ -123,6 +127,7 @@ namespace eokas
         virtual void setFillMode(FillMode fillMode) override;
         virtual void setCullMode(CullMode cullMode) override;
         virtual void setDepthStencilState(const DepthStencilState& state) override;
+        virtual void setSamplerState(uint32_t index, const SamplerState& state) override;
         virtual void end() override;
     };
 

@@ -91,6 +91,14 @@ namespace eokas::gpu {
             depthStencil.depthWrite = true;
             depthStencil.depthFunc = CompareOp::Less;
             mPipelineObject->setDepthStencilState(depthStencil);
+            SamplerState sampler;
+            sampler.minFilter = SamplerFilterMode::Linear;
+            sampler.magFilter = SamplerFilterMode::Linear;
+            sampler.mipFilter = SamplerFilterMode::Linear;
+            sampler.addressU = SamplerAddressMode::Clamp;
+            sampler.addressV = SamplerAddressMode::Clamp;
+            sampler.addressW = SamplerAddressMode::Clamp;
+            mPipelineObject->setSamplerState(0, sampler);
             mPipelineObject->end();
 
             mPipelineBindings = mDevice->createPipelineBindings(mPipelineObject);

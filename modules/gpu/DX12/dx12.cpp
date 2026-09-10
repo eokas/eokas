@@ -96,6 +96,58 @@ namespace eokas
         }
         return D3D12_RESOURCE_STATE_COMMON;
     }
+
+    D3D12_FILTER DX12Utils::transferFilter(SamplerFilterMode minFilter, SamplerFilterMode magFilter, SamplerFilterMode mipFilter)
+    {
+        if (minFilter == SamplerFilterMode::Anisotropic
+            || magFilter == SamplerFilterMode::Anisotropic
+            || mipFilter == SamplerFilterMode::Anisotropic)
+        {
+            return D3D12_FILTER_ANISOTROPIC;
+        }
+        D3D12_FILTER_TYPE minType = (minFilter == SamplerFilterMode::Point)
+            ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
+        D3D12_FILTER_TYPE magType = (magFilter == SamplerFilterMode::Point)
+            ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
+        D3D12_FILTER_TYPE mipType = (mipFilter == SamplerFilterMode::Point)
+            ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
+        return D3D12_ENCODE_BASIC_FILTER(minType, magType, mipType, D3D12_FILTER_REDUCTION_TYPE_STANDARD);
+    }
+
+    D3D12_TEXTURE_ADDRESS_MODE DX12Utils::transferAddressMode(SamplerAddressMode mode)
+    {
+        switch (mode)
+        {
+            case SamplerAddressMode::Clamp: return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            case SamplerAddressMode::Border: return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+            case SamplerAddressMode::Repeat: return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            case SamplerAddressMode::Mirror: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+        }
+        return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    }
+
+    void DX12Utils::fillStaticSampler(D3D12_STATIC_SAMPLER_DESC& desc, uint32_t shaderRegister, const SamplerState& state)
+    {
+        const bool anisotropic =
+            state.minFilter == SamplerFilterMode::Anisotropic
+            || state.magFilter == SamplerFilterMode::Anisotropic
+            || state.mipFilter == SamplerFilterMode::Anisotropic;
+
+        desc = {};
+        desc.Filter = transferFilter(state.minFilter, state.magFilter, state.mipFilter);
+        desc.AddressU = transferAddressMode(state.addressU);
+        desc.AddressV = transferAddressMode(state.addressV);
+        desc.AddressW = transferAddressMode(state.addressW);
+        desc.MipLODBias = 0;
+        desc.MaxAnisotropy = anisotropic ? 16u : 1u;
+        desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        desc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+        desc.MinLOD = 0.0f;
+        desc.MaxLOD = D3D12_FLOAT32_MAX;
+        desc.ShaderRegister = shaderRegister;
+        desc.RegisterSpace = 0;
+        desc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    }
     
     D3D12_PRIMITIVE_TOPOLOGY DX12Utils::transferTopology(Topology topology)
     {
@@ -329,7 +381,7 @@ namespace eokas
     
     void DX12PipelineObject::begin()
     {
-    
+        mSamplers.clear();
     }
     
     void DX12PipelineObject::setVertexElements(std::vector<VertexElement>& vElements)
@@ -387,6 +439,11 @@ namespace eokas
         mDepthStencil = state;
         mDepthStencilSet = true;
     }
+
+    void DX12PipelineObject::setSamplerState(uint32_t index, const SamplerState& state)
+    {
+        mSamplers[index] = state;
+    }
     
     void DX12PipelineObject::end()
     {
@@ -394,20 +451,22 @@ namespace eokas
         
         // Create Root Signature
         {
-            D3D12_STATIC_SAMPLER_DESC samplers[1] = {{}};
-            samplers[0].Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-            samplers[0].AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-            samplers[0].AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-            samplers[0].AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-            samplers[0].MipLODBias = 0;
-            samplers[0].MinLOD = 0.0f;
-            samplers[0].MaxLOD = D3D12_FLOAT32_MAX;
-            samplers[0].MaxAnisotropy = 0;
-            samplers[0].ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
-            samplers[0].BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-            samplers[0].ShaderRegister = 0;
-            samplers[0].RegisterSpace = 0;
-            samplers[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+            std::vector<D3D12_STATIC_SAMPLER_DESC> samplers;
+            if (mSamplers.empty())
+            {
+                D3D12_STATIC_SAMPLER_DESC desc = {};
+                DX12Utils::fillStaticSampler(desc, 0, SamplerState{});
+                samplers.push_back(desc);
+            }
+            else
+            {
+                for (const auto& node : mSamplers)
+                {
+                    D3D12_STATIC_SAMPLER_DESC desc = {};
+                    DX12Utils::fillStaticSampler(desc, node.first, node.second);
+                    samplers.push_back(desc);
+                }
+            }
             
             D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
             featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -445,8 +504,8 @@ namespace eokas
                 
                 rootSignatureDesc.Desc_1_1.NumParameters = 2;
                 rootSignatureDesc.Desc_1_1.pParameters = parameters1;
-                rootSignatureDesc.Desc_1_1.NumStaticSamplers = 1;
-                rootSignatureDesc.Desc_1_1.pStaticSamplers = samplers;
+                rootSignatureDesc.Desc_1_1.NumStaticSamplers = (UINT)samplers.size();
+                rootSignatureDesc.Desc_1_1.pStaticSamplers = samplers.data();
                 rootSignatureDesc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
             }
             else
@@ -468,8 +527,8 @@ namespace eokas
                 
                 rootSignatureDesc.Desc_1_0.NumParameters = 2;
                 rootSignatureDesc.Desc_1_0.pParameters = parameters0;
-                rootSignatureDesc.Desc_1_0.NumStaticSamplers = 1;
-                rootSignatureDesc.Desc_1_0.pStaticSamplers = samplers;
+                rootSignatureDesc.Desc_1_0.NumStaticSamplers = (UINT)samplers.size();
+                rootSignatureDesc.Desc_1_0.pStaticSamplers = samplers.data();
                 rootSignatureDesc.Desc_1_0.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
             }
             
