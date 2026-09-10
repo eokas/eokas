@@ -30,6 +30,8 @@ namespace eokas
     {
         static DXGI_FORMAT transferFormat(Format format);
         static D3D12_PRIMITIVE_TOPOLOGY transferTopology(Topology topology);
+        static D3D12_COMPARISON_FUNC transferCompareOp(CompareOp op);
+        static D3D12_RESOURCE_STATES transferResourceState(ResourceState state);
     };
     
     struct DX12DescriptorHeap
@@ -38,7 +40,8 @@ namespace eokas
         {
             RTV,
             SRV,
-            UAV
+            UAV,
+            DSV
         };
         
         const DX12Device& mDevice;
@@ -107,6 +110,8 @@ namespace eokas
         
         D3D12_FILL_MODE mFillMode = D3D12_FILL_MODE_SOLID;
         D3D12_CULL_MODE mCullMode = D3D12_CULL_MODE_BACK;
+        DepthStencilState mDepthStencil;
+        bool mDepthStencilSet = false;
         
         ComPtr <ID3D12PipelineState> mPipelineState;
         
@@ -117,6 +122,7 @@ namespace eokas
         virtual void setProgram(ProgramType type, Program::Ref program) override;
         virtual void setFillMode(FillMode fillMode) override;
         virtual void setCullMode(CullMode cullMode) override;
+        virtual void setDepthStencilState(const DepthStencilState& state) override;
         virtual void end() override;
     };
 
@@ -147,8 +153,9 @@ namespace eokas
         DX12CommandBuffer(const DX12Device& device, const DX12PipelineBindings& bindings);
         
         virtual void reset(PipelineBindings::Ref bindings) override;
-        virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets) override;
+        virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets, RenderTarget::Ref depthStencil) override;
         virtual void clearRenderTarget(RenderTarget::Ref renderTarget, float(& color)[4]) override;
+        virtual void clearDepthStencil(RenderTarget::Ref depthStencil, float depth, uint32_t stencil) override;
         virtual void setViewport(const Viewport& viewport) override;
         virtual void setTopology(Topology topology) override;
         virtual void setVertexBuffer(DynamicBuffer::Ref buffer, uint32_t length, uint32_t stride) override;
@@ -172,7 +179,9 @@ namespace eokas
         uint32_t mFrameBufferIndex;
         
         std::shared_ptr<DX12DescriptorHeap> mRTVHeap;
+        std::shared_ptr<DX12DescriptorHeap> mDSVHeap;
         DX12RenderTarget::Ref mRenderTargets[kFrameBufferCount];
+        DX12RenderTarget::Ref mDepthTarget;
         ComPtr <ID3D12CommandAllocator> mCommandAllocators[kFrameBufferCount];
         
         ComPtr <ID3D12Fence> mFence;
@@ -183,6 +192,7 @@ namespace eokas
         virtual ~DX12Device();
         
         virtual RenderTarget::Ref getActiveRenderTarget() override;
+        virtual RenderTarget::Ref getActiveDepthTarget() override;
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length, uint32_t usage) override;
         virtual Texture::Ref createTexture(const TextureOptions& options) override;
         virtual Program::Ref createProgram(const ProgramOptions& options) override;

@@ -164,7 +164,7 @@ namespace eokas
     {
         bool depthTest = true;
         bool depthWrite = true;
-        CompareOp depthFunc = CompareOp::Always;
+        CompareOp depthFunc = CompareOp::Less;
         StencilOp stencilOp = StencilOp::Keep;
     };
 
@@ -197,6 +197,7 @@ namespace eokas
         virtual void setProgram(ProgramType type, Program::Ref program) = 0;
         virtual void setFillMode(FillMode fillMode) = 0;
         virtual void setCullMode(CullMode cullMode) = 0;
+        virtual void setDepthStencilState(const DepthStencilState& state) = 0;
         virtual void end() = 0;
     };
 
@@ -221,16 +222,27 @@ namespace eokas
         float right = 1024;
         float top = 0;
         float bottom = 768;
-        float front = 0.01f;
-        float back = 1000.0f;
+        float front = 0.0f;
+        float back = 1.0f;
     };
     
+    enum class ResourceState
+    {
+        Common,
+        Present,
+        RenderTarget,
+        DepthWrite,
+        DepthRead,
+        ShaderResource,
+        CopyDest,
+        CopySource
+    };
+
     struct Barrier
     {
         Resource::Ref resource = nullptr;
-        uint32_t type = 0;
-        uint32_t before = 0;
-        uint32_t after = 0;
+        ResourceState before = ResourceState::Common;
+        ResourceState after = ResourceState::Common;
     };
     
     struct CommandBuffer
@@ -240,8 +252,9 @@ namespace eokas
         virtual ~CommandBuffer() = default;
         
         virtual void reset(PipelineBindings::Ref bindings) = 0;
-        virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets) = 0;
+        virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets, RenderTarget::Ref depthStencil = nullptr) = 0;
         virtual void clearRenderTarget(RenderTarget::Ref renderTarget, float(& color)[4]) = 0;
+        virtual void clearDepthStencil(RenderTarget::Ref depthStencil, float depth = 1.0f, uint32_t stencil = 0) = 0;
         virtual void setViewport(const Viewport& viewport) = 0;
         virtual void setTopology(Topology topology) = 0;
         virtual void setVertexBuffer(DynamicBuffer::Ref buffer, uint32_t length, uint32_t stride) = 0;
@@ -257,6 +270,7 @@ namespace eokas
         using Ref = std::shared_ptr<Device>;
         
         virtual RenderTarget::Ref getActiveRenderTarget() = 0;
+        virtual RenderTarget::Ref getActiveDepthTarget() = 0;
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length, uint32_t usage) = 0;
         virtual Texture::Ref createTexture(const TextureOptions& options) = 0;
         virtual Program::Ref createProgram(const ProgramOptions& options) = 0;

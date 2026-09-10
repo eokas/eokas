@@ -64,6 +64,38 @@ namespace eokas
         }
         return DXGI_FORMAT_UNKNOWN;
     }
+
+    D3D12_COMPARISON_FUNC DX12Utils::transferCompareOp(CompareOp op)
+    {
+        switch (op)
+        {
+            case CompareOp::Always: return D3D12_COMPARISON_FUNC_ALWAYS;
+            case CompareOp::Never: return D3D12_COMPARISON_FUNC_NEVER;
+            case CompareOp::Equal: return D3D12_COMPARISON_FUNC_EQUAL;
+            case CompareOp::NotEqual: return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+            case CompareOp::Less: return D3D12_COMPARISON_FUNC_LESS;
+            case CompareOp::LessEqual: return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+            case CompareOp::Greater: return D3D12_COMPARISON_FUNC_GREATER;
+            case CompareOp::GreaterEqual: return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+        }
+        return D3D12_COMPARISON_FUNC_LESS;
+    }
+
+    D3D12_RESOURCE_STATES DX12Utils::transferResourceState(ResourceState state)
+    {
+        switch (state)
+        {
+            case ResourceState::Common: return D3D12_RESOURCE_STATE_COMMON;
+            case ResourceState::Present: return D3D12_RESOURCE_STATE_PRESENT;
+            case ResourceState::RenderTarget: return D3D12_RESOURCE_STATE_RENDER_TARGET;
+            case ResourceState::DepthWrite: return D3D12_RESOURCE_STATE_DEPTH_WRITE;
+            case ResourceState::DepthRead: return D3D12_RESOURCE_STATE_DEPTH_READ;
+            case ResourceState::ShaderResource: return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            case ResourceState::CopyDest: return D3D12_RESOURCE_STATE_COPY_DEST;
+            case ResourceState::CopySource: return D3D12_RESOURCE_STATE_COPY_SOURCE;
+        }
+        return D3D12_RESOURCE_STATE_COMMON;
+    }
     
     D3D12_PRIMITIVE_TOPOLOGY DX12Utils::transferTopology(Topology topology)
     {
@@ -94,6 +126,11 @@ namespace eokas
         if(usage == Usage::RTV)
         {
             mDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            mDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        }
+        else if(usage == Usage::DSV)
+        {
+            mDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
             mDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         }
         else if(usage == Usage::SRV || usage == Usage::UAV)
@@ -344,6 +381,12 @@ namespace eokas
             case CullMode::Back: mCullMode = D3D12_CULL_MODE_BACK; break;
         }
     }
+
+    void DX12PipelineObject::setDepthStencilState(const DepthStencilState& state)
+    {
+        mDepthStencil = state;
+        mDepthStencilSet = true;
+    }
     
     void DX12PipelineObject::end()
     {
@@ -457,16 +500,25 @@ namespace eokas
             
             psoDesc.RasterizerState.FillMode = mFillMode;
             psoDesc.RasterizerState.CullMode = mCullMode;
+            psoDesc.RasterizerState.DepthClipEnable = TRUE;
             
             psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
             psoDesc.BlendState.IndependentBlendEnable = FALSE;
             psoDesc.BlendState.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
             
-            psoDesc.DepthStencilState.DepthEnable = FALSE;
+            const bool depthEnable = mDepthStencilSet && mDepthStencil.depthTest;
+            psoDesc.DepthStencilState.DepthEnable = depthEnable ? TRUE : FALSE;
+            psoDesc.DepthStencilState.DepthWriteMask = (depthEnable && mDepthStencil.depthWrite)
+                ? D3D12_DEPTH_WRITE_MASK_ALL
+                : D3D12_DEPTH_WRITE_MASK_ZERO;
+            psoDesc.DepthStencilState.DepthFunc = DX12Utils::transferCompareOp(mDepthStencil.depthFunc);
             psoDesc.DepthStencilState.StencilEnable = FALSE;
             
             psoDesc.NumRenderTargets = 1;
             psoDesc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+            psoDesc.DSVFormat = depthEnable
+                ? DX12Utils::transferFormat(Format::D32_FLOAT)
+                : DXGI_FORMAT_UNKNOWN;
             psoDesc.SampleMask = UINT_MAX;
             psoDesc.SampleDesc.Count = 1;
             
@@ -562,7 +614,7 @@ namespace eokas
         }
     }
     
-    void DX12CommandBuffer::setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets)
+    void DX12CommandBuffer::setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets, RenderTarget::Ref depthStencil)
     {
         std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtv;
         for (size_t i = 0; i < renderTargets.size(); i++)
@@ -570,13 +622,31 @@ namespace eokas
             auto dxRT = dynamic_cast<DX12RenderTarget*>(renderTargets.at(i).get());
             rtv.push_back(dxRT->mView);
         }
-        mCommandList->OMSetRenderTargets((UINT) rtv.size(), rtv.data(), FALSE, nullptr);
+        D3D12_CPU_DESCRIPTOR_HANDLE* pDSV = nullptr;
+        if (depthStencil)
+        {
+            auto dxDS = dynamic_cast<DX12RenderTarget*>(depthStencil.get());
+            pDSV = &dxDS->mView;
+        }
+        mCommandList->OMSetRenderTargets((UINT) rtv.size(), rtv.data(), FALSE, pDSV);
     }
     
     void DX12CommandBuffer::clearRenderTarget(RenderTarget::Ref renderTarget, float(& color)[4])
     {
         auto dxRT = dynamic_cast<DX12RenderTarget*>(renderTarget.get());
         mCommandList->ClearRenderTargetView(dxRT->mView, color, 0, nullptr);
+    }
+
+    void DX12CommandBuffer::clearDepthStencil(RenderTarget::Ref depthStencil, float depth, uint32_t stencil)
+    {
+        auto dxDS = dynamic_cast<DX12RenderTarget*>(depthStencil.get());
+        mCommandList->ClearDepthStencilView(
+            dxDS->mView,
+            D3D12_CLEAR_FLAG_DEPTH,
+            depth,
+            (UINT8)stencil,
+            0,
+            nullptr);
     }
     
     void DX12CommandBuffer::setViewport(const Viewport& viewport)
@@ -649,8 +719,8 @@ namespace eokas
             dxBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
             dxBarrier.Transition.pResource = (ID3D12Resource*) barrier.resource->getNativeResource();
             dxBarrier.Transition.Subresource = 0;
-            dxBarrier.Transition.StateBefore = (D3D12_RESOURCE_STATES) barrier.before;
-            dxBarrier.Transition.StateAfter = (D3D12_RESOURCE_STATES) barrier.after;
+            dxBarrier.Transition.StateBefore = DX12Utils::transferResourceState(barrier.before);
+            dxBarrier.Transition.StateAfter = DX12Utils::transferResourceState(barrier.after);
         }
         mCommandList->ResourceBarrier((UINT) dxBarriers.size(), dxBarriers.data());
     }
@@ -817,6 +887,42 @@ namespace eokas
             dxRT->mView = mRTVHeap->acquire();
             mDevice->CreateRenderTargetView(dxRT->mResource.Get(), nullptr, dxRT->mView);
         }
+
+        mDSVHeap = std::make_shared<DX12DescriptorHeap>(*this, DX12DescriptorHeap::Usage::DSV, 1);
+        {
+            D3D12_RESOURCE_DESC depthDesc = {};
+            depthDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            depthDesc.Width = windowWidth;
+            depthDesc.Height = windowHeight;
+            depthDesc.DepthOrArraySize = 1;
+            depthDesc.MipLevels = 1;
+            depthDesc.Format = DX12Utils::transferFormat(Format::D32_FLOAT);
+            depthDesc.SampleDesc.Count = 1;
+            depthDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+            D3D12_CLEAR_VALUE clearValue = {};
+            clearValue.Format = DX12Utils::transferFormat(Format::D32_FLOAT);
+            clearValue.DepthStencil.Depth = 1.0f;
+            clearValue.DepthStencil.Stencil = 0;
+
+            D3D12_HEAP_PROPERTIES heapProps = {};
+            heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+            mDepthTarget = std::make_shared<DX12RenderTarget>();
+            DX12RenderTarget* dxDS = dynamic_cast<DX12RenderTarget*>(mDepthTarget.get());
+            _ThrowIfFailed(mDevice->CreateCommittedResource(
+                &heapProps,
+                D3D12_HEAP_FLAG_NONE,
+                &depthDesc,
+                D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                &clearValue,
+                IID_PPV_ARGS(&dxDS->mResource)));
+            dxDS->mView = mDSVHeap->acquire();
+            D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+            dsvDesc.Format = DX12Utils::transferFormat(Format::D32_FLOAT);
+            dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+            mDevice->CreateDepthStencilView(dxDS->mResource.Get(), &dsvDesc, dxDS->mView);
+        }
         
         // Create CommandAllocators
         for (UINT i = 0; i < kFrameBufferCount; i++)
@@ -845,6 +951,11 @@ namespace eokas
     RenderTarget::Ref DX12Device::getActiveRenderTarget()
     {
         return mRenderTargets[mFrameBufferIndex];
+    }
+
+    RenderTarget::Ref DX12Device::getActiveDepthTarget()
+    {
+        return mDepthTarget;
     }
     
     DynamicBuffer::Ref DX12Device::createDynamicBuffer(uint32_t length, uint32_t usage)

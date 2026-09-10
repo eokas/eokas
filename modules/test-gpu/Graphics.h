@@ -4,25 +4,11 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
-#include <strsafe.h>
-#include <comdef.h>
-#include <wrl.h>
-using namespace Microsoft;
-using namespace Microsoft::WRL;
-
-// 必要的 DX 头文件
-#include <dxgi1_6.h>
-#include <d3d12.h>
-#if defined(_DEBUG)
-#include <dxgidebug.h>
-#endif
 
 // C 运行时头文件
 #include <string>
 #include <exception>
 #include <vector>
-#include <map>
-#include <codecvt>
 
 // libgpu
 #include "gpu/main.h"
@@ -100,6 +86,11 @@ namespace eokas::gpu {
             mPipelineObject->setProgram(ProgramType::Fragment, ps);
             mPipelineObject->setVertexElements(vElements);
             mPipelineObject->setCullMode(CullMode::Front);
+            DepthStencilState depthStencil;
+            depthStencil.depthTest = true;
+            depthStencil.depthWrite = true;
+            depthStencil.depthFunc = CompareOp::Less;
+            mPipelineObject->setDepthStencilState(depthStencil);
             mPipelineObject->end();
 
             mPipelineBindings = mDevice->createPipelineBindings(mPipelineObject);
@@ -172,16 +163,18 @@ namespace eokas::gpu {
                 mCommandBuffer->setViewport(mViewport);
                 
                 RenderTarget::Ref renderTarget = mDevice->getActiveRenderTarget();
+                RenderTarget::Ref depthTarget = mDevice->getActiveDepthTarget();
                 
                 Barrier begin;
                 begin.resource = renderTarget;
-                begin.before = D3D12_RESOURCE_STATE_PRESENT;
-                begin.after = D3D12_RESOURCE_STATE_RENDER_TARGET;
+                begin.before = ResourceState::Present;
+                begin.after = ResourceState::RenderTarget;
                 mCommandBuffer->barrier({begin});
                 
-                mCommandBuffer->setRenderTargets({renderTarget});
+                mCommandBuffer->setRenderTargets({renderTarget}, depthTarget);
                 float clearColor[4] = {0.0f, 0.2f, 0.4f, 1.0f};
                 mCommandBuffer->clearRenderTarget(renderTarget, clearColor);
+                mCommandBuffer->clearDepthStencil(depthTarget);
                 mCommandBuffer->setTopology(Topology::TriangleList);
                 mCommandBuffer->setVertexBuffer(mVertexBuffer, vDataLength, vDataStride);
                 mCommandBuffer->setIndexBuffer(mIndexBuffer, iDataLength, iDataFormat);
@@ -189,8 +182,8 @@ namespace eokas::gpu {
                 
                 Barrier end;
                 end.resource = renderTarget;
-                end.before = D3D12_RESOURCE_STATE_RENDER_TARGET;
-                end.after = D3D12_RESOURCE_STATE_PRESENT;
+                end.before = ResourceState::RenderTarget;
+                end.after = ResourceState::Present;
                 mCommandBuffer->barrier({end});
                 
                 mCommandBuffer->finish();
