@@ -129,6 +129,30 @@ namespace eokas
         ProgramType type = ProgramType::Vertex;
         ProgramTarget target = ProgramTarget::SM_3_0;
     };
+
+    enum class ProgramParameterType
+    {
+        UniformBuffer,
+        Texture,
+        Sampler
+    };
+
+    struct ProgramParameterEntry
+    {
+        std::string name;
+        ProgramParameterType type = ProgramParameterType::UniformBuffer;
+        uint32_t slot = 0;
+        uint32_t count = 1;
+    };
+
+    struct ProgramParameterMap
+    {
+        std::vector<ProgramParameterEntry> entries;
+
+        void add(const ProgramParameterEntry& entry);
+        const ProgramParameterEntry* findBySlot(ProgramParameterType type, uint32_t slot) const;
+        const ProgramParameterEntry* findByName(ProgramParameterType type, const std::string& name) const;
+    };
     
     struct Program
     {
@@ -137,7 +161,7 @@ namespace eokas
         virtual ~Program() = default;
         
         virtual const ProgramOptions& getOptions() const = 0;
-        virtual uint32_t getTextureCount() const = 0;
+        virtual const ProgramParameterMap& getParameters() const = 0;
     };
     
     enum class FillMode
@@ -209,6 +233,8 @@ namespace eokas
         virtual void setSamplerState(uint32_t index, const SamplerState& state) = 0;
         virtual void setBlendState(const BlendState& state) = 0;
         virtual void end() = 0;
+        virtual const ProgramParameterEntry* findParameterBySlot(ProgramParameterType type, uint32_t slot) const = 0;
+        virtual const ProgramParameterEntry* findParameterByName(ProgramParameterType type, const std::string& name) const = 0;
     };
 
     // 绘制绑定：引用 PipelineObject，绑定 UniformBuffer / Texture
@@ -221,8 +247,10 @@ namespace eokas
 
         virtual PipelineObject::Ref getPipelineObject() const = 0;
         virtual void begin() = 0;
-        virtual void setUniformBuffer(uint32_t index, DynamicBuffer::Ref buffer) = 0;
-        virtual void setTexture(uint32_t index, Texture::Ref texture) = 0;
+        virtual void setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer) = 0;
+        virtual void setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer) = 0;
+        virtual void setTextureBySlot(uint32_t slot, Texture::Ref texture) = 0;
+        virtual void setTextureByName(const std::string& name, Texture::Ref texture) = 0;
         virtual void end() = 0;
     };
     

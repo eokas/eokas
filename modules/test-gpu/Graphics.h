@@ -112,8 +112,8 @@ namespace eokas::gpu {
 
             mPipelineBindings = mDevice->createPipelineBindings(mPipelineObject);
             mPipelineBindings->begin();
-            mPipelineBindings->setUniformBuffer(0, mUniformBuffer);
-            mPipelineBindings->setTexture(0, mTexture);
+            mPipelineBindings->setUniformBufferByName("Transform", mUniformBuffer);
+            mPipelineBindings->setTextureByName("gMainTexture", mTexture);
             mPipelineBindings->end();
             
             mCommandBuffer = mDevice->createCommandBuffer(mPipelineBindings);

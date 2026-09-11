@@ -8,9 +8,11 @@
 #include <memory.h>
 #include <string>
 #include <exception>
+#include <stdexcept>
 #include <vector>
 #include <map>
 #include <codecvt>
+#include <d3d11shader.h>
 
 namespace eokas
 {
@@ -43,6 +45,56 @@ namespace eokas
     };
 
 #define _ThrowIfFailed(hr) { HRESULT ret = (hr); if(FAILED(ret)) throw HRException(ret, __FILE__, __LINE__); }
+
+    static void addReflectedBinding(ProgramParameterMap& parameters, const char* name, D3D_SHADER_INPUT_TYPE type, uint32_t bindPoint, uint32_t bindCount)
+    {
+        ProgramParameterEntry entry;
+        entry.name = name ? name : "";
+        entry.slot = bindPoint;
+        entry.count = bindCount;
+        if (type == D3D_SIT_CBUFFER)
+            entry.type = ProgramParameterType::UniformBuffer;
+        else if (type == D3D_SIT_TEXTURE)
+            entry.type = ProgramParameterType::Texture;
+        else if (type == D3D_SIT_SAMPLER)
+            entry.type = ProgramParameterType::Sampler;
+        else
+            return;
+        parameters.add(entry);
+    }
+
+    static void reflectProgramParameters(ID3DBlob* code, ProgramParameterMap& parameters)
+    {
+        ComPtr<ID3D12ShaderReflection> reflector12;
+        if (SUCCEEDED(D3DReflect(code->GetBufferPointer(), code->GetBufferSize(), IID_PPV_ARGS(&reflector12))))
+        {
+            D3D12_SHADER_DESC shaderDesc = {};
+            _ThrowIfFailed(reflector12->GetDesc(&shaderDesc));
+            for (UINT i = 0; i < shaderDesc.BoundResources; i++)
+            {
+                D3D12_SHADER_INPUT_BIND_DESC bindDesc = {};
+                _ThrowIfFailed(reflector12->GetResourceBindingDesc(i, &bindDesc));
+                addReflectedBinding(parameters, bindDesc.Name, bindDesc.Type, bindDesc.BindPoint, bindDesc.BindCount);
+            }
+            return;
+        }
+
+        ComPtr<ID3D11ShaderReflection> reflector11;
+        _ThrowIfFailed(D3DReflect(
+            code->GetBufferPointer(),
+            code->GetBufferSize(),
+            IID_ID3D11ShaderReflection,
+            &reflector11));
+        D3D11_SHADER_DESC shaderDesc = {};
+        _ThrowIfFailed(reflector11->GetDesc(&shaderDesc));
+        for (UINT i = 0; i < shaderDesc.BoundResources; i++)
+        {
+            D3D11_SHADER_INPUT_BIND_DESC bindDesc = {};
+            _ThrowIfFailed(reflector11->GetResourceBindingDesc(i, &bindDesc));
+            addReflectedBinding(parameters, bindDesc.Name, bindDesc.Type, bindDesc.BindPoint, bindDesc.BindCount);
+        }
+    }
+
     
     DXGI_FORMAT DX12Utils::transferFormat(Format format)
     {
@@ -419,6 +471,8 @@ namespace eokas
         {
             _ThrowIfFailed(hr);
         }
+
+        reflectProgramParameters(mCode.Get(), mParameters);
     }
     
     const ProgramOptions& DX12Program::getOptions() const
@@ -426,9 +480,9 @@ namespace eokas
         return mOptions;
     }
     
-    uint32_t DX12Program::getTextureCount() const
+    const ProgramParameterMap& DX12Program::getParameters() const
     {
-        return 0;
+        return mParameters;
     }
     
     DX12PipelineObject::DX12PipelineObject(const DX12Device& device)
@@ -439,6 +493,10 @@ namespace eokas
     void DX12PipelineObject::begin()
     {
         mSamplers.clear();
+        mParameterMap.entries.clear();
+        mCBVRegisters.clear();
+        mSRVRegisters.clear();
+        mSamplerRegisters.clear();
     }
     
     void DX12PipelineObject::setVertexElements(std::vector<VertexElement>& vElements)
@@ -510,24 +568,35 @@ namespace eokas
     void DX12PipelineObject::end()
     {
         auto& dxDevice = mDevice.mDevice;
+
+        mParameterMap.entries.clear();
+        mCBVRegisters.clear();
+        mSRVRegisters.clear();
+        mSamplerRegisters.clear();
+        for (const auto& node : mPrograms)
+        {
+            for (const auto& entry : node.second->getParameters().entries)
+            {
+                mParameterMap.add(entry);
+            }
+        }
+        for (const auto& entry : mParameterMap.entries)
+        {
+            if (entry.type == ProgramParameterType::UniformBuffer) mCBVRegisters.insert(entry.slot);
+            else if (entry.type == ProgramParameterType::Texture) mSRVRegisters.insert(entry.slot);
+            else if (entry.type == ProgramParameterType::Sampler) mSamplerRegisters.insert(entry.slot);
+        }
         
         // Create Root Signature
         {
             std::vector<D3D12_STATIC_SAMPLER_DESC> samplers;
-            if (mSamplers.empty())
+            for (uint32_t shaderRegister : mSamplerRegisters)
             {
                 D3D12_STATIC_SAMPLER_DESC desc = {};
-                DX12Utils::fillStaticSampler(desc, 0, SamplerState{});
+                auto it = mSamplers.find(shaderRegister);
+                const SamplerState& state = (it != mSamplers.end()) ? it->second : SamplerState{};
+                DX12Utils::fillStaticSampler(desc, shaderRegister, state);
                 samplers.push_back(desc);
-            }
-            else
-            {
-                for (const auto& node : mSamplers)
-                {
-                    D3D12_STATIC_SAMPLER_DESC desc = {};
-                    DX12Utils::fillStaticSampler(desc, node.first, node.second);
-                    samplers.push_back(desc);
-                }
             }
             
             D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
@@ -540,57 +609,79 @@ namespace eokas
             D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
             rootSignatureDesc.Version = featureData.HighestVersion;
 
-            D3D12_DESCRIPTOR_RANGE1 descriptorRanges1[1] = {};
-            D3D12_ROOT_PARAMETER1 parameters1[2] = {};
-            D3D12_DESCRIPTOR_RANGE descriptorRanges0[1] = {};
-            D3D12_ROOT_PARAMETER parameters0[2] = {};
+            std::vector<D3D12_DESCRIPTOR_RANGE1> descriptorRanges1;
+            std::vector<D3D12_ROOT_PARAMETER1> parameters1;
+            std::vector<D3D12_DESCRIPTOR_RANGE> descriptorRanges0;
+            std::vector<D3D12_ROOT_PARAMETER> parameters0;
 
             if (rootSignatureDesc.Version == D3D_ROOT_SIGNATURE_VERSION_1_1)
             {
-                descriptorRanges1[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                descriptorRanges1[0].NumDescriptors = 1;
-                descriptorRanges1[0].BaseShaderRegister = 0;
-                descriptorRanges1[0].RegisterSpace = 0;
-                descriptorRanges1[0].Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+                for (uint32_t reg : mCBVRegisters)
+                {
+                    D3D12_ROOT_PARAMETER1 parameter = {};
+                    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+                    parameter.Descriptor.ShaderRegister = reg;
+                    parameter.Descriptor.RegisterSpace = 0;
+                    parameter.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+                    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+                    parameters1.push_back(parameter);
+                }
+                if (!mSRVRegisters.empty())
+                {
+                    D3D12_DESCRIPTOR_RANGE1 range = {};
+                    range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                    range.NumDescriptors = *mSRVRegisters.rbegin() - *mSRVRegisters.begin() + 1;
+                    range.BaseShaderRegister = *mSRVRegisters.begin();
+                    range.RegisterSpace = 0;
+                    range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+                    descriptorRanges1.push_back(range);
+
+                    D3D12_ROOT_PARAMETER1 parameter = {};
+                    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                    parameter.DescriptorTable.NumDescriptorRanges = 1;
+                    parameter.DescriptorTable.pDescriptorRanges = descriptorRanges1.data();
+                    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+                    parameters1.push_back(parameter);
+                }
                 
-                parameters1[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-                parameters1[0].Descriptor.ShaderRegister = 0;
-                parameters1[0].Descriptor.RegisterSpace = 0;
-                parameters1[0].Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
-                parameters1[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-                
-                parameters1[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-                parameters1[1].DescriptorTable.NumDescriptorRanges = 1;
-                parameters1[1].DescriptorTable.pDescriptorRanges = descriptorRanges1;
-                parameters1[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-                
-                rootSignatureDesc.Desc_1_1.NumParameters = 2;
-                rootSignatureDesc.Desc_1_1.pParameters = parameters1;
+                rootSignatureDesc.Desc_1_1.NumParameters = (UINT)parameters1.size();
+                rootSignatureDesc.Desc_1_1.pParameters = parameters1.empty() ? nullptr : parameters1.data();
                 rootSignatureDesc.Desc_1_1.NumStaticSamplers = (UINT)samplers.size();
-                rootSignatureDesc.Desc_1_1.pStaticSamplers = samplers.data();
+                rootSignatureDesc.Desc_1_1.pStaticSamplers = samplers.empty() ? nullptr : samplers.data();
                 rootSignatureDesc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
             }
             else
             {
-                descriptorRanges0[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                descriptorRanges0[0].NumDescriptors = 1;
-                descriptorRanges0[0].BaseShaderRegister = 0;
-                descriptorRanges0[0].RegisterSpace = 0;
+                for (uint32_t reg : mCBVRegisters)
+                {
+                    D3D12_ROOT_PARAMETER parameter = {};
+                    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+                    parameter.Descriptor.ShaderRegister = reg;
+                    parameter.Descriptor.RegisterSpace = 0;
+                    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+                    parameters0.push_back(parameter);
+                }
+                if (!mSRVRegisters.empty())
+                {
+                    D3D12_DESCRIPTOR_RANGE range = {};
+                    range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                    range.NumDescriptors = *mSRVRegisters.rbegin() - *mSRVRegisters.begin() + 1;
+                    range.BaseShaderRegister = *mSRVRegisters.begin();
+                    range.RegisterSpace = 0;
+                    descriptorRanges0.push_back(range);
+
+                    D3D12_ROOT_PARAMETER parameter = {};
+                    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                    parameter.DescriptorTable.NumDescriptorRanges = 1;
+                    parameter.DescriptorTable.pDescriptorRanges = descriptorRanges0.data();
+                    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+                    parameters0.push_back(parameter);
+                }
                 
-                parameters0[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
-                parameters0[0].Descriptor.ShaderRegister = 0;
-                parameters0[0].Descriptor.RegisterSpace = 0;
-                parameters0[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
-                
-                parameters0[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-                parameters0[1].DescriptorTable.NumDescriptorRanges = 1;
-                parameters0[1].DescriptorTable.pDescriptorRanges = descriptorRanges0;
-                parameters0[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-                
-                rootSignatureDesc.Desc_1_0.NumParameters = 2;
-                rootSignatureDesc.Desc_1_0.pParameters = parameters0;
+                rootSignatureDesc.Desc_1_0.NumParameters = (UINT)parameters0.size();
+                rootSignatureDesc.Desc_1_0.pParameters = parameters0.empty() ? nullptr : parameters0.data();
                 rootSignatureDesc.Desc_1_0.NumStaticSamplers = (UINT)samplers.size();
-                rootSignatureDesc.Desc_1_0.pStaticSamplers = samplers.data();
+                rootSignatureDesc.Desc_1_0.pStaticSamplers = samplers.empty() ? nullptr : samplers.data();
                 rootSignatureDesc.Desc_1_0.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
             }
             
@@ -656,6 +747,16 @@ namespace eokas
             _ThrowIfFailed(dxDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPipelineState)));
         }
     }
+
+    const ProgramParameterEntry* DX12PipelineObject::findParameterBySlot(ProgramParameterType type, uint32_t slot) const
+    {
+        return mParameterMap.findBySlot(type, slot);
+    }
+
+    const ProgramParameterEntry* DX12PipelineObject::findParameterByName(ProgramParameterType type, const std::string& name) const
+    {
+        return mParameterMap.findByName(type, name);
+    }
     
     DX12PipelineBindings::DX12PipelineBindings(const DX12Device& device, PipelineObject::Ref pipeline)
         : mDevice(device)
@@ -672,28 +773,81 @@ namespace eokas
     {
     }
 
-    void DX12PipelineBindings::setUniformBuffer(uint32_t index, DynamicBuffer::Ref buffer)
+    void DX12PipelineBindings::setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer)
     {
-        mUniformBuffers[index] = buffer;
+        if (!mPipelineObject->findParameterBySlot(ProgramParameterType::UniformBuffer, slot))
+        {
+            throw std::runtime_error("PipelineBindings: unknown uniform buffer slot.");
+        }
+        mUniformBuffers[slot] = buffer;
     }
 
-    void DX12PipelineBindings::setTexture(uint32_t index, Texture::Ref texture)
+    void DX12PipelineBindings::setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer)
     {
-        mTextures[index] = texture;
+        const ProgramParameterEntry* entry = mPipelineObject->findParameterByName(ProgramParameterType::UniformBuffer, name);
+        if (!entry)
+        {
+            throw std::runtime_error("PipelineBindings: unknown uniform buffer name.");
+        }
+        setUniformBufferBySlot(entry->slot, buffer);
+    }
+
+    void DX12PipelineBindings::setTextureBySlot(uint32_t slot, Texture::Ref texture)
+    {
+        if (!mPipelineObject->findParameterBySlot(ProgramParameterType::Texture, slot))
+        {
+            throw std::runtime_error("PipelineBindings: unknown texture slot.");
+        }
+        mTextures[slot] = texture;
+    }
+
+    void DX12PipelineBindings::setTextureByName(const std::string& name, Texture::Ref texture)
+    {
+        const ProgramParameterEntry* entry = mPipelineObject->findParameterByName(ProgramParameterType::Texture, name);
+        if (!entry)
+        {
+            throw std::runtime_error("PipelineBindings: unknown texture name.");
+        }
+        setTextureBySlot(entry->slot, texture);
     }
 
     void DX12PipelineBindings::end()
     {
         auto& dxDevice = mDevice.mDevice;
-        uint32_t srvCount = mTextures.empty() ? 1 : (uint32_t)mTextures.size();
-        mSRVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::SRV, srvCount);
-
-        for (auto& node : mTextures)
+        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(mPipelineObject.get());
+        if (pipelineObject->mSRVRegisters.empty())
         {
-            auto texture = node.second;
-            auto dxResource = dynamic_cast<DX12Texture*>(texture.get())->mResource;
-            D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mSRVHeap->acquire();
+            mSRVHeap.reset();
+            return;
+        }
 
+        uint32_t base = *pipelineObject->mSRVRegisters.begin();
+        uint32_t count = *pipelineObject->mSRVRegisters.rbegin() - base + 1;
+        mSRVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::SRV, count);
+
+        for (uint32_t i = 0; i < count; i++)
+        {
+            uint32_t reg = base + i;
+            D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mSRVHeap->acquire();
+            if (pipelineObject->mSRVRegisters.find(reg) == pipelineObject->mSRVRegisters.end())
+            {
+                D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srvDesc.Texture2D.MipLevels = 1;
+                dxDevice->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+                continue;
+            }
+
+            auto it = mTextures.find(reg);
+            if (it == mTextures.end() || !it->second)
+            {
+                throw std::runtime_error("PipelineBindings: missing texture slot.");
+            }
+
+            auto texture = it->second;
+            auto dxResource = dynamic_cast<DX12Texture*>(texture.get())->mResource;
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
             srvDesc.Format = DX12Utils::transferFormat(texture->getOptions().format);
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -726,14 +880,22 @@ namespace eokas
         _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), pipelineObject->mPipelineState.Get()));
         mCommandList->SetGraphicsRootSignature(pipelineObject->mRootSignature.Get());
 
-        auto ubIt = pipelineBindings->mUniformBuffers.find(0);
-        if (ubIt != pipelineBindings->mUniformBuffers.end() && ubIt->second)
+        uint32_t root = 0;
+        for (uint32_t reg : pipelineObject->mCBVRegisters)
         {
+            auto ubIt = pipelineBindings->mUniformBuffers.find(reg);
+            if (ubIt == pipelineBindings->mUniformBuffers.end() || !ubIt->second)
+            {
+                throw std::runtime_error("PipelineBindings: missing uniform buffer slot.");
+            }
             auto* dxUB = dynamic_cast<DX12DynamicBuffer*>(ubIt->second.get());
-            mCommandList->SetGraphicsRootConstantBufferView(0, dxUB->getGPUVirtualAddress());
+            mCommandList->SetGraphicsRootConstantBufferView(root, dxUB->getGPUVirtualAddress());
+            root += 1;
         }
 
-        if (pipelineBindings->mSRVHeap != nullptr && !pipelineBindings->mSRVHeap->mHeaps.empty())
+        if (!pipelineObject->mSRVRegisters.empty()
+            && pipelineBindings->mSRVHeap != nullptr
+            && !pipelineBindings->mSRVHeap->mHeaps.empty())
         {
             std::vector<ID3D12DescriptorHeap*> dxSRVHeapList(pipelineBindings->mSRVHeap->mHeaps.size());
             for (size_t i = 0; i < dxSRVHeapList.size(); i++)
@@ -741,7 +903,9 @@ namespace eokas
                 dxSRVHeapList[i] = pipelineBindings->mSRVHeap->mHeaps[i].Get();
             }
             mCommandList->SetDescriptorHeaps((UINT)dxSRVHeapList.size(), dxSRVHeapList.data());
-            mCommandList->SetGraphicsRootDescriptorTable(1, dxSRVHeapList[0]->GetGPUDescriptorHandleForHeapStart());
+            mCommandList->SetGraphicsRootDescriptorTable(
+                (UINT)pipelineObject->mCBVRegisters.size(),
+                dxSRVHeapList[0]->GetGPUDescriptorHandleForHeapStart());
         }
     }
     

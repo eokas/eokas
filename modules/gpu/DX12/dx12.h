@@ -19,6 +19,7 @@ using namespace Microsoft::WRL;
 #include <d3dcompiler.h>
 
 #include <dxgidebug.h>
+#include <set>
 
 namespace eokas
 {
@@ -101,11 +102,12 @@ namespace eokas
         ProgramOptions mOptions;
         ComPtr <ID3DBlob> mCode;
         ComPtr <ID3DBlob> mError;
+        ProgramParameterMap mParameters;
         
         DX12Program(const DX12Device& device, const ProgramOptions& options);
         
         virtual const ProgramOptions& getOptions() const override;
-        virtual uint32_t getTextureCount() const override;
+        virtual const ProgramParameterMap& getParameters() const override;
     };
     
     struct DX12PipelineObject : public PipelineObject
@@ -125,6 +127,10 @@ namespace eokas
         BlendState mBlend;
         
         ComPtr <ID3D12PipelineState> mPipelineState;
+        ProgramParameterMap mParameterMap;
+        std::set<uint32_t> mCBVRegisters;
+        std::set<uint32_t> mSRVRegisters;
+        std::set<uint32_t> mSamplerRegisters;
         
         DX12PipelineObject(const DX12Device& device);
         
@@ -137,6 +143,8 @@ namespace eokas
         virtual void setSamplerState(uint32_t index, const SamplerState& state) override;
         virtual void setBlendState(const BlendState& state) override;
         virtual void end() override;
+        virtual const ProgramParameterEntry* findParameterBySlot(ProgramParameterType type, uint32_t slot) const override;
+        virtual const ProgramParameterEntry* findParameterByName(ProgramParameterType type, const std::string& name) const override;
     };
 
     struct DX12PipelineBindings : public PipelineBindings
@@ -151,8 +159,10 @@ namespace eokas
 
         virtual PipelineObject::Ref getPipelineObject() const override;
         virtual void begin() override;
-        virtual void setUniformBuffer(uint32_t index, DynamicBuffer::Ref buffer) override;
-        virtual void setTexture(uint32_t index, Texture::Ref texture) override;
+        virtual void setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer) override;
+        virtual void setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer) override;
+        virtual void setTextureBySlot(uint32_t slot, Texture::Ref texture) override;
+        virtual void setTextureByName(const std::string& name, Texture::Ref texture) override;
         virtual void end() override;
     };
     
