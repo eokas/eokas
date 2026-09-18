@@ -3,6 +3,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include "./Graphics.h"
+#include <exception>
 
 const char* windowTitle = "test-ui";
 const char* windowClass = "test-ui";
@@ -11,11 +12,65 @@ const int windowHeight = 600;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+    eokas::ui::Graphics* graphics = reinterpret_cast<eokas::ui::Graphics*>(GetWindowLongPtrA(hWnd, GWLP_USERDATA));
+
     switch (message)
     {
     case WM_CLOSE:
     {
         PostQuitMessage(0);
+        return 0;
+    }
+    case WM_MOUSEMOVE:
+    {
+        if (graphics)
+        {
+            float x = (float)(short)LOWORD(lParam);
+            float y = (float)(short)HIWORD(lParam);
+            graphics->canvas().onMouseMove(x, y);
+        }
+        return 0;
+    }
+    case WM_LBUTTONDOWN:
+    {
+        if (graphics)
+        {
+            SetCapture(hWnd);
+            float x = (float)(short)LOWORD(lParam);
+            float y = (float)(short)HIWORD(lParam);
+            graphics->canvas().onMouseDown(x, y, 0);
+        }
+        return 0;
+    }
+    case WM_LBUTTONUP:
+    {
+        if (graphics)
+        {
+            float x = (float)(short)LOWORD(lParam);
+            float y = (float)(short)HIWORD(lParam);
+            graphics->canvas().onMouseUp(x, y, 0);
+            ReleaseCapture();
+        }
+        return 0;
+    }
+    case WM_RBUTTONDOWN:
+    {
+        if (graphics)
+        {
+            float x = (float)(short)LOWORD(lParam);
+            float y = (float)(short)HIWORD(lParam);
+            graphics->canvas().onMouseDown(x, y, 1);
+        }
+        return 0;
+    }
+    case WM_RBUTTONUP:
+    {
+        if (graphics)
+        {
+            float x = (float)(short)LOWORD(lParam);
+            float y = (float)(short)HIWORD(lParam);
+            graphics->canvas().onMouseUp(x, y, 1);
+        }
         return 0;
     }
     default:
@@ -60,6 +115,7 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
 
         eokas::ui::Graphics graphics;
         graphics.init(hWnd, windowWidth, windowHeight);
+        SetWindowLongPtrA(hWnd, GWLP_USERDATA, (LONG_PTR)&graphics);
 
         LARGE_INTEGER freq, last, now;
         QueryPerformanceFrequency(&freq);

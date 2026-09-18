@@ -141,7 +141,7 @@ namespace eokas {
     
     bool File::readText(const String& path, String& content) {
         FileStream stream(path, "r");
-        if(!stream.isOpen())
+        if(!stream.open())
             return false;
         size_t size = stream.size();
         content = String(' ', size);
@@ -152,7 +152,7 @@ namespace eokas {
     
     bool File::readData(const String& path, void* data, size_t size) {
         FileStream stream(path, "rb");
-        if(!stream.isOpen())
+        if(!stream.open())
             return false;
         size = size <= stream.size() ? size : stream.size();
         stream.read(data, size);
@@ -162,7 +162,7 @@ namespace eokas {
     
     bool File::writeText(const String& path, String& content) {
         FileStream stream(path, "w");
-        if(!stream.isOpen())
+        if(!stream.open())
             return false;
         stream.write((void*)content.cstr(), content.length());
         stream.close();
@@ -171,7 +171,7 @@ namespace eokas {
     
     bool File::writeData(const String& path, void* data, size_t size) {
         FileStream stream(path, "wb");
-        if(!stream.isOpen())
+        if(!stream.open())
             return false;
         stream.write(data, size);
         stream.close();

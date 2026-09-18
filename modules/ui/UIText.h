@@ -11,6 +11,7 @@ namespace eokas
     {
     public:
         String text;
+        String fontPath;
         float fontSize = 16.0f;
         UIFont* font = nullptr;
         void render(UIShape& shape) override;

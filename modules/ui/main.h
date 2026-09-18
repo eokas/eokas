@@ -3,6 +3,7 @@
 
 #include "UIShape.h"
 #include "UIWidget.h"
+#include "UICanvas.h"
 #include "UIImage.h"
 #include "UIText.h"
 #include "UILayout.h"
