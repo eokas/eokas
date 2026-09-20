@@ -102,12 +102,12 @@ namespace eokas
         ProgramOptions mOptions;
         ComPtr <ID3DBlob> mCode;
         ComPtr <ID3DBlob> mError;
-        ProgramParameterMap mParameters;
+        PipelineLayout mLayout;
         
         DX12Program(const DX12Device& device, const ProgramOptions& options);
         
         virtual const ProgramOptions& getOptions() const override;
-        virtual const ProgramParameterMap& getParameters() const override;
+        virtual const PipelineLayout& getLayout() const override;
     };
     
     struct DX12PipelineObject : public PipelineObject
@@ -127,7 +127,7 @@ namespace eokas
         BlendState mBlend;
         
         ComPtr <ID3D12PipelineState> mPipelineState;
-        ProgramParameterMap mParameterMap;
+        PipelineLayout mLayout;
         std::set<uint32_t> mCBVRegisters;
         std::set<uint32_t> mSRVRegisters;
         std::set<uint32_t> mSamplerRegisters;
@@ -143,21 +143,20 @@ namespace eokas
         virtual void setSamplerState(uint32_t index, const SamplerState& state) override;
         virtual void setBlendState(const BlendState& state) override;
         virtual void end() override;
-        virtual const ProgramParameterEntry* findParameterBySlot(ProgramParameterType type, uint32_t slot) const override;
-        virtual const ProgramParameterEntry* findParameterByName(ProgramParameterType type, const std::string& name) const override;
+        virtual const PipelineLayout& getLayout() const override;
     };
 
     struct DX12PipelineBindings : public PipelineBindings
     {
         const DX12Device& mDevice;
-        PipelineObject::Ref mPipelineObject;
+        PipelineLayout mLayout;
         std::map<uint32_t, DynamicBuffer::Ref> mUniformBuffers;
         std::map<uint32_t, DX12Texture::Ref> mTextures;
         std::shared_ptr<DX12DescriptorHeap> mSRVHeap;
 
-        DX12PipelineBindings(const DX12Device& device, PipelineObject::Ref pipeline);
+        DX12PipelineBindings(const DX12Device& device, const PipelineLayout& layout);
 
-        virtual PipelineObject::Ref getPipelineObject() const override;
+        virtual const PipelineLayout& getLayout() const override;
         virtual void begin() override;
         virtual void setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer) override;
         virtual void setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer) override;
@@ -172,10 +171,13 @@ namespace eokas
         ComPtr <ID3D12GraphicsCommandList> mCommandList;
         
         ComPtr <ID3D12Resource> uploadBuffer;
+        PipelineObject::Ref mCurrentPipeline;
         
-        DX12CommandBuffer(const DX12Device& device, const DX12PipelineBindings& bindings);
+        DX12CommandBuffer(const DX12Device& device);
         
-        virtual void reset(PipelineBindings::Ref bindings) override;
+        virtual void reset() override;
+        virtual void setPipelineObject(PipelineObject::Ref pipeline) override;
+        virtual void setPipelineBindings(PipelineBindings::Ref bindings) override;
         virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets, RenderTarget::Ref depthStencil) override;
         virtual void clearRenderTarget(RenderTarget::Ref renderTarget, float(& color)[4]) override;
         virtual void clearDepthStencil(RenderTarget::Ref depthStencil, float depth, uint32_t stencil) override;
@@ -220,8 +222,9 @@ namespace eokas
         virtual Texture::Ref createTexture(const TextureOptions& options) override;
         virtual Program::Ref createProgram(const ProgramOptions& options) override;
         virtual PipelineObject::Ref createPipelineObject() override;
+        virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) override;
         virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) override;
-        virtual CommandBuffer::Ref createCommandBuffer(PipelineBindings::Ref bindings) override;
+        virtual CommandBuffer::Ref createCommandBuffer() override;
         virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) override;
         virtual void present() override;
         virtual void waitForGPU() override;

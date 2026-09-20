@@ -116,7 +116,7 @@ namespace eokas::gpu {
             mPipelineBindings->setTextureByName("gMainTexture", mTexture);
             mPipelineBindings->end();
             
-            mCommandBuffer = mDevice->createCommandBuffer(mPipelineBindings);
+            mCommandBuffer = mDevice->createCommandBuffer();
             
             GeoMesh mesh;
             GeoMeshFactory::createBox(mesh, 1.0f, 1.0f, 1.0f);
@@ -176,7 +176,9 @@ namespace eokas::gpu {
             
             // fill command buffer
             {
-                mCommandBuffer->reset(mPipelineBindings);
+                mCommandBuffer->reset();
+                mCommandBuffer->setPipelineObject(mPipelineObject);
+                mCommandBuffer->setPipelineBindings(mPipelineBindings);
                 mCommandBuffer->setViewport(mViewport);
                 
                 RenderTarget::Ref renderTarget = mDevice->getActiveRenderTarget();

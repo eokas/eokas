@@ -24,6 +24,7 @@ namespace eokas
 
         void prepare();
         UIFont* font();
+        void setTexture(Texture::Ref texture, const std::vector<uint8_t>& rgba);
 
         void beginFrame();
         void renderFrame();

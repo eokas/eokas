@@ -64,7 +64,7 @@ namespace eokas
         mPipelineBindings = mDevice->createPipelineBindings(mPipelineObject);
         mPipelineBindings->begin();
         mPipelineBindings->setUniformBufferByName("Transform", mShape.uniformBuffer);
-        mCommandBuffer = mDevice->createCommandBuffer(mPipelineBindings);
+        mCommandBuffer = mDevice->createCommandBuffer();
     }
 
     void UICanvas::quit()
@@ -168,6 +168,26 @@ namespace eokas
         return mFonts.front().get();
     }
 
+    void UICanvas::setTexture(Texture::Ref texture, const std::vector<uint8_t>& rgba)
+    {
+        if (!mDevice || !mCommandBuffer || !mPipelineBindings || !texture)
+        {
+            return;
+        }
+
+        mCommandBuffer->fillTexture(texture, rgba);
+        mCommandBuffer->finish();
+        mDevice->commitCommandBuffer(mCommandBuffer);
+        mDevice->waitForGPU();
+
+        mTexture = texture;
+        mShape.setTexture(texture);
+        mPipelineBindings->begin();
+        mPipelineBindings->setUniformBufferByName("Transform", mShape.uniformBuffer);
+        mPipelineBindings->setTextureByName("gMainTexture", texture);
+        mPipelineBindings->end();
+    }
+
     void UICanvas::collectTexts(UIWidget* widget, std::vector<UIText*>& texts)
     {
         if (widget == nullptr)
@@ -239,7 +259,9 @@ namespace eokas
 
     void UICanvas::beginFrame()
     {
-        mCommandBuffer->reset(mPipelineBindings);
+        mCommandBuffer->reset();
+        mCommandBuffer->setPipelineObject(mPipelineObject);
+        mCommandBuffer->setPipelineBindings(mPipelineBindings);
 
         Viewport viewport;
         viewport.left = 0;

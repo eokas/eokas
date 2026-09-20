@@ -130,28 +130,29 @@ namespace eokas
         ProgramTarget target = ProgramTarget::SM_3_0;
     };
 
-    enum class ProgramParameterType
+    enum class PipelineResourceType
     {
         UniformBuffer,
         Texture,
         Sampler
     };
 
-    struct ProgramParameterEntry
+    struct PipelineLayoutEntry
     {
         std::string name;
-        ProgramParameterType type = ProgramParameterType::UniformBuffer;
+        PipelineResourceType type = PipelineResourceType::UniformBuffer;
         uint32_t slot = 0;
         uint32_t count = 1;
     };
 
-    struct ProgramParameterMap
+    struct PipelineLayout
     {
-        std::vector<ProgramParameterEntry> entries;
+        std::vector<PipelineLayoutEntry> entries;
 
-        void add(const ProgramParameterEntry& entry);
-        const ProgramParameterEntry* findBySlot(ProgramParameterType type, uint32_t slot) const;
-        const ProgramParameterEntry* findByName(ProgramParameterType type, const std::string& name) const;
+        void add(const PipelineLayoutEntry& entry);
+        const PipelineLayoutEntry* findBySlot(PipelineResourceType type, uint32_t slot) const;
+        const PipelineLayoutEntry* findByName(PipelineResourceType type, const std::string& name) const;
+        bool compatibleWith(const PipelineLayout& other) const;
     };
     
     struct Program
@@ -161,7 +162,7 @@ namespace eokas
         virtual ~Program() = default;
         
         virtual const ProgramOptions& getOptions() const = 0;
-        virtual const ProgramParameterMap& getParameters() const = 0;
+        virtual const PipelineLayout& getLayout() const = 0;
     };
     
     enum class FillMode
@@ -233,11 +234,10 @@ namespace eokas
         virtual void setSamplerState(uint32_t index, const SamplerState& state) = 0;
         virtual void setBlendState(const BlendState& state) = 0;
         virtual void end() = 0;
-        virtual const ProgramParameterEntry* findParameterBySlot(ProgramParameterType type, uint32_t slot) const = 0;
-        virtual const ProgramParameterEntry* findParameterByName(ProgramParameterType type, const std::string& name) const = 0;
+        virtual const PipelineLayout& getLayout() const = 0;
     };
 
-    // 绘制绑定：引用 PipelineObject，绑定 UniformBuffer / Texture
+    // 绘制绑定：持有 PipelineLayout 副本，绑定 UniformBuffer / Texture
     // DX12 对应 descriptor heap / root CBV，不是 ID3D12PipelineState
     struct PipelineBindings
     {
@@ -245,7 +245,7 @@ namespace eokas
 
         virtual ~PipelineBindings() = default;
 
-        virtual PipelineObject::Ref getPipelineObject() const = 0;
+        virtual const PipelineLayout& getLayout() const = 0;
         virtual void begin() = 0;
         virtual void setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer) = 0;
         virtual void setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer) = 0;
@@ -289,7 +289,9 @@ namespace eokas
 
         virtual ~CommandBuffer() = default;
         
-        virtual void reset(PipelineBindings::Ref bindings) = 0;
+        virtual void reset() = 0;
+        virtual void setPipelineObject(PipelineObject::Ref pipeline) = 0;
+        virtual void setPipelineBindings(PipelineBindings::Ref bindings) = 0;
         virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets, RenderTarget::Ref depthStencil = nullptr) = 0;
         virtual void clearRenderTarget(RenderTarget::Ref renderTarget, float(& color)[4]) = 0;
         virtual void clearDepthStencil(RenderTarget::Ref depthStencil, float depth = 1.0f, uint32_t stencil = 0) = 0;
@@ -313,8 +315,9 @@ namespace eokas
         virtual Texture::Ref createTexture(const TextureOptions& options) = 0;
         virtual Program::Ref createProgram(const ProgramOptions& options) = 0;
         virtual PipelineObject::Ref createPipelineObject() = 0;
+        virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) = 0;
         virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) = 0;
-        virtual CommandBuffer::Ref createCommandBuffer(PipelineBindings::Ref bindings) = 0;
+        virtual CommandBuffer::Ref createCommandBuffer() = 0;
         virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) = 0;
         virtual void present() = 0;
         virtual void waitForGPU() = 0;

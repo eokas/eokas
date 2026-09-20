@@ -46,24 +46,24 @@ namespace eokas
 
 #define _ThrowIfFailed(hr) { HRESULT ret = (hr); if(FAILED(ret)) throw HRException(ret, __FILE__, __LINE__); }
 
-    static void addReflectedBinding(ProgramParameterMap& parameters, const char* name, D3D_SHADER_INPUT_TYPE type, uint32_t bindPoint, uint32_t bindCount)
+    static void addReflectedBinding(PipelineLayout& layout, const char* name, D3D_SHADER_INPUT_TYPE type, uint32_t bindPoint, uint32_t bindCount)
     {
-        ProgramParameterEntry entry;
+        PipelineLayoutEntry entry;
         entry.name = name ? name : "";
         entry.slot = bindPoint;
         entry.count = bindCount;
         if (type == D3D_SIT_CBUFFER)
-            entry.type = ProgramParameterType::UniformBuffer;
+            entry.type = PipelineResourceType::UniformBuffer;
         else if (type == D3D_SIT_TEXTURE)
-            entry.type = ProgramParameterType::Texture;
+            entry.type = PipelineResourceType::Texture;
         else if (type == D3D_SIT_SAMPLER)
-            entry.type = ProgramParameterType::Sampler;
+            entry.type = PipelineResourceType::Sampler;
         else
             return;
-        parameters.add(entry);
+        layout.add(entry);
     }
 
-    static void reflectProgramParameters(ID3DBlob* code, ProgramParameterMap& parameters)
+    static void reflectProgramParameters(ID3DBlob* code, PipelineLayout& parameters)
     {
         ComPtr<ID3D12ShaderReflection> reflector12;
         if (SUCCEEDED(D3DReflect(code->GetBufferPointer(), code->GetBufferSize(), IID_PPV_ARGS(&reflector12))))
@@ -472,7 +472,7 @@ namespace eokas
             _ThrowIfFailed(hr);
         }
 
-        reflectProgramParameters(mCode.Get(), mParameters);
+        reflectProgramParameters(mCode.Get(), mLayout);
     }
     
     const ProgramOptions& DX12Program::getOptions() const
@@ -480,9 +480,9 @@ namespace eokas
         return mOptions;
     }
     
-    const ProgramParameterMap& DX12Program::getParameters() const
+    const PipelineLayout& DX12Program::getLayout() const
     {
-        return mParameters;
+        return mLayout;
     }
     
     DX12PipelineObject::DX12PipelineObject(const DX12Device& device)
@@ -493,7 +493,7 @@ namespace eokas
     void DX12PipelineObject::begin()
     {
         mSamplers.clear();
-        mParameterMap.entries.clear();
+        mLayout.entries.clear();
         mCBVRegisters.clear();
         mSRVRegisters.clear();
         mSamplerRegisters.clear();
@@ -569,22 +569,22 @@ namespace eokas
     {
         auto& dxDevice = mDevice.mDevice;
 
-        mParameterMap.entries.clear();
+        mLayout.entries.clear();
         mCBVRegisters.clear();
         mSRVRegisters.clear();
         mSamplerRegisters.clear();
         for (const auto& node : mPrograms)
         {
-            for (const auto& entry : node.second->getParameters().entries)
+            for (const auto& entry : node.second->getLayout().entries)
             {
-                mParameterMap.add(entry);
+                mLayout.add(entry);
             }
         }
-        for (const auto& entry : mParameterMap.entries)
+        for (const auto& entry : mLayout.entries)
         {
-            if (entry.type == ProgramParameterType::UniformBuffer) mCBVRegisters.insert(entry.slot);
-            else if (entry.type == ProgramParameterType::Texture) mSRVRegisters.insert(entry.slot);
-            else if (entry.type == ProgramParameterType::Sampler) mSamplerRegisters.insert(entry.slot);
+            if (entry.type == PipelineResourceType::UniformBuffer) mCBVRegisters.insert(entry.slot);
+            else if (entry.type == PipelineResourceType::Texture) mSRVRegisters.insert(entry.slot);
+            else if (entry.type == PipelineResourceType::Sampler) mSamplerRegisters.insert(entry.slot);
         }
         
         // Create Root Signature
@@ -748,25 +748,20 @@ namespace eokas
         }
     }
 
-    const ProgramParameterEntry* DX12PipelineObject::findParameterBySlot(ProgramParameterType type, uint32_t slot) const
+    const PipelineLayout& DX12PipelineObject::getLayout() const
     {
-        return mParameterMap.findBySlot(type, slot);
-    }
-
-    const ProgramParameterEntry* DX12PipelineObject::findParameterByName(ProgramParameterType type, const std::string& name) const
-    {
-        return mParameterMap.findByName(type, name);
+        return mLayout;
     }
     
-    DX12PipelineBindings::DX12PipelineBindings(const DX12Device& device, PipelineObject::Ref pipeline)
+    DX12PipelineBindings::DX12PipelineBindings(const DX12Device& device, const PipelineLayout& layout)
         : mDevice(device)
-        , mPipelineObject(pipeline)
+        , mLayout(layout)
     {
     }
 
-    PipelineObject::Ref DX12PipelineBindings::getPipelineObject() const
+    const PipelineLayout& DX12PipelineBindings::getLayout() const
     {
-        return mPipelineObject;
+        return mLayout;
     }
 
     void DX12PipelineBindings::begin()
@@ -775,7 +770,7 @@ namespace eokas
 
     void DX12PipelineBindings::setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer)
     {
-        if (!mPipelineObject->findParameterBySlot(ProgramParameterType::UniformBuffer, slot))
+        if (!mLayout.findBySlot(PipelineResourceType::UniformBuffer, slot))
         {
             throw std::runtime_error("PipelineBindings: unknown uniform buffer slot.");
         }
@@ -784,7 +779,7 @@ namespace eokas
 
     void DX12PipelineBindings::setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer)
     {
-        const ProgramParameterEntry* entry = mPipelineObject->findParameterByName(ProgramParameterType::UniformBuffer, name);
+        const PipelineLayoutEntry* entry = mLayout.findByName(PipelineResourceType::UniformBuffer, name);
         if (!entry)
         {
             throw std::runtime_error("PipelineBindings: unknown uniform buffer name.");
@@ -794,7 +789,7 @@ namespace eokas
 
     void DX12PipelineBindings::setTextureBySlot(uint32_t slot, Texture::Ref texture)
     {
-        if (!mPipelineObject->findParameterBySlot(ProgramParameterType::Texture, slot))
+        if (!mLayout.findBySlot(PipelineResourceType::Texture, slot))
         {
             throw std::runtime_error("PipelineBindings: unknown texture slot.");
         }
@@ -803,7 +798,7 @@ namespace eokas
 
     void DX12PipelineBindings::setTextureByName(const std::string& name, Texture::Ref texture)
     {
-        const ProgramParameterEntry* entry = mPipelineObject->findParameterByName(ProgramParameterType::Texture, name);
+        const PipelineLayoutEntry* entry = mLayout.findByName(PipelineResourceType::Texture, name);
         if (!entry)
         {
             throw std::runtime_error("PipelineBindings: unknown texture name.");
@@ -814,22 +809,29 @@ namespace eokas
     void DX12PipelineBindings::end()
     {
         auto& dxDevice = mDevice.mDevice;
-        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(mPipelineObject.get());
-        if (pipelineObject->mSRVRegisters.empty())
+        std::set<uint32_t> srvRegisters;
+        for (const auto& entry : mLayout.entries)
+        {
+            if (entry.type == PipelineResourceType::Texture)
+            {
+                srvRegisters.insert(entry.slot);
+            }
+        }
+        if (srvRegisters.empty())
         {
             mSRVHeap.reset();
             return;
         }
 
-        uint32_t base = *pipelineObject->mSRVRegisters.begin();
-        uint32_t count = *pipelineObject->mSRVRegisters.rbegin() - base + 1;
+        uint32_t base = *srvRegisters.begin();
+        uint32_t count = *srvRegisters.rbegin() - base + 1;
         mSRVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::SRV, count);
 
         for (uint32_t i = 0; i < count; i++)
         {
             uint32_t reg = base + i;
             D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mSRVHeap->acquire();
-            if (pipelineObject->mSRVRegisters.find(reg) == pipelineObject->mSRVRegisters.end())
+            if (srvRegisters.find(reg) == srvRegisters.end())
             {
                 D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
                 srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -847,7 +849,12 @@ namespace eokas
             }
 
             auto texture = it->second;
-            auto dxResource = dynamic_cast<DX12Texture*>(texture.get())->mResource;
+            auto* dxTexture = dynamic_cast<DX12Texture*>(texture.get());
+            if (!dxTexture)
+            {
+                throw std::runtime_error("PipelineBindings: texture is not a DX12Texture.");
+            }
+            auto dxResource = dxTexture->mResource;
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
             srvDesc.Format = DX12Utils::transferFormat(texture->getOptions().format);
             srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -857,28 +864,55 @@ namespace eokas
         }
     }
 
-    DX12CommandBuffer::DX12CommandBuffer(const DX12Device& device, const DX12PipelineBindings& bindings)
+    DX12CommandBuffer::DX12CommandBuffer(const DX12Device& device)
         : mDevice(device)
     {
         auto& dxDevice = device.mDevice;
-        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(bindings.mPipelineObject.get());
-        auto& dxPSO = pipelineObject->mPipelineState;
         auto& dxCommandAllocator = device.mCommandAllocators[device.mFrameBufferIndex];
-        
-        _ThrowIfFailed(dxDevice->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, dxCommandAllocator.Get(), dxPSO.Get(), IID_PPV_ARGS(&mCommandList)));
-        
-        //_ThrowIfFailed(mCommandList->Close());
+        _ThrowIfFailed(dxDevice->CreateCommandList(
+            0, D3D12_COMMAND_LIST_TYPE_DIRECT, dxCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList)));
     }
     
-    void DX12CommandBuffer::reset(PipelineBindings::Ref bindings)
+    void DX12CommandBuffer::reset()
     {
         auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameBufferIndex];
-        auto* pipelineBindings = dynamic_cast<DX12PipelineBindings*>(bindings.get());
-        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(pipelineBindings->mPipelineObject.get());
-
+        ID3D12PipelineState* pso = nullptr;
+        if (auto* current = dynamic_cast<DX12PipelineObject*>(mCurrentPipeline.get()))
+        {
+            pso = current->mPipelineState.Get();
+        }
         _ThrowIfFailed(dxCommandAllocator->Reset());
-        _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), pipelineObject->mPipelineState.Get()));
+        _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), pso));
+        if (mCurrentPipeline)
+        {
+            setPipelineObject(mCurrentPipeline);
+        }
+    }
+
+    void DX12CommandBuffer::setPipelineObject(PipelineObject::Ref pipeline)
+    {
+        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(pipeline.get());
+        if (!pipelineObject)
+        {
+            throw std::runtime_error("CommandBuffer: invalid pipeline.");
+        }
+        mCurrentPipeline = pipeline;
+        mCommandList->SetPipelineState(pipelineObject->mPipelineState.Get());
         mCommandList->SetGraphicsRootSignature(pipelineObject->mRootSignature.Get());
+    }
+
+    void DX12CommandBuffer::setPipelineBindings(PipelineBindings::Ref bindings)
+    {
+        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(mCurrentPipeline.get());
+        auto* pipelineBindings = dynamic_cast<DX12PipelineBindings*>(bindings.get());
+        if (!pipelineObject || !pipelineBindings)
+        {
+            throw std::runtime_error("CommandBuffer: setPipelineObject before setPipelineBindings.");
+        }
+        if (!pipelineBindings->getLayout().compatibleWith(pipelineObject->getLayout()))
+        {
+            throw std::runtime_error("CommandBuffer: PipelineBindings layout is not compatible with current PipelineObject.");
+        }
 
         uint32_t root = 0;
         for (uint32_t reg : pipelineObject->mCBVRegisters)
@@ -889,14 +923,20 @@ namespace eokas
                 throw std::runtime_error("PipelineBindings: missing uniform buffer slot.");
             }
             auto* dxUB = dynamic_cast<DX12DynamicBuffer*>(ubIt->second.get());
+            if (!dxUB)
+            {
+                throw std::runtime_error("PipelineBindings: uniform buffer is not a DX12DynamicBuffer.");
+            }
             mCommandList->SetGraphicsRootConstantBufferView(root, dxUB->getGPUVirtualAddress());
             root += 1;
         }
 
-        if (!pipelineObject->mSRVRegisters.empty()
-            && pipelineBindings->mSRVHeap != nullptr
-            && !pipelineBindings->mSRVHeap->mHeaps.empty())
+        if (!pipelineObject->mSRVRegisters.empty())
         {
+            if (pipelineBindings->mSRVHeap == nullptr || pipelineBindings->mSRVHeap->mHeaps.empty())
+            {
+                throw std::runtime_error("PipelineBindings: missing SRV heap.");
+            }
             std::vector<ID3D12DescriptorHeap*> dxSRVHeapList(pipelineBindings->mSRVHeap->mHeaps.size());
             for (size_t i = 0; i < dxSRVHeapList.size(); i++)
             {
@@ -1274,15 +1314,23 @@ namespace eokas
         return std::make_shared<DX12PipelineObject>(*this);
     }
 
-    PipelineBindings::Ref DX12Device::createPipelineBindings(PipelineObject::Ref pipeline)
+    PipelineBindings::Ref DX12Device::createPipelineBindings(const PipelineLayout& layout)
     {
-        return std::make_shared<DX12PipelineBindings>(*this, pipeline);
+        return std::make_shared<DX12PipelineBindings>(*this, layout);
     }
 
-    CommandBuffer::Ref DX12Device::createCommandBuffer(PipelineBindings::Ref bindings)
+    PipelineBindings::Ref DX12Device::createPipelineBindings(PipelineObject::Ref pipeline)
     {
-        const DX12PipelineBindings& dxBindings = dynamic_cast<const DX12PipelineBindings&>(*bindings.get());
-        return std::make_shared<DX12CommandBuffer>(*this, dxBindings);
+        if (!pipeline)
+        {
+            throw std::runtime_error("Device: createPipelineBindings requires a pipeline.");
+        }
+        return createPipelineBindings(pipeline->getLayout());
+    }
+
+    CommandBuffer::Ref DX12Device::createCommandBuffer()
+    {
+        return std::make_shared<DX12CommandBuffer>(*this);
     }
     
     void DX12Device::commitCommandBuffer(const CommandBuffer::Ref commandBuffer)

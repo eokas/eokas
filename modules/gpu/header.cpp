@@ -3,20 +3,20 @@
 
 namespace eokas
 {
-    void ProgramParameterMap::add(const ProgramParameterEntry& entry)
+    void PipelineLayout::add(const PipelineLayoutEntry& entry)
     {
-        if (const ProgramParameterEntry* existing = findByName(entry.type, entry.name))
+        if (const PipelineLayoutEntry* existing = findByName(entry.type, entry.name))
         {
             if (existing->slot != entry.slot)
             {
-                throw std::runtime_error("ProgramParameterMap: name maps to different slots.");
+                throw std::runtime_error("PipelineLayout: name maps to different slots.");
             }
             return;
         }
         entries.push_back(entry);
     }
 
-    const ProgramParameterEntry* ProgramParameterMap::findBySlot(ProgramParameterType type, uint32_t slot) const
+    const PipelineLayoutEntry* PipelineLayout::findBySlot(PipelineResourceType type, uint32_t slot) const
     {
         for (const auto& entry : entries)
         {
@@ -25,12 +25,25 @@ namespace eokas
         return nullptr;
     }
 
-    const ProgramParameterEntry* ProgramParameterMap::findByName(ProgramParameterType type, const std::string& name) const
+    const PipelineLayoutEntry* PipelineLayout::findByName(PipelineResourceType type, const std::string& name) const
     {
         for (const auto& entry : entries)
         {
             if (entry.type == type && entry.name == name) return &entry;
         }
         return nullptr;
+    }
+
+    bool PipelineLayout::compatibleWith(const PipelineLayout& other) const
+    {
+        for (const auto& entry : other.entries)
+        {
+            const PipelineLayoutEntry* found = findBySlot(entry.type, entry.slot);
+            if (!found || found->name != entry.name || found->count != entry.count)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }
