@@ -10,12 +10,11 @@ namespace eokas
     {
         using Ref = std::shared_ptr<Space>;
         std::vector<Camera::Ref> cameras;
-        Camera::Ref view;
+        Camera::Ref activeCamera;
         std::vector<Light::Ref> lights;
         std::vector<Primitive::Ref> primitives;
         Color clearColor = Color(0, 0.2f, 0.4f, 1);
         Color ambient = Color(0.15f, 0.15f, 0.15f, 1);
-        Viewport viewport;
         DynamicBuffer::Ref lightingUniforms;
         CommandBuffer::Ref commandBuffer;
 

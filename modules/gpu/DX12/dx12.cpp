@@ -467,9 +467,9 @@ namespace eokas
             std::string str((const char*) mError->GetBufferPointer(), mError->GetBufferSize());
             throw std::runtime_error(str.c_str());
         }
-        else
+        if (FAILED(hr) || mCode == nullptr)
         {
-            _ThrowIfFailed(hr);
+            throw std::runtime_error("D3DCompile failed.");
         }
 
         reflectProgramParameters(mCode.Get(), mLayout);

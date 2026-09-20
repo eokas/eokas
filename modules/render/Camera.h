@@ -18,6 +18,7 @@ namespace eokas
         float farZ = 100.0f;
         bool perspective = true;
         float orthoHeight = 10.0f;
+        Viewport viewport;
 
         Matrix4 viewMatrix() const;
         Matrix4 projectionMatrix() const;

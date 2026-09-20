@@ -26,6 +26,7 @@ namespace eokas
     {
         Matrix4 world;
         Matrix4 wvp;
+        float cameraPos[4];
     };
 
     struct LightUniforms
@@ -45,6 +46,11 @@ namespace eokas
     struct MaterialUniforms
     {
         float albedo[4];
+        float metallic;
+        float roughness;
+        float ao;
+        float _pad0;
+        float emissive[4];
     };
 }
 

@@ -11,7 +11,7 @@ namespace eokas
     void Space::remove(Camera::Ref camera)
     {
         cameras.erase(std::remove(cameras.begin(), cameras.end(), camera), cameras.end());
-        if (view == camera) view = nullptr;
+        if (activeCamera == camera) activeCamera = nullptr;
     }
     void Space::remove(Light::Ref light)
     {
@@ -60,7 +60,7 @@ namespace eokas
 
     void Space::render(Device::Ref device)
     {
-        Camera::Ref cam = view ? view : (cameras.empty() ? nullptr : cameras[0]);
+        Camera::Ref cam = activeCamera ? activeCamera : (cameras.empty() ? nullptr : cameras[0]);
         if (!device || !cam)
             return;
 
@@ -100,7 +100,7 @@ namespace eokas
                 p->material->uploadDefaultTexture(commandBuffer);
         }
 
-        commandBuffer->setViewport(viewport);
+        commandBuffer->setViewport(cam->viewport);
         RenderTarget::Ref rt = device->getActiveRenderTarget();
         RenderTarget::Ref ds = device->getActiveDepthTarget();
         Barrier begin{rt, ResourceState::Present, ResourceState::RenderTarget};
