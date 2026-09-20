@@ -56,15 +56,26 @@ namespace eokas
         using Ref = std::shared_ptr<RenderTarget>;
     };
 
-    enum class BufferUsage
+    struct Buffer : public Resource
     {
-        VertexBuffer,
-        IndexBuffer,
-        UniformBuffer,
-        UnorderedAccess
+        using Ref = std::shared_ptr<Buffer>;
+        virtual uint32_t getLength() const = 0;
+        virtual uint32_t getBindOffset() const { return 0; }
     };
-    
-    struct DynamicBuffer : public Resource
+
+    struct StaticBuffer : public Buffer
+    {
+        using Ref = std::shared_ptr<StaticBuffer>;
+    };
+
+    struct MutableBuffer : public Buffer
+    {
+        using Ref = std::shared_ptr<MutableBuffer>;
+        virtual void* map() = 0;
+        virtual void unmap() = 0;
+    };
+
+    struct DynamicBuffer : public Buffer
     {
         using Ref = std::shared_ptr<DynamicBuffer>;
         virtual void* map() = 0;
@@ -297,9 +308,10 @@ namespace eokas
         virtual void clearDepthStencil(RenderTarget::Ref depthStencil, float depth = 1.0f, uint32_t stencil = 0) = 0;
         virtual void setViewport(const Viewport& viewport) = 0;
         virtual void setTopology(Topology topology) = 0;
-        virtual void setVertexBuffer(DynamicBuffer::Ref buffer, uint32_t length, uint32_t stride) = 0;
-        virtual void setIndexBuffer(DynamicBuffer::Ref buffer, uint32_t length, Format format) = 0;
+        virtual void setVertexBuffer(Buffer::Ref buffer, uint32_t length, uint32_t stride) = 0;
+        virtual void setIndexBuffer(Buffer::Ref buffer, uint32_t length, Format format) = 0;
         virtual void drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, uint32_t startInstanceLocation) = 0;
+        virtual void fillBuffer(StaticBuffer::Ref target, const void* data, uint32_t size) = 0;
         virtual void fillTexture(Texture::Ref target, const std::vector<uint8_t>& source) = 0;
         virtual void barrier(const std::vector<Barrier>& barriers) = 0;
         virtual void finish() = 0;
@@ -311,7 +323,11 @@ namespace eokas
         
         virtual RenderTarget::Ref getActiveRenderTarget() = 0;
         virtual RenderTarget::Ref getActiveDepthTarget() = 0;
-        virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length, uint32_t usage) = 0;
+        virtual uint32_t getFrameCount() const = 0;
+        virtual uint32_t getFrameIndex() const = 0;
+        virtual StaticBuffer::Ref createStaticBuffer(uint32_t length) = 0;
+        virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) = 0;
+        virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length) = 0;
         virtual Texture::Ref createTexture(const TextureOptions& options) = 0;
         virtual Program::Ref createProgram(const ProgramOptions& options) = 0;
         virtual PipelineObject::Ref createPipelineObject() = 0;

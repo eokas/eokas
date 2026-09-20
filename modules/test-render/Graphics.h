@@ -85,6 +85,7 @@ namespace eokas
             if (mBoxRight)
                 mBoxRight->transform.rotation = rot;
 
+            mDevice->waitForGPU();
             mSpace.render(mDevice);
         }
     };

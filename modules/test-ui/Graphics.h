@@ -88,6 +88,7 @@ namespace eokas::ui {
         void tick(float delta) {
             (void)delta;
 
+            mDevice->waitForGPU();
             mCanvas.beginFrame();
             mCanvas.renderFrame();
             mCanvas.endFrame();

@@ -6,7 +6,7 @@ namespace eokas
     void Primitive::createResources(Device::Ref device)
     {
         if (!objectUniforms)
-            objectUniforms = device->createDynamicBuffer(sizeof(TransformUniforms), (uint32_t)BufferUsage::UniformBuffer);
+            objectUniforms = device->createDynamicBuffer(sizeof(TransformUniforms));
     }
 
     void Primitive::updateUniforms(const Camera& cam)

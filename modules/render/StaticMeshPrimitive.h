@@ -9,13 +9,14 @@ namespace eokas
     {
         using Ref = std::shared_ptr<StaticMeshPrimitive>;
         GeoMesh mesh;
-        DynamicBuffer::Ref vertexBuffer;
-        DynamicBuffer::Ref indexBuffer;
+        StaticBuffer::Ref vertexBuffer;
+        StaticBuffer::Ref indexBuffer;
         uint32_t vertexBytes = 0;
         uint32_t vertexStride = 0;
         uint32_t indexBytes = 0;
         uint32_t indexCount = 0;
         Format indexFormat = Format::R32_UINT;
+        bool geometryUploaded = false;
 
         void createResources(Device::Ref device) override;
         void encode(CommandBuffer::Ref cmd) override;

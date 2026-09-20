@@ -46,6 +46,16 @@ namespace eokas
 
 #define _ThrowIfFailed(hr) { HRESULT ret = (hr); if(FAILED(ret)) throw HRException(ret, __FILE__, __LINE__); }
 
+    namespace
+    {
+        constexpr uint32_t kConstantBufferAlignment = 256;
+
+        uint32_t alignUp(uint32_t value, uint32_t alignment)
+        {
+            return (value + alignment - 1) & ~(alignment - 1);
+        }
+    }
+
     static void addReflectedBinding(PipelineLayout& layout, const char* name, D3D_SHADER_INPUT_TYPE type, uint32_t bindPoint, uint32_t bindCount)
     {
         PipelineLayoutEntry entry;
@@ -315,20 +325,12 @@ namespace eokas
     {
         return mResource.Get();
     }
-    
-    DX12DynamicBuffer::DX12DynamicBuffer(const DX12Device& device, uint32_t length, uint32_t usage)
-        : mDevice(device)
-        , mUsage(usage)
+
+    DX12StaticBuffer::DX12StaticBuffer(const DX12Device& device, uint32_t length)
     {
         auto& dxDevice = device.mDevice;
-        uint32_t slice = length;
-        if (usage == (uint32_t)BufferUsage::UniformBuffer)
-        {
-            slice = (length + 255u) & ~255u;
-            length = slice * kFrameBufferCount;
-        }
-        mSlice = slice;
-        
+        mLength = length;
+
         D3D12_RESOURCE_DESC bufferDesc = {};
         bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
         bufferDesc.Alignment = 0;
@@ -341,10 +343,50 @@ namespace eokas
         bufferDesc.SampleDesc.Quality = 0;
         bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
         bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-        
+
+        D3D12_HEAP_PROPERTIES bufferHeapProps = {};
+        bufferHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+        _ThrowIfFailed(dxDevice->CreateCommittedResource(
+            &bufferHeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &bufferDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            nullptr,
+            IID_PPV_ARGS(&mResource)));
+    }
+
+    void* DX12StaticBuffer::getNativeResource() const
+    {
+        return mResource.Get();
+    }
+
+    uint32_t DX12StaticBuffer::getLength() const
+    {
+        return mLength;
+    }
+
+    DX12MutableBuffer::DX12MutableBuffer(const DX12Device& device, uint32_t length)
+        : mLength(length)
+    {
+        auto& dxDevice = device.mDevice;
+
+        D3D12_RESOURCE_DESC bufferDesc = {};
+        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufferDesc.Alignment = 0;
+        bufferDesc.Width = length;
+        bufferDesc.Height = 1;
+        bufferDesc.DepthOrArraySize = 1;
+        bufferDesc.MipLevels = 1;
+        bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+        bufferDesc.SampleDesc.Count = 1;
+        bufferDesc.SampleDesc.Quality = 0;
+        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
         D3D12_HEAP_PROPERTIES bufferHeapProps = {};
         bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-        
+
         _ThrowIfFailed(dxDevice->CreateCommittedResource(
             &bufferHeapProps,
             D3D12_HEAP_FLAG_NONE,
@@ -353,44 +395,90 @@ namespace eokas
             nullptr,
             IID_PPV_ARGS(&mResource)));
     }
-    
+
+    void* DX12MutableBuffer::getNativeResource() const
+    {
+        return mResource.Get();
+    }
+
+    uint32_t DX12MutableBuffer::getLength() const
+    {
+        return mLength;
+    }
+
+    void* DX12MutableBuffer::map()
+    {
+        UINT8* ptr = nullptr;
+        _ThrowIfFailed(mResource->Map(0, nullptr, (void**) &ptr));
+        return ptr;
+    }
+
+    void DX12MutableBuffer::unmap()
+    {
+        mResource->Unmap(0, nullptr);
+    }
+
+    DX12DynamicBuffer::DX12DynamicBuffer(const DX12Device& device, uint32_t length)
+        : mDevice(device)
+        , mLength(length)
+        , mFrameSize(alignUp(length, kConstantBufferAlignment))
+        , mFrameCount(device.getFrameCount())
+    {
+        auto& dxDevice = device.mDevice;
+
+        D3D12_RESOURCE_DESC bufferDesc = {};
+        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufferDesc.Alignment = 0;
+        bufferDesc.Width = (uint64_t)mFrameSize * mFrameCount;
+        bufferDesc.Height = 1;
+        bufferDesc.DepthOrArraySize = 1;
+        bufferDesc.MipLevels = 1;
+        bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+        bufferDesc.SampleDesc.Count = 1;
+        bufferDesc.SampleDesc.Quality = 0;
+        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+        D3D12_HEAP_PROPERTIES bufferHeapProps = {};
+        bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+        _ThrowIfFailed(dxDevice->CreateCommittedResource(
+            &bufferHeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&mResource)));
+    }
+
     void* DX12DynamicBuffer::getNativeResource() const
     {
         return mResource.Get();
     }
-    
-    void* DX12DynamicBuffer::map()
+
+    uint32_t DX12DynamicBuffer::getLength() const
     {
-        UINT8* ptr = nullptr;
-        _ThrowIfFailed(mResource->Map(0, nullptr, (void**) &ptr));
-        if (mUsage == (uint32_t)BufferUsage::UniformBuffer)
-        {
-            return ptr + mDevice.mFrameBufferIndex * mSlice;
-        }
-        return ptr;
-    }
-    
-    void DX12DynamicBuffer::unmap()
-    {
-        if (mUsage == (uint32_t)BufferUsage::UniformBuffer)
-        {
-            D3D12_RANGE written;
-            written.Begin = (SIZE_T)mDevice.mFrameBufferIndex * mSlice;
-            written.End = written.Begin + mSlice;
-            mResource->Unmap(0, &written);
-            return;
-        }
-        mResource->Unmap(0, nullptr);
+        return mLength;
     }
 
-    D3D12_GPU_VIRTUAL_ADDRESS DX12DynamicBuffer::getGPUVirtualAddress() const
+    uint32_t DX12DynamicBuffer::getBindOffset() const
     {
-        D3D12_GPU_VIRTUAL_ADDRESS va = mResource->GetGPUVirtualAddress();
-        if (mUsage == (uint32_t)BufferUsage::UniformBuffer)
-        {
-            va += (D3D12_GPU_VIRTUAL_ADDRESS)mDevice.mFrameBufferIndex * mSlice;
-        }
-        return va;
+        return mDevice.getFrameIndex() * mFrameSize;
+    }
+
+    void* DX12DynamicBuffer::map()
+    {
+        void* base = nullptr;
+        D3D12_RANGE readRange = {0, 0};
+        _ThrowIfFailed(mResource->Map(0, &readRange, &base));
+        return static_cast<uint8_t*>(base) + getBindOffset();
+    }
+
+    void DX12DynamicBuffer::unmap()
+    {
+        const uint32_t offset = getBindOffset();
+        D3D12_RANGE written = {offset, offset + mLength};
+        mResource->Unmap(0, &written);
     }
     
     DX12Texture::DX12Texture(const DX12Device& device, const TextureOptions& options)
@@ -875,6 +963,7 @@ namespace eokas
     
     void DX12CommandBuffer::reset()
     {
+        mUploadResources.clear();
         auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameBufferIndex];
         ID3D12PipelineState* pso = nullptr;
         if (auto* current = dynamic_cast<DX12PipelineObject*>(mCurrentPipeline.get()))
@@ -922,12 +1011,13 @@ namespace eokas
             {
                 throw std::runtime_error("PipelineBindings: missing uniform buffer slot.");
             }
-            auto* dxUB = dynamic_cast<DX12DynamicBuffer*>(ubIt->second.get());
-            if (!dxUB)
+            auto* native = static_cast<ID3D12Resource*>(ubIt->second->getNativeResource());
+            if (!native)
             {
-                throw std::runtime_error("PipelineBindings: uniform buffer is not a DX12DynamicBuffer.");
+                throw std::runtime_error("PipelineBindings: uniform buffer has no native resource.");
             }
-            mCommandList->SetGraphicsRootConstantBufferView(root, dxUB->getGPUVirtualAddress());
+            mCommandList->SetGraphicsRootConstantBufferView(
+                root, native->GetGPUVirtualAddress() + ubIt->second->getBindOffset());
             root += 1;
         }
 
@@ -1010,30 +1100,97 @@ namespace eokas
         mCommandList->IASetPrimitiveTopology(dxTopology);
     }
     
-    void DX12CommandBuffer::setVertexBuffer(DynamicBuffer::Ref buffer, uint32_t length, uint32_t stride)
+    void DX12CommandBuffer::setVertexBuffer(Buffer::Ref buffer, uint32_t length, uint32_t stride)
     {
-        DX12DynamicBuffer* dxVBO = dynamic_cast<DX12DynamicBuffer*>(buffer.get());
-        const auto& dxVBR = dxVBO->mResource;
-        
+        auto* dxRes = static_cast<ID3D12Resource*>(buffer->getNativeResource());
         D3D12_VERTEX_BUFFER_VIEW dxVBV;
-        dxVBV.BufferLocation = dxVBR->GetGPUVirtualAddress();
+        dxVBV.BufferLocation = dxRes->GetGPUVirtualAddress() + buffer->getBindOffset();
         dxVBV.SizeInBytes = length;
         dxVBV.StrideInBytes = stride;
         
         mCommandList->IASetVertexBuffers(0, 1, &dxVBV);
     }
     
-    void DX12CommandBuffer::setIndexBuffer(DynamicBuffer::Ref buffer, uint32_t length, Format format)
+    void DX12CommandBuffer::setIndexBuffer(Buffer::Ref buffer, uint32_t length, Format format)
     {
-        DX12DynamicBuffer* dxIBO = dynamic_cast<DX12DynamicBuffer*>(buffer.get());
-        const auto& dxIBR = dxIBO->mResource;
-        
+        auto* dxRes = static_cast<ID3D12Resource*>(buffer->getNativeResource());
         D3D12_INDEX_BUFFER_VIEW dxIBV;
-        dxIBV.BufferLocation = dxIBR->GetGPUVirtualAddress();
+        dxIBV.BufferLocation = dxRes->GetGPUVirtualAddress() + buffer->getBindOffset();
         dxIBV.SizeInBytes = length;
         dxIBV.Format = DX12Utils::transferFormat(format);
         
         mCommandList->IASetIndexBuffer(&dxIBV);
+    }
+
+    void DX12CommandBuffer::fillBuffer(StaticBuffer::Ref target, const void* data, uint32_t size)
+    {
+        if (!target || !data || size == 0)
+        {
+            throw std::runtime_error("CommandBuffer: fillBuffer requires a valid target and data.");
+        }
+
+        auto* dxTarget = dynamic_cast<DX12StaticBuffer*>(target.get());
+        if (!dxTarget || !dxTarget->mResource)
+        {
+            throw std::runtime_error("CommandBuffer: fillBuffer target is not a DX12StaticBuffer.");
+        }
+        if (size > dxTarget->mLength)
+        {
+            throw std::runtime_error("CommandBuffer: fillBuffer source is larger than the static buffer.");
+        }
+
+        auto& dxDevice = mDevice.mDevice;
+        ComPtr<ID3D12Resource> upload;
+        {
+            D3D12_RESOURCE_DESC bufferDesc = {};
+            bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            bufferDesc.Alignment = 0;
+            bufferDesc.Width = size;
+            bufferDesc.Height = 1;
+            bufferDesc.DepthOrArraySize = 1;
+            bufferDesc.MipLevels = 1;
+            bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+            bufferDesc.SampleDesc.Count = 1;
+            bufferDesc.SampleDesc.Quality = 0;
+            bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+            D3D12_HEAP_PROPERTIES bufferHeapProps = {};
+            bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+            _ThrowIfFailed(dxDevice->CreateCommittedResource(
+                &bufferHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upload)));
+        }
+
+        UINT8* dstPtr = nullptr;
+        _ThrowIfFailed(upload->Map(0, nullptr, (void**)&dstPtr));
+        memcpy(dstPtr, data, size);
+        upload->Unmap(0, nullptr);
+
+        if (dxTarget->mState != D3D12_RESOURCE_STATE_COPY_DEST)
+        {
+            D3D12_RESOURCE_BARRIER toCopy = {};
+            toCopy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            toCopy.Transition.pResource = dxTarget->mResource.Get();
+            toCopy.Transition.Subresource = 0;
+            toCopy.Transition.StateBefore = dxTarget->mState;
+            toCopy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+            mCommandList->ResourceBarrier(1, &toCopy);
+            dxTarget->mState = D3D12_RESOURCE_STATE_COPY_DEST;
+        }
+
+        mCommandList->CopyBufferRegion(dxTarget->mResource.Get(), 0, upload.Get(), 0, size);
+
+        D3D12_RESOURCE_BARRIER onFinish = {};
+        onFinish.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        onFinish.Transition.pResource = dxTarget->mResource.Get();
+        onFinish.Transition.Subresource = 0;
+        onFinish.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        onFinish.Transition.StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ;
+        mCommandList->ResourceBarrier(1, &onFinish);
+        dxTarget->mState = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+        mUploadResources.push_back(upload);
     }
     
     void DX12CommandBuffer::drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, uint32_t startInstanceLocation)
@@ -1083,7 +1240,7 @@ namespace eokas
         dxDevice->GetCopyableFootprints(&dxTargetDesc, subresourceIndex, subresourceCount, 0, &uploadFootprint, &numRows, &rowSizeInBytes, &uploadBufferSize);
         
         // 2. 创建上传堆
-        
+        ComPtr<ID3D12Resource> upload;
         {
             D3D12_RESOURCE_DESC bufferDesc = {};
             bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -1100,25 +1257,25 @@ namespace eokas
             
             D3D12_HEAP_PROPERTIES bufferHeapProps = {};
             bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
-            _ThrowIfFailed(dxDevice->CreateCommittedResource(&bufferHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&uploadBuffer)));
+            _ThrowIfFailed(dxDevice->CreateCommittedResource(&bufferHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upload)));
         }
         
         // 3. 将数据从 std::vector<UINT8> 复制到上传堆中
         const UINT8* srcPtr = source.data();
         UINT8* dstPtr;
-        _ThrowIfFailed(uploadBuffer->Map(0, nullptr, (void**) &dstPtr));
+        _ThrowIfFailed(upload->Map(0, nullptr, (void**) &dstPtr));
         for (UINT row = 0; row < numRows; ++row)
         {
             memcpy(dstPtr, srcPtr, rowSizeInBytes);
             dstPtr += uploadFootprint.Footprint.RowPitch;
             srcPtr += rowSizeInBytes;
         }
-        uploadBuffer->Unmap(0, nullptr);
+        upload->Unmap(0, nullptr);
         
         // 4. 将数据从上传堆复制到纹理资源中
         {
             D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
-            srcLocation.pResource = uploadBuffer.Get();
+            srcLocation.pResource = upload.Get();
             srcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
             srcLocation.PlacedFootprint = uploadFootprint;
             
@@ -1137,6 +1294,8 @@ namespace eokas
             onFinish.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
             mCommandList->ResourceBarrier(1, &onFinish);
         }
+
+        mUploadResources.push_back(upload);
     }
     
     DX12Device::DX12Device(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
@@ -1293,10 +1452,30 @@ namespace eokas
     {
         return mDepthTargets[mFrameBufferIndex];
     }
-    
-    DynamicBuffer::Ref DX12Device::createDynamicBuffer(uint32_t length, uint32_t usage)
+
+    uint32_t DX12Device::getFrameCount() const
     {
-        return std::make_shared<DX12DynamicBuffer>(*this, length, usage);
+        return kFrameBufferCount;
+    }
+
+    uint32_t DX12Device::getFrameIndex() const
+    {
+        return mFrameBufferIndex;
+    }
+
+    StaticBuffer::Ref DX12Device::createStaticBuffer(uint32_t length)
+    {
+        return std::make_shared<DX12StaticBuffer>(*this, length);
+    }
+
+    MutableBuffer::Ref DX12Device::createMutableBuffer(uint32_t length)
+    {
+        return std::make_shared<DX12MutableBuffer>(*this, length);
+    }
+
+    DynamicBuffer::Ref DX12Device::createDynamicBuffer(uint32_t length)
+    {
+        return std::make_shared<DX12DynamicBuffer>(*this, length);
     }
     
     Texture::Ref DX12Device::createTexture(const TextureOptions& options)

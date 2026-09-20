@@ -23,10 +23,10 @@ namespace eokas::gpu {
         PipelineObject::Ref mPipelineObject;
         PipelineBindings::Ref mPipelineBindings;
         CommandBuffer::Ref mCommandBuffer;
-        DynamicBuffer::Ref mVertexBuffer;
+        StaticBuffer::Ref mVertexBuffer;
         uint32_t vDataLength;
         uint32_t vDataStride;
-        DynamicBuffer::Ref mIndexBuffer;
+        StaticBuffer::Ref mIndexBuffer;
         uint32_t iDataLength;
         Format iDataFormat;
         Texture::Ref mTexture;
@@ -78,7 +78,7 @@ namespace eokas::gpu {
             options.format = Format::R8G8B8A8_UNORM;
             mTexture = mDevice->createTexture(options);
             
-            mUniformBuffer = mDevice->createDynamicBuffer(sizeof(Matrix4) * 2, (uint32_t)BufferUsage::UniformBuffer);
+            mUniformBuffer = mDevice->createDynamicBuffer(sizeof(Matrix4) * 2);
             
             mPipelineObject = mDevice->createPipelineObject();
             mPipelineObject->begin();
@@ -125,19 +125,15 @@ namespace eokas::gpu {
             {
                 vDataStride = sizeof(Vertex);
                 vDataLength = vDataStride * mesh.vertices.size();
-                mVertexBuffer = mDevice->createDynamicBuffer(vDataLength, 0);
-                void* ptr = mVertexBuffer->map();
-                memcpy(ptr, mesh.vertices.data(), vDataLength);
-                mVertexBuffer->unmap();
+                mVertexBuffer = mDevice->createStaticBuffer(vDataLength);
+                mCommandBuffer->fillBuffer(mVertexBuffer, mesh.vertices.data(), vDataLength);
             }
             // ib
             {
                 iDataLength = mesh.indices.size() * sizeof(uint32_t);
                 iDataFormat = Format::R32_UINT;
-                mIndexBuffer = mDevice->createDynamicBuffer(iDataLength, 0);
-                void* ptr = mIndexBuffer->map();
-                memcpy(ptr, mesh.indices.data(), iDataLength);
-                mIndexBuffer->unmap();
+                mIndexBuffer = mDevice->createStaticBuffer(iDataLength);
+                mCommandBuffer->fillBuffer(mIndexBuffer, mesh.indices.data(), iDataLength);
             }
             // Texture
             {
@@ -168,7 +164,7 @@ namespace eokas::gpu {
             Matrix4 rz = Matrix4::rotate(Vector3(0, 0, 1), mAngleZ);
             Matrix4 world = Matrix4::transform(rz, Matrix4::transform(ry, rx));
             Matrix4 wvp = Matrix4::transform(world, mViewProj);
-            
+
             void* ptr = mUniformBuffer->map();
             memcpy(ptr, world.value, sizeof(world.value));
             memcpy((uint8_t*)ptr + sizeof(world.value), wvp.value, sizeof(wvp.value));

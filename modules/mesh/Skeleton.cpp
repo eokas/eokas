@@ -1,5 +1,6 @@
 #include "./Skeleton.h"
 #include "./RawMesh.h"
+#include <algorithm>
 
 namespace eokas
 {

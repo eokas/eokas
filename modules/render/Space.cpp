@@ -25,7 +25,7 @@ namespace eokas
     void Space::ensureResources(Device::Ref device)
     {
         if (!lightingUniforms)
-            lightingUniforms = device->createDynamicBuffer(sizeof(LightingUniforms), (uint32_t)BufferUsage::UniformBuffer);
+            lightingUniforms = device->createDynamicBuffer(sizeof(LightingUniforms));
         for (auto& p : primitives)
         {
             if (!p) continue;

@@ -11,9 +11,9 @@ namespace eokas
         vertexLength = maxQuads * 4 * vertexStride;
         indexFormat = Format::R32_UINT;
         indexLength = maxQuads * 6 * sizeof(uint32_t);
-        vertexBuffer = device->createDynamicBuffer(vertexLength, 0);
-        indexBuffer = device->createDynamicBuffer(indexLength, 0);
-        uniformBuffer = device->createDynamicBuffer(sizeof(Matrix4), (uint32_t)BufferUsage::UniformBuffer);
+        vertexBuffer = device->createDynamicBuffer(vertexLength);
+        indexBuffer = device->createDynamicBuffer(indexLength);
+        uniformBuffer = device->createDynamicBuffer(sizeof(Matrix4));
         mProjection = Matrix4::IDENTITY;
         indexCount = 0;
     }

@@ -193,7 +193,7 @@ namespace eokas
     {
         if (buffer || !device)
             return;
-        buffer = device->createDynamicBuffer(sizeof(MaterialUniforms), (uint32_t)BufferUsage::UniformBuffer);
+        buffer = device->createDynamicBuffer(sizeof(MaterialUniforms));
         update();
     }
 
