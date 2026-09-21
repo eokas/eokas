@@ -4,8 +4,6 @@ namespace eokas
 {
     Matrix4 Camera::viewMatrix() const
     {
-        if (useFocus)
-            return Matrix4::lookAtLH(transform.position, focus, up);
         return Matrix4::lookToLH(transform.position, transform.forward(), transform.up());
     }
 

@@ -1,5 +1,6 @@
 #include "UILayout.h"
 #include "UIFont.h"
+#include <cmath>
 
 namespace eokas
 {
@@ -31,8 +32,8 @@ namespace eokas
                 }
             }
             first = false;
-            child->rect.x = cursorX;
-            child->rect.y = cursorY;
+            child->rect.x = floorf(cursorX + 0.5f);
+            child->rect.y = floorf(cursorY + 0.5f);
             if (direction == UILayoutDirection::Horizontal)
             {
                 cursorX += child->rect.width;

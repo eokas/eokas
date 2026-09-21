@@ -105,6 +105,18 @@ namespace eokas
         SamplerAddressMode addressU = SamplerAddressMode::Clamp;
         SamplerAddressMode addressV = SamplerAddressMode::Clamp;
         SamplerAddressMode addressW = SamplerAddressMode::Clamp;
+
+        bool operator==(const SamplerState& other) const
+        {
+            return minFilter == other.minFilter
+                && magFilter == other.magFilter
+                && mipFilter == other.mipFilter
+                && addressU == other.addressU
+                && addressV == other.addressV
+                && addressW == other.addressW;
+        }
+
+        bool operator!=(const SamplerState& other) const { return !(*this == other); }
     };
     
     struct Texture : public Resource
@@ -202,6 +214,16 @@ namespace eokas
         bool depthWrite = true;
         CompareOp depthFunc = CompareOp::Less;
         StencilOp stencilOp = StencilOp::Keep;
+
+        bool operator==(const DepthStencilState& other) const
+        {
+            return depthTest == other.depthTest
+                && depthWrite == other.depthWrite
+                && depthFunc == other.depthFunc
+                && stencilOp == other.stencilOp;
+        }
+
+        bool operator!=(const DepthStencilState& other) const { return !(*this == other); }
     };
 
     enum class BlendFactor
@@ -226,6 +248,19 @@ namespace eokas
         BlendFactor srcAlpha = BlendFactor::One;
         BlendFactor dstAlpha = BlendFactor::Zero;
         BlendOp alphaOp = BlendOp::Add;
+
+        bool operator==(const BlendState& other) const
+        {
+            return enabled == other.enabled
+                && srcColor == other.srcColor
+                && dstColor == other.dstColor
+                && colorOp == other.colorOp
+                && srcAlpha == other.srcAlpha
+                && dstAlpha == other.dstAlpha
+                && alphaOp == other.alphaOp;
+        }
+
+        bool operator!=(const BlendState& other) const { return !(*this == other); }
     };
     
     // 长期管线：Shader / InputLayout / 光栅状态 / RootSignature
@@ -258,8 +293,8 @@ namespace eokas
 
         virtual const PipelineLayout& getLayout() const = 0;
         virtual void begin() = 0;
-        virtual void setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer) = 0;
-        virtual void setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer) = 0;
+        virtual void setUniformBufferBySlot(uint32_t slot, Buffer::Ref buffer) = 0;
+        virtual void setUniformBufferByName(const std::string& name, Buffer::Ref buffer) = 0;
         virtual void setTextureBySlot(uint32_t slot, Texture::Ref texture) = 0;
         virtual void setTextureByName(const std::string& name, Texture::Ref texture) = 0;
         virtual void end() = 0;

@@ -9,5 +9,6 @@
 #include "./StaticMeshPrimitive.h"
 #include "./SkeletalMeshPrimitive.h"
 #include "./Space.h"
+#include "./Renderer.h"
 
 #endif

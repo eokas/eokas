@@ -8,5 +8,6 @@
 #include "UIText.h"
 #include "UILayout.h"
 #include "UIFont.h"
+#include "UIMenu.h"
 
 #endif//_EOKAS_UI_MAIN_H_

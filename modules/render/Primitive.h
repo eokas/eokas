@@ -12,13 +12,14 @@ namespace eokas
         Transform transform;
         Material::Ref material;
         bool visible = true;
+        bool screenSpace = false;
         DynamicBuffer::Ref objectUniforms;
 
         virtual ~Primitive() = default;
         virtual void createResources(Device::Ref device);
         virtual void updateUniforms(const Camera& cam);
         virtual void encode(CommandBuffer::Ref cmd) = 0;
-        virtual bool ready() const = 0;
+        virtual bool ready() const;
     };
 }
 

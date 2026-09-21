@@ -177,7 +177,7 @@ namespace eokas
     {
         const DX12Device& mDevice;
         PipelineLayout mLayout;
-        std::map<uint32_t, DynamicBuffer::Ref> mUniformBuffers;
+        std::map<uint32_t, Buffer::Ref> mUniformBuffers;
         std::map<uint32_t, DX12Texture::Ref> mTextures;
         std::shared_ptr<DX12DescriptorHeap> mSRVHeap;
 
@@ -185,8 +185,8 @@ namespace eokas
 
         virtual const PipelineLayout& getLayout() const override;
         virtual void begin() override;
-        virtual void setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer) override;
-        virtual void setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer) override;
+        virtual void setUniformBufferBySlot(uint32_t slot, Buffer::Ref buffer) override;
+        virtual void setUniformBufferByName(const std::string& name, Buffer::Ref buffer) override;
         virtual void setTextureBySlot(uint32_t slot, Texture::Ref texture) override;
         virtual void setTextureByName(const std::string& name, Texture::Ref texture) override;
         virtual void end() override;

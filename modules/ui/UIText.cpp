@@ -13,8 +13,8 @@ namespace eokas
 
         float bake = (float)font->pixelSize();
         float scale = (fontSize > 0.0f ? fontSize : bake) / bake;
-        float baseline = rect.y + font->ascender() * scale;
-        float cursorX = rect.x;
+        float baseline = floorf(rect.y + font->ascender() * scale + 0.5f);
+        float cursorX = floorf(rect.x + 0.5f);
         for (size_t i = 0; i < text.length(); i++)
         {
             const UIFontGlyph& g = font->glyph(text.at(i));

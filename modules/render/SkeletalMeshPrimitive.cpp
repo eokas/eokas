@@ -37,6 +37,6 @@ namespace eokas
 
     bool SkeletalMeshPrimitive::ready() const
     {
-        return material && material->built && vertexBuffer && indexBuffer && indexCount > 0 && objectUniforms;
+        return material && material->isReady() && vertexBuffer && indexBuffer && indexCount > 0 && objectUniforms;
     }
 }

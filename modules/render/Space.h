@@ -16,7 +16,6 @@ namespace eokas
         Color clearColor = Color(0, 0.2f, 0.4f, 1);
         Color ambient = Color(0.15f, 0.15f, 0.15f, 1);
         DynamicBuffer::Ref lightingUniforms;
-        CommandBuffer::Ref commandBuffer;
 
         void add(Camera::Ref camera);
         void add(Light::Ref light);
@@ -24,12 +23,6 @@ namespace eokas
         void remove(Camera::Ref camera);
         void remove(Light::Ref light);
         void remove(Primitive::Ref primitive);
-
-        void render(Device::Ref device);
-
-    private:
-        void ensureResources(Device::Ref device);
-        void updateLighting();
     };
 }
 

@@ -89,6 +89,8 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
 #endif
 
     try {
+        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
         WNDCLASSEXA wcex;
         wcex.cbSize = sizeof(WNDCLASSEXA);
         wcex.style = CS_GLOBALCLASS;
@@ -104,8 +106,11 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
         wcex.hIconSm = NULL;
         RegisterClassExA(&wcex);
 
+        RECT windowRect = { 0, 0, windowWidth, windowHeight };
+        AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
         HWND hWnd = CreateWindowA(windowClass, windowTitle, WS_OVERLAPPEDWINDOW,
-            0, 0, windowWidth, windowHeight, nullptr, nullptr, hInstance, nullptr);
+            0, 0, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top,
+            nullptr, nullptr, hInstance, nullptr);
         if (!hWnd)
         {
             return FALSE;

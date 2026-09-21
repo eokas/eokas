@@ -856,7 +856,7 @@ namespace eokas
     {
     }
 
-    void DX12PipelineBindings::setUniformBufferBySlot(uint32_t slot, DynamicBuffer::Ref buffer)
+    void DX12PipelineBindings::setUniformBufferBySlot(uint32_t slot, Buffer::Ref buffer)
     {
         if (!mLayout.findBySlot(PipelineResourceType::UniformBuffer, slot))
         {
@@ -865,7 +865,7 @@ namespace eokas
         mUniformBuffers[slot] = buffer;
     }
 
-    void DX12PipelineBindings::setUniformBufferByName(const std::string& name, DynamicBuffer::Ref buffer)
+    void DX12PipelineBindings::setUniformBufferByName(const std::string& name, Buffer::Ref buffer)
     {
         const PipelineLayoutEntry* entry = mLayout.findByName(PipelineResourceType::UniformBuffer, name);
         if (!entry)

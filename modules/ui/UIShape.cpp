@@ -4,18 +4,9 @@
 
 namespace eokas
 {
-    void UIShape::create(Device::Ref device, uint32_t maxQuads)
+    UIShape::UIShape()
     {
-        mMaxQuads = maxQuads;
-        vertexStride = sizeof(UIVertex);
-        vertexLength = maxQuads * 4 * vertexStride;
-        indexFormat = Format::R32_UINT;
-        indexLength = maxQuads * 6 * sizeof(uint32_t);
-        vertexBuffer = device->createDynamicBuffer(vertexLength);
-        indexBuffer = device->createDynamicBuffer(indexLength);
-        uniformBuffer = device->createDynamicBuffer(sizeof(Matrix4));
-        mProjection = Matrix4::IDENTITY;
-        indexCount = 0;
+        screenSpace = true;
     }
 
     void UIShape::begin()
@@ -30,9 +21,11 @@ namespace eokas
         texture = tex;
     }
 
-    void UIShape::setProjection(const Matrix4& proj)
+    void UIShape::setPendingUpload(const std::vector<uint8_t>& rgba, uint32_t atlasSize)
     {
-        mProjection = proj;
+        mPendingUploadRgba = rgba;
+        mPendingAtlasSize = atlasSize;
+        mTextureDirty = true;
     }
 
     void UIShape::addQuad(const Rect& screen, const Rect& uv, const Color& color)
@@ -63,7 +56,41 @@ namespace eokas
         indexCount = (uint32_t)mIndices.size();
         vertexLength = (uint32_t)(mVertices.size() * sizeof(UIVertex));
         indexLength = (uint32_t)(mIndices.size() * sizeof(uint32_t));
+    }
 
+    void UIShape::createResources(Device::Ref device)
+    {
+        vertexStride = sizeof(UIVertex);
+        vertexLength = mMaxQuads * 4 * vertexStride;
+        indexFormat = Format::R32_UINT;
+        indexLength = mMaxQuads * 6 * sizeof(uint32_t);
+        if (!vertexBuffer)
+            vertexBuffer = device->createDynamicBuffer(vertexLength);
+        if (!indexBuffer)
+            indexBuffer = device->createDynamicBuffer(indexLength);
+
+        if (!texture && mPendingAtlasSize > 0)
+        {
+            TextureOptions options;
+            options.width = mPendingAtlasSize;
+            options.height = mPendingAtlasSize;
+            options.mipCount = 1;
+            options.format = Format::R8G8B8A8_UNORM;
+            texture = device->createTexture(options);
+            if (material)
+                material->setParameter("gMainTexture", texture);
+        }
+
+        Primitive::createResources(device);
+    }
+
+    void UIShape::encode(CommandBuffer::Ref cmd)
+    {
+        if (mTextureDirty && texture && cmd)
+        {
+            cmd->fillTexture(texture, mPendingUploadRgba);
+            mTextureDirty = false;
+        }
         if (vertexBuffer && !mVertices.empty())
         {
             void* ptr = vertexBuffer->map();
@@ -76,11 +103,12 @@ namespace eokas
             memcpy(ptr, mIndices.data(), indexLength);
             indexBuffer->unmap();
         }
-        if (uniformBuffer)
-        {
-            void* ptr = uniformBuffer->map();
-            memcpy(ptr, mProjection.value, sizeof(mProjection.value));
-            uniformBuffer->unmap();
-        }
+        if (indexCount == 0)
+            return;
+
+        cmd->setTopology(Topology::TriangleList);
+        cmd->setVertexBuffer(vertexBuffer, vertexLength, vertexStride);
+        cmd->setIndexBuffer(indexBuffer, indexLength, indexFormat);
+        cmd->drawIndexedInstanced(indexCount, 1, 0, 0, 0);
     }
 }

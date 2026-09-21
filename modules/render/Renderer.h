@@ -1,0 +1,34 @@
+#ifndef _EOKAS_RENDER_RENDERER_H_
+#define _EOKAS_RENDER_RENDERER_H_
+
+#include "./header.h"
+
+namespace eokas
+{
+    struct Space;
+
+    class Renderer
+    {
+    public:
+        using Ref = std::shared_ptr<Renderer>;
+
+        Renderer() = default;
+        ~Renderer();
+
+        bool create(void* windowHandle, uint32_t width, uint32_t height);
+        void destroy();
+        bool isAvailable() const { return mDevice != nullptr; }
+        Device::Ref device() const { return mDevice; }
+
+        void render(Space& space);
+
+    private:
+        void ensureResources(Space& space);
+        void updateLighting(Space& space);
+
+        Device::Ref mDevice;
+        CommandBuffer::Ref mCommandBuffer;
+    };
+}
+
+#endif

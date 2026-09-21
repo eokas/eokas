@@ -5,79 +5,82 @@
 
 namespace eokas
 {
-    enum class MaterialParamType
+    class Material
     {
-        Float, Float2, Float3, Float4
-    };
-
-    struct MaterialParameter
-    {
-        std::string name;
-        MaterialParamType type = MaterialParamType::Float4;
-        uint32_t offset = 0;
-    };
-
-    struct MaterialParameterBlock
-    {
-        std::string name = "MaterialParams";
-        MaterialUniforms data;
-        DynamicBuffer::Ref buffer;
-        std::vector<MaterialParameter> parameters;
-
-        MaterialParameterBlock();
-
-        MaterialParameter* findParameter(const std::string& name);
-        const MaterialParameter* findParameter(const std::string& name) const;
-
-        bool setParameter(const std::string& name, float value);
-        bool setParameter(const std::string& name, const Vector2& value);
-        bool setParameter(const std::string& name, const Vector3& value);
-        bool setParameter(const std::string& name, const Vector4& value);
-        bool setParameter(const std::string& name, const Color& value);
-
-        bool getParameter(const std::string& name, float& out) const;
-        bool getParameter(const std::string& name, Vector2& out) const;
-        bool getParameter(const std::string& name, Vector3& out) const;
-        bool getParameter(const std::string& name, Vector4& out) const;
-        bool getParameter(const std::string& name, Color& out) const;
-
-        void createBuffer(Device::Ref device);
-        void update();
-    };
-
-    struct Material
-    {
+    public:
         using Ref = std::shared_ptr<Material>;
-        std::string shaderPath;
-        std::string shaderSource;
-        MaterialParameterBlock parameterBlock;
-        std::vector<std::pair<std::string, Texture::Ref>> textures;
 
-        Program::Ref vs;
-        Program::Ref ps;
-        PipelineObject::Ref pipelineObject;
-        PipelineBindings::Ref pipelineBindings;
-        Texture::Ref defaultTexture;
-        bool built = false;
-        bool textureUploaded = false;
+        Material();
 
-        bool setParameter(const std::string& name, float value);
-        bool setParameter(const std::string& name, const Vector2& value);
-        bool setParameter(const std::string& name, const Vector3& value);
-        bool setParameter(const std::string& name, const Vector4& value);
-        bool setParameter(const std::string& name, const Color& value);
-        bool setParameter(const std::string& name, Texture::Ref texture);
+        void setDevice(Device::Ref device);
+        void setShaderPath(const String& path);
+        void setShaderSource(const String& source);
 
-        bool getParameter(const std::string& name, float& out) const;
-        bool getParameter(const std::string& name, Vector2& out) const;
-        bool getParameter(const std::string& name, Vector3& out) const;
-        bool getParameter(const std::string& name, Vector4& out) const;
-        bool getParameter(const std::string& name, Color& out) const;
-        bool getParameter(const std::string& name, Texture::Ref& out) const;
+        void setVertexElements(const std::vector<VertexElement>& elements);
+        void addVertexElement(const VertexElement& element);
 
-        void build(Device::Ref device, DynamicBuffer::Ref spaceLighting);
-        void updateUniforms();
+        void setFillMode(FillMode mode);
+        void setCullMode(CullMode mode);
+        void setDepthStencilState(const DepthStencilState& state);
+        void setBlendState(const BlendState& state);
+        void setSamplerState(uint32_t index, const SamplerState& state);
+
+        bool setParameter(const String& name, float value);
+        bool setParameter(const String& name, const Vector2& value);
+        bool setParameter(const String& name, const Vector3& value);
+        bool setParameter(const String& name, const Vector4& value);
+        bool setParameter(const String& name, const Color& value);
+        bool setParameter(const String& name, Texture::Ref texture);
+
+        bool getParameter(const String& name, float& out) const;
+        bool getParameter(const String& name, Vector2& out) const;
+        bool getParameter(const String& name, Vector3& out) const;
+        bool getParameter(const String& name, Vector4& out) const;
+        bool getParameter(const String& name, Color& out) const;
+        bool getParameter(const String& name, Texture::Ref& out) const;
+
+        bool setUniformBuffer(const String& name, DynamicBuffer::Ref buffer);
+
+        bool build();
+        void bind(CommandBuffer::Ref cmd);
+        bool isReady() const;
+
+    private:
+        void invalidatePipeline();
+        void invalidateDeviceResources();
+        void bindResources();
+        void pruneTextures(const PipelineLayout& layout);
         void uploadDefaultTexture(CommandBuffer::Ref cmd);
+        void flushUniforms();
+        bool hasLayout() const { return mPipelineObject != nullptr; }
+        bool isTextureNameValid(const String& name) const;
+        bool isUniformBufferNameValid(const String& name) const;
+
+        Device::Ref mDevice;
+        String mShaderPath;
+        String mShaderSource;
+        std::vector<VertexElement> mVertexElements;
+
+        FillMode mFillMode = FillMode::Solid;
+        CullMode mCullMode = CullMode::Front;
+        DepthStencilState mDepthStencil;
+        BlendState mBlend;
+        std::vector<std::pair<uint32_t, SamplerState>> mSamplers;
+
+        MaterialUniforms mUniformData{};
+        DynamicBuffer::Ref mMaterialParamsBuffer;
+        std::vector<std::pair<String, Texture::Ref>> mTextures;
+        std::vector<std::pair<String, DynamicBuffer::Ref>> mUniformBuffers;
+
+        Program::Ref mVS;
+        Program::Ref mPS;
+        PipelineObject::Ref mPipelineObject;
+        PipelineBindings::Ref mPipelineBindings;
+        Texture::Ref mDefaultTexture;
+        bool mPipelineDirty = true;
+        bool mBindingsDirty = true;
+        bool mUniformsDirty = true;
+        bool mTextureUploaded = false;
     };
 }
 

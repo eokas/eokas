@@ -2,7 +2,7 @@
 #define _EOKAS_UI_HEADER_H_
 
 #include "base/main.h"
-#include "gpu/main.h"
+#include "render/main.h"
 
 namespace eokas
 {

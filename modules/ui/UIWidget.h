@@ -13,6 +13,7 @@ namespace eokas
         Rect rect;
         Color color { 1.0f, 1.0f, 1.0f, 1.0f };
         bool visible = true;
+        bool hovered = false;
         std::vector<std::shared_ptr<UIWidget>> children;
 
         virtual ~UIWidget() = default;

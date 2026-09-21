@@ -13,11 +13,8 @@ namespace eokas
     class UICanvas
     {
     public:
-        void init(Device::Ref device, uint32_t width, uint32_t height);
+        void init(uint32_t width, uint32_t height);
         void quit();
-
-        Device::Ref device() const;
-        CommandBuffer::Ref commandBuffer() const;
 
         const std::shared_ptr<UIWidget>& root() const;
         void setRoot(const std::shared_ptr<UIWidget>& widget);
@@ -26,10 +23,8 @@ namespace eokas
         UIFont* font();
         void setTexture(Texture::Ref texture, const std::vector<uint8_t>& rgba);
 
-        void beginFrame();
-        void renderFrame();
-        void endFrame();
-        UIShape& shape();
+        void flush();
+        UIShape::Ref shape() const;
 
         UIWidget* hitTest(float x, float y);
         void onMouseMove(float x, float y);
@@ -37,28 +32,18 @@ namespace eokas
         void onMouseUp(float x, float y, int button);
 
     private:
-        Program::Ref compileShader(const char* file, ProgramType type, ProgramTarget target, const char* entry);
         String resolveAssetPath(const char* relativePath) const;
         void collectTexts(UIWidget* widget, std::vector<UIText*>& texts);
         UIFont* loadFont(const char* fontPath, uint32_t pixelSize);
-        void bindFontAtlas(UIFont* font);
-        void uploadShape();
         UIWidget* hitTestNode(UIWidget* widget, float x, float y);
+        void clearHovered(UIWidget* widget);
 
         float mWidth = 0.0f;
         float mHeight = 0.0f;
 
-        Device::Ref mDevice;
-        PipelineObject::Ref mPipelineObject;
-        PipelineBindings::Ref mPipelineBindings;
-        CommandBuffer::Ref mCommandBuffer;
-        Texture::Ref mTexture;
-
         std::shared_ptr<UIWidget> mRoot;
-
         std::vector<std::unique_ptr<UIFont>> mFonts;
-
-        UIShape mShape;
+        UIShape::Ref mShape;
 
         UIWidget* mHovered = nullptr;
         UIWidget* mPressed = nullptr;

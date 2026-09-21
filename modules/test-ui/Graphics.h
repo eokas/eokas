@@ -42,43 +42,65 @@ namespace eokas::ui {
     }
 
     class Graphics {
-        Device::Ref mDevice;
+        Renderer mRenderer;
+        Space mSpace;
         UICanvas mCanvas;
 
     public:
         UICanvas& canvas() { return mCanvas; }
 
         void init(HWND windowHandle, int32_t windowWidth, int32_t windowHeight) {
-            mDevice = GPUFactory::createDevice(windowHandle, windowWidth, windowHeight);
-            mCanvas.init(mDevice, (uint32_t)windowWidth, (uint32_t)windowHeight);
+            mRenderer.create(windowHandle, windowWidth, windowHeight);
+            mCanvas.init((uint32_t)windowWidth, (uint32_t)windowHeight);
 
-            auto layout = std::make_shared<UILayout>();
-            layout->rect = Rect(40.0f, 40.0f, 400.0f, 260.0f);
-            layout->direction = UILayoutDirection::Vertical;
-            layout->padding = 16.0f;
-            layout->spacing = 12.0f;
-            layout->color = Color(0.2f, 0.2f, 0.25f, 0.0f);
+            UINT dpi = GetDpiForWindow(windowHandle);
+            if (dpi == 0)
+            {
+                dpi = 96;
+            }
+            const float uiScale = (float)dpi / 96.0f;
+            const float fontPx = 16.0f * uiScale;
 
-            auto sliced = std::make_shared<UIImage>();
-            sliced->rect = Rect(0.0f, 0.0f, 360.0f, 180.0f);
-            sliced->uv = Rect(0.0f, 0.0f, 1.0f, 1.0f);
-            sliced->border = UIBorder(8.0f, 8.0f, 8.0f, 8.0f);
-            sliced->type = UIImageType::Sliced;
-            sliced->color = Color(1.0f, 1.0f, 1.0f, 1.0f);
-            layout->addChild(sliced);
+            auto menu = std::make_shared<UIMenu>();
+            menu->rect = Rect(0.0f, 0.0f, (float)windowWidth, 32.0f * uiScale);
+            menu->direction = UILayoutDirection::Horizontal;
+            menu->padding = 4.0f * uiScale;
+            menu->spacing = 0.0f;
+            menu->color = Color(0.16f, 0.16f, 0.20f, 1.0f);
 
-            mCanvas.setRoot(layout);
+            const char* fontPath = "modules/test-ui/fonts/Roboto-Regular.ttf";
+            auto addItem = [&](const char* title)
+            {
+                auto item = std::make_shared<UIMenuItem>();
+                item->paddingX = 12.0f * uiScale;
+                item->paddingY = 6.0f * uiScale;
+                item->setText(title);
+                if (UIText* label = item->label())
+                {
+                    label->fontPath = fontPath;
+                    label->fontSize = fontPx;
+                    label->color = Color(0.92f, 0.92f, 0.94f, 1.0f);
+                }
+                menu->addItem(item);
+            };
+            addItem("File");
+            addItem("View");
+            addItem("About");
+
+            mCanvas.setRoot(menu);
             mCanvas.prepare();
 
-            const uint32_t kTestSize = 32;
-            const uint32_t kTestBorder = 8;
-            TextureOptions options;
-            options.width = kTestSize;
-            options.height = kTestSize;
-            options.mipCount = 1;
-            options.format = Format::R8G8B8A8_UNORM;
-            Texture::Ref testTexture = mDevice->createTexture(options);
-            mCanvas.setTexture(testTexture, makeSlicedTestPixels(kTestSize, kTestBorder));
+            auto camera = std::make_shared<Camera>();
+            camera->viewport.left = 0;
+            camera->viewport.top = 0;
+            camera->viewport.right = (float)windowWidth;
+            camera->viewport.bottom = (float)windowHeight;
+            camera->viewport.front = 0.0f;
+            camera->viewport.back = 1.0f;
+            mSpace.clearColor = Color(0.12f, 0.12f, 0.16f, 1);
+            mSpace.add(camera);
+            mSpace.activeCamera = camera;
+            mSpace.add(mCanvas.shape());
         }
 
         void quit() {
@@ -88,14 +110,8 @@ namespace eokas::ui {
         void tick(float delta) {
             (void)delta;
 
-            mDevice->waitForGPU();
-            mCanvas.beginFrame();
-            mCanvas.renderFrame();
-            mCanvas.endFrame();
-            CommandBuffer::Ref cmd = mCanvas.commandBuffer();
-            mDevice->commitCommandBuffer(cmd);
-            mDevice->present();
-            mDevice->waitForNextFrame();
+            mCanvas.flush();
+            mRenderer.render(mSpace);
         }
     };
 }

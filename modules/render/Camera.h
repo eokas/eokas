@@ -9,9 +9,6 @@ namespace eokas
     {
         using Ref = std::shared_ptr<Camera>;
         Transform transform;
-        Vector3 focus = Vector3(0, 0, 0);
-        Vector3 up = Vector3(0, 1, 0);
-        bool useFocus = true;
         float fovY = Math::PI / 4.0f;
         float aspect = 16.0f / 9.0f;
         float nearZ = 0.1f;

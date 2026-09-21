@@ -2,35 +2,42 @@
 #define _EOKAS_UI_SHAPE_H_
 
 #include "header.h"
+#include <memory>
 #include <vector>
 
 namespace eokas
 {
-    class UIShape
+    class UIShape : public Primitive
     {
     public:
+        using Ref = std::shared_ptr<UIShape>;
         DynamicBuffer::Ref vertexBuffer;
         uint32_t vertexLength = 0;
         uint32_t vertexStride = sizeof(UIVertex);
         DynamicBuffer::Ref indexBuffer;
         uint32_t indexLength = 0;
         Format indexFormat = Format::R32_UINT;
-        DynamicBuffer::Ref uniformBuffer;
         Texture::Ref texture;
         uint32_t indexCount = 0;
 
-        void create(Device::Ref device, uint32_t maxQuads = 2048);
+        UIShape();
+
         void begin();
         void setTexture(Texture::Ref tex);
-        void setProjection(const Matrix4& proj);
         void addQuad(const Rect& screen, const Rect& uv, const Color& color);
         void end();
+        void setPendingUpload(const std::vector<uint8_t>& rgba, uint32_t atlasSize = 0);
 
     private:
+        void createResources(Device::Ref device) override;
+        void encode(CommandBuffer::Ref cmd) override;
+
         std::vector<UIVertex> mVertices;
         std::vector<uint32_t> mIndices;
-        Matrix4 mProjection = Matrix4::IDENTITY;
-        uint32_t mMaxQuads = 0;
+        std::vector<uint8_t> mPendingUploadRgba;
+        uint32_t mMaxQuads = 2048;
+        uint32_t mPendingAtlasSize = 0;
+        bool mTextureDirty = false;
     };
 }
 

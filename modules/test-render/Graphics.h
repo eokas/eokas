@@ -3,6 +3,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <Windows.h>
+#include <cmath>
 
 #include "render/main.h"
 
@@ -10,7 +11,7 @@ namespace eokas
 {
     class Graphics
     {
-        Device::Ref mDevice;
+        Renderer mRenderer;
         Space mSpace;
         StaticMeshPrimitive::Ref mBoxLeft;
         StaticMeshPrimitive::Ref mBoxRight;
@@ -19,13 +20,12 @@ namespace eokas
     public:
         void init(HWND windowHandle, int32_t windowWidth, int32_t windowHeight)
         {
-            mDevice = GPUFactory::createDevice(windowHandle, windowWidth, windowHeight);
+            mRenderer.create(windowHandle, windowWidth, windowHeight);
 
             auto camera = std::make_shared<Camera>();
             camera->transform.position = Vector3(0.0f, 0.6f, -2.2f);
-            camera->focus = Vector3(0, 0, 0);
-            camera->up = Vector3(0, 1, 0);
-            camera->useFocus = true;
+            camera->transform.rotation = Quaternion::rotateAxisAngle(
+                Vector3(1, 0, 0), atan2f(0.6f, 2.2f));
             camera->aspect = (float)windowWidth / (float)windowHeight;
             camera->fovY = Math::PI / 4.0f;
             camera->viewport.left = 0;
@@ -44,13 +44,13 @@ namespace eokas
             mSpace.add(light);
 
             auto matDielectric = std::make_shared<Material>();
-            matDielectric->shaderPath = "../shaders/BPR.hlsl";
+            matDielectric->setShaderPath("../shaders/BPR.hlsl");
             matDielectric->setParameter("albedo", Color(0.82f, 0.12f, 0.10f, 1));
             matDielectric->setParameter("metallic", 0.0f);
             matDielectric->setParameter("roughness", 0.75f);
 
             auto matMetal = std::make_shared<Material>();
-            matMetal->shaderPath = "../shaders/BPR.hlsl";
+            matMetal->setShaderPath("../shaders/BPR.hlsl");
             matMetal->setParameter("albedo", Color(1.0f, 0.78f, 0.34f, 1));
             matMetal->setParameter("metallic", 1.0f);
             matMetal->setParameter("roughness", 0.18f);
@@ -85,8 +85,7 @@ namespace eokas
             if (mBoxRight)
                 mBoxRight->transform.rotation = rot;
 
-            mDevice->waitForGPU();
-            mSpace.render(mDevice);
+            mRenderer.render(mSpace);
         }
     };
 }

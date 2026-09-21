@@ -25,7 +25,7 @@ file(GLOB EOKAS_SOURCE_FILES
 )
 
 set(EOKAS_LIBRARY_FILES
-        "base" "gpu" "freetype"
+        "base" "render" "freetype"
 )
 
 message("EOKAS_HEADER_DIRS = ${EOKAS_HEADER_DIRS}")
