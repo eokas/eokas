@@ -9,5 +9,9 @@
 #include "UILayout.h"
 #include "UIFont.h"
 #include "UIMenu.h"
+#include "UIButton.h"
+#include "UISlider.h"
+#include "UIToggle.h"
+#include "UIInput.h"
 
 #endif//_EOKAS_UI_MAIN_H_

@@ -15,9 +15,15 @@ namespace eokas
         float scale = (fontSize > 0.0f ? fontSize : bake) / bake;
         float baseline = floorf(rect.y + font->ascender() * scale + 0.5f);
         float cursorX = floorf(rect.x + 0.5f);
-        for (size_t i = 0; i < text.length(); i++)
+        size_t index = 0;
+        while (index < text.length())
         {
-            const UIFontGlyph& g = font->glyph(text.at(i));
+            uint32_t codepoint = 0;
+            if (!UIFont::nextUtf8(text.cstr(), text.length(), index, codepoint))
+            {
+                continue;
+            }
+            const UIFontGlyph& g = font->glyph(codepoint);
             if (g.uv.width > 0.0f && g.uv.height > 0.0f)
             {
                 float destX = floorf(cursorX + g.bearingX * scale + 0.5f);

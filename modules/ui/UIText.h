@@ -10,9 +10,12 @@ namespace eokas
     class UIText : public UIWidget
     {
     public:
+        static constexpr float kDefaultFontSize = 16.0f;
+
+        UIText() { interactive = false; }
         String text;
         String fontPath;
-        float fontSize = 16.0f;
+        float fontSize = kDefaultFontSize;
         UIFont* font = nullptr;
         void render(UIShape& shape) override;
     };

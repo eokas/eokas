@@ -25,6 +25,7 @@ namespace eokas
         void begin();
         void setTexture(Texture::Ref tex);
         void addQuad(const Rect& screen, const Rect& uv, const Color& color);
+        void addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color);
         void end();
         void setPendingUpload(const std::vector<uint8_t>& rgba, uint32_t atlasSize = 0);
 

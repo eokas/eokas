@@ -10,8 +10,8 @@ namespace eokas
     {
     public:
         float paddingX = 12.0f;
-        float paddingY = 6.0f;
-        Color background { 0.0f, 0.0f, 0.0f, 0.0f };
+        float paddingY = 2.0f;
+        Color background { 0.16f, 0.16f, 0.20f, 1.0f };
         Color hoverColor { 0.28f, 0.38f, 0.58f, 1.0f };
         std::shared_ptr<UIWidget> content;
 
@@ -27,7 +27,7 @@ namespace eokas
     {
     public:
         UILayoutDirection direction = UILayoutDirection::Horizontal;
-        float padding = 4.0f;
+        float padding = 2.0f;
         float spacing = 0.0f;
         std::shared_ptr<UILayout> layout;
 

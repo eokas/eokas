@@ -30,13 +30,24 @@ namespace eokas
 
     void UIShape::addQuad(const Rect& screen, const Rect& uv, const Color& color)
     {
+        this->addQuad(
+            Vector2(screen.x, screen.y),
+            Vector2(screen.x + screen.width, screen.y),
+            Vector2(screen.x + screen.width, screen.y + screen.height),
+            Vector2(screen.x, screen.y + screen.height),
+            uv,
+            color);
+    }
+
+    void UIShape::addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color)
+    {
         uint32_t base = (uint32_t)mVertices.size();
         Vector4 vertexColor(color.r, color.g, color.b, color.a);
 
-        mVertices.push_back({ Vector2(screen.x, screen.y), Vector2(uv.x, uv.y), vertexColor });
-        mVertices.push_back({ Vector2(screen.x + screen.width, screen.y), Vector2(uv.x + uv.width, uv.y), vertexColor });
-        mVertices.push_back({ Vector2(screen.x + screen.width, screen.y + screen.height), Vector2(uv.x + uv.width, uv.y + uv.height), vertexColor });
-        mVertices.push_back({ Vector2(screen.x, screen.y + screen.height), Vector2(uv.x, uv.y + uv.height), vertexColor });
+        mVertices.push_back({ p0, Vector2(uv.x, uv.y), vertexColor });
+        mVertices.push_back({ p1, Vector2(uv.x + uv.width, uv.y), vertexColor });
+        mVertices.push_back({ p2, Vector2(uv.x + uv.width, uv.y + uv.height), vertexColor });
+        mVertices.push_back({ p3, Vector2(uv.x, uv.y + uv.height), vertexColor });
 
         mIndices.push_back(base + 0);
         mIndices.push_back(base + 1);
@@ -78,7 +89,7 @@ namespace eokas
             options.format = Format::R8G8B8A8_UNORM;
             texture = device->createTexture(options);
             if (material)
-                material->setParameter("gMainTexture", texture);
+                material->setParameter(kUIMainTexture, texture);
         }
 
         Primitive::createResources(device);

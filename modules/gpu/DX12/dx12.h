@@ -117,6 +117,7 @@ namespace eokas
     {
         TextureOptions mOptions;
         ComPtr <ID3D12Resource> mResource;
+        D3D12_RESOURCE_STATES mState = D3D12_RESOURCE_STATE_COPY_DEST;
         
         DX12Texture(const DX12Device& device, const TextureOptions& options);
         

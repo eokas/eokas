@@ -5,14 +5,14 @@
 #include "./Graphics.h"
 #include <exception>
 
-const char* windowTitle = "test-ui";
-const char* windowClass = "test-ui";
+const wchar_t* windowTitle = L"test-ui";
+const wchar_t* windowClass = L"test-ui";
 const int windowWidth = 800;
-const int windowHeight = 600;
+const int windowHeight = 640;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    eokas::ui::Graphics* graphics = reinterpret_cast<eokas::ui::Graphics*>(GetWindowLongPtrA(hWnd, GWLP_USERDATA));
+    eokas::ui::Graphics* graphics = reinterpret_cast<eokas::ui::Graphics*>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
 
     switch (message)
     {
@@ -73,8 +73,78 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         return 0;
     }
+    case WM_KEYDOWN:
+    {
+        if (graphics)
+        {
+            bool mapped = true;
+            eokas::UIKey key = eokas::UIKey::Enter;
+            switch (wParam)
+            {
+            case VK_BACK: key = eokas::UIKey::Backspace; break;
+            case VK_DELETE: key = eokas::UIKey::Delete; break;
+            case VK_LEFT: key = eokas::UIKey::Left; break;
+            case VK_RIGHT: key = eokas::UIKey::Right; break;
+            case VK_UP: key = eokas::UIKey::Up; break;
+            case VK_DOWN: key = eokas::UIKey::Down; break;
+            case VK_HOME: key = eokas::UIKey::Home; break;
+            case VK_END: key = eokas::UIKey::End; break;
+            case VK_RETURN: key = eokas::UIKey::Enter; break;
+            case VK_ESCAPE: key = eokas::UIKey::Escape; break;
+            case 'A': key = eokas::UIKey::A; break;
+            case 'C': key = eokas::UIKey::C; break;
+            case 'X': key = eokas::UIKey::X; break;
+            case 'V': key = eokas::UIKey::V; break;
+            default: mapped = false; break;
+            }
+            if (mapped)
+            {
+                eokas::UIKeyMods mods;
+                mods.ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                mods.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                bool textKey = key == eokas::UIKey::A || key == eokas::UIKey::C || key == eokas::UIKey::X || key == eokas::UIKey::V;
+                if (!textKey || mods.ctrl)
+                {
+                    graphics->canvas().onKeyDown(key, mods);
+                    return 0;
+                }
+            }
+        }
+        return DefWindowProcW(hWnd, message, wParam, lParam);
+    }
+    case WM_CHAR:
+    {
+        if (graphics)
+        {
+            static wchar_t pendingHigh = 0;
+            wchar_t unit = (wchar_t)wParam;
+            uint32_t codepoint = 0;
+            if (unit >= 0xD800 && unit <= 0xDBFF)
+            {
+                pendingHigh = unit;
+                return 0;
+            }
+            if (unit >= 0xDC00 && unit <= 0xDFFF && pendingHigh != 0)
+            {
+                codepoint = 0x10000 + (((uint32_t)pendingHigh - 0xD800) << 10) + ((uint32_t)unit - 0xDC00);
+                pendingHigh = 0;
+            }
+            else
+            {
+                pendingHigh = 0;
+                codepoint = (uint32_t)unit;
+            }
+
+            if (codepoint >= 32 && codepoint != 127)
+            {
+                graphics->canvas().onChar(codepoint);
+                return 0;
+            }
+        }
+        return DefWindowProcW(hWnd, message, wParam, lParam);
+    }
     default:
-        return DefWindowProc(hWnd, message, wParam, lParam);
+        return DefWindowProcW(hWnd, message, wParam, lParam);
     }
     return 0;
 }
@@ -90,9 +160,16 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
 
     try {
         SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+        UINT dpi = GetDpiForSystem();
+        if (dpi == 0)
+        {
+            dpi = 96;
+        }
+        const int clientWidth = MulDiv(windowWidth, (int)dpi, 96);
+        const int clientHeight = MulDiv(windowHeight, (int)dpi, 96);
 
-        WNDCLASSEXA wcex;
-        wcex.cbSize = sizeof(WNDCLASSEXA);
+        WNDCLASSEXW wcex;
+        wcex.cbSize = sizeof(WNDCLASSEXW);
         wcex.style = CS_GLOBALCLASS;
         wcex.lpfnWndProc = WndProc;
         wcex.cbClsExtra = 0;
@@ -104,12 +181,12 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
         wcex.lpszMenuName = NULL;
         wcex.lpszClassName = windowClass;
         wcex.hIconSm = NULL;
-        RegisterClassExA(&wcex);
+        RegisterClassExW(&wcex);
 
-        RECT windowRect = { 0, 0, windowWidth, windowHeight };
-        AdjustWindowRect(&windowRect, WS_OVERLAPPEDWINDOW, FALSE);
-        HWND hWnd = CreateWindowA(windowClass, windowTitle, WS_OVERLAPPEDWINDOW,
-            0, 0, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top,
+        RECT windowRect = { 0, 0, clientWidth, clientHeight };
+        AdjustWindowRectExForDpi(&windowRect, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi);
+        HWND hWnd = CreateWindowW(windowClass, windowTitle, WS_OVERLAPPEDWINDOW,
+            80, 40, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top,
             nullptr, nullptr, hInstance, nullptr);
         if (!hWnd)
         {
@@ -119,8 +196,8 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
         UpdateWindow(hWnd);
 
         eokas::ui::Graphics graphics;
-        graphics.init(hWnd, windowWidth, windowHeight);
-        SetWindowLongPtrA(hWnd, GWLP_USERDATA, (LONG_PTR)&graphics);
+        graphics.init(hWnd, clientWidth, clientHeight);
+        SetWindowLongPtrW(hWnd, GWLP_USERDATA, (LONG_PTR)&graphics);
 
         LARGE_INTEGER freq, last, now;
         QueryPerformanceFrequency(&freq);
@@ -130,10 +207,10 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
         msg.message = static_cast<UINT>(~WM_QUIT);
         while (msg.message != WM_QUIT)
         {
-            if (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE))
+            if (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
             {
                 TranslateMessage(&msg);
-                DispatchMessageA(&msg);
+                DispatchMessageW(&msg);
             }
             else
             {

@@ -12,6 +12,8 @@ namespace eokas
         Vector2 uv;
         Vector4 color;
     };
+
+    constexpr const char* kUIMainTexture = "gMainTexture";
 }
 
 #endif//_EOKAS_UI_HEADER_H_

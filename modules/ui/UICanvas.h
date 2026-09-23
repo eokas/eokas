@@ -30,17 +30,25 @@ namespace eokas
         void onMouseMove(float x, float y);
         void onMouseDown(float x, float y, int button);
         void onMouseUp(float x, float y, int button);
+        void onChar(uint32_t codepoint);
+        void setFallbackFontPath(const char* path);
+        void onKeyDown(UIKey key, const UIKeyMods& mods);
+        void setFocus(UIWidget* widget);
+        UIWidget* focus() const;
 
     private:
         String resolveAssetPath(const char* relativePath) const;
         void collectTexts(UIWidget* widget, std::vector<UIText*>& texts);
         UIFont* loadFont(const char* fontPath, uint32_t pixelSize);
         UIWidget* hitTestNode(UIWidget* widget, float x, float y);
-        void clearHovered(UIWidget* widget);
+        void resetPointerState(UIWidget* widget);
+        bool containsWidget(UIWidget* node, UIWidget* target) const;
+        bool focusAlive();
 
         float mWidth = 0.0f;
         float mHeight = 0.0f;
 
+        String mFallbackFontPath;
         std::shared_ptr<UIWidget> mRoot;
         std::vector<std::unique_ptr<UIFont>> mFonts;
         UIShape::Ref mShape;
@@ -48,6 +56,7 @@ namespace eokas
         UIWidget* mHovered = nullptr;
         UIWidget* mPressed = nullptr;
         int mPressedButton = -1;
+        UIWidget* mFocused = nullptr;
     };
 }
 

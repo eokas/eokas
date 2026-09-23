@@ -1272,6 +1272,18 @@ namespace eokas
         }
         upload->Unmap(0, nullptr);
         
+        if (dxTarget->mState != D3D12_RESOURCE_STATE_COPY_DEST)
+        {
+            D3D12_RESOURCE_BARRIER toCopy = {};
+            toCopy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            toCopy.Transition.pResource = dxTarget->mResource.Get();
+            toCopy.Transition.Subresource = 0;
+            toCopy.Transition.StateBefore = dxTarget->mState;
+            toCopy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+            mCommandList->ResourceBarrier(1, &toCopy);
+            dxTarget->mState = D3D12_RESOURCE_STATE_COPY_DEST;
+        }
+
         // 4. 将数据从上传堆复制到纹理资源中
         {
             D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
@@ -1293,6 +1305,7 @@ namespace eokas
             onFinish.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
             onFinish.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
             mCommandList->ResourceBarrier(1, &onFinish);
+            dxTarget->mState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         }
 
         mUploadResources.push_back(upload);

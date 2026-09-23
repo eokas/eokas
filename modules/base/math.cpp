@@ -1682,7 +1682,7 @@ namespace eokas {
     }
     
     bool Rect::contains(const Vector2& p) {
-        return p.x >= this->x && p.x <= this->x + this->width && p.y >= this->x && p.y <= this->y + this->height;
+        return p.x >= this->x && p.x <= this->x + this->width && p.y >= this->y && p.y <= this->y + this->height;
     }
     
     /*

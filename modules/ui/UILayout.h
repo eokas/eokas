@@ -14,6 +14,7 @@ namespace eokas
     class UILayout : public UIWidget
     {
     public:
+        UILayout() { interactive = false; }
         UILayoutDirection direction = UILayoutDirection::Vertical;
         float padding = 8.0f;
         float spacing = 8.0f;
