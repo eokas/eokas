@@ -26,9 +26,10 @@ namespace eokas
 
     void UIWidget::triggerPointerDrag(float x, float y, int button)
     {
-        (void)x;
-        (void)y;
-        (void)button;
+        if (onPointerDrag)
+        {
+            onPointerDrag(x, y, button);
+        }
     }
 
     void UIWidget::triggerFocus()

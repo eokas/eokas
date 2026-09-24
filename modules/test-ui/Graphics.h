@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <memory>
+#include <vector>
 
 #include "ui/main.h"
 
@@ -14,10 +15,26 @@ namespace eokas::ui {
     class Graphics {
         Renderer mRenderer;
         Surface::Ref mSurface;
+        struct FloatWindow
+        {
+            HWND hwnd = nullptr;
+            Surface::Ref surface;
+            Space space;
+            Camera::Ref camera;
+            UICanvas canvas;
+            std::shared_ptr<UIDockPage> page;
+            Rect screenRect;
+        };
+        std::vector<std::unique_ptr<FloatWindow>> mFloatWindows;
+        std::vector<std::unique_ptr<FloatWindow>> mClosingFloatWindows;
+        String mFallbackFontPath;
+        std::unique_ptr<UIDockHost> mDockHost;
         Space mSpace;
         UICanvas mCanvas;
         std::shared_ptr<UIMenu> mMenu;
         std::shared_ptr<UIView> mView;
+        std::shared_ptr<UIDockSpace> mDock;
+        HWND mHostWindow = nullptr;
         std::shared_ptr<UILayout> mSections;
         float mClientWidth = 0.0f;
         float mClientHeight = 0.0f;
@@ -46,9 +63,39 @@ namespace eokas::ui {
     public:
         UICanvas& canvas() { return mCanvas; }
 
+        bool splitterCursor(HWND hwnd, float x, float y, bool& vertical) const
+        {
+            if (hwnd != mHostWindow || !mDock) return false;
+            return mDock->splitterAxis(x, y, vertical);
+        }
+
+        void hoverDock(HWND hwnd, float x, float y)
+        {
+            if (hwnd != mHostWindow || !mDock) return;
+            mDock->setHover(x, y);
+        }
+
         void init(HWND windowHandle, int32_t windowWidth, int32_t windowHeight) {
+            mHostWindow = windowHandle;
             mRenderer.create();
             mSurface = mRenderer.attach(windowHandle, (uint32_t)windowWidth, (uint32_t)windowHeight);
+            mDockHost = std::make_unique<UIDockHost>();
+            mDockHost->onCreateFloatingWindow = [this](const std::shared_ptr<UIDockPage>& page, const Rect& screenRect) -> void*
+            {
+                return this->createFloatingWindow(page, screenRect);
+            };
+            mDockHost->onDestroyFloatingWindow = [this](void* handle)
+            {
+                this->destroyFloatingWindow(handle);
+            };
+            mDockHost->onPlaceFloatingWindow = [this](void* handle, const Rect& screenRect)
+            {
+                for (auto& item : mFloatWindows)
+                {
+                    if (item && item->hwnd == handle) item->screenRect = screenRect;
+                }
+            };
+            mDockHost->onPrepareContent = [this]() { mCanvas.prepare(); };
             mCanvas.init((uint32_t)windowWidth, (uint32_t)windowHeight);
             const char* fallbacks[] = {
                 "C:/Windows/Fonts/msyh.ttc",
@@ -61,6 +108,7 @@ namespace eokas::ui {
                 if (File::exists(path))
                 {
                     mCanvas.setFallbackFontPath(path);
+                    mFallbackFontPath = path;
                     break;
                 }
             }
@@ -245,7 +293,6 @@ namespace eokas::ui {
             view->scrollbarColor = Color(0.40f, 0.44f, 0.52f, 1.0f);
             view->scrollbarTrackColor = Color(0.078f, 0.086f, 0.110f, 1.0f);
             view->scrollbarPressedColor = accent;
-            root->children.push_back(view);
 
             float innerW = (float)windowWidth - pagePad * 2.0f;
             float colW = (float)(int)((innerW - colGap) * 0.5f);
@@ -671,9 +718,66 @@ namespace eokas::ui {
             }
             float menuH = menu->padding * 2.0f + itemH;
             menu->rect.height = menuH;
-            view->rect = Rect(0.0f, menuH, (float)windowWidth, (float)windowHeight - menuH);
+            float contentTop = menuH;
+            float contentH = (float)windowHeight - contentTop;
+            auto dock = std::make_shared<UIDockSpace>();
+            dock->rect = Rect(0.0f, contentTop, (float)windowWidth, contentH);
+            dock->setScreenMapper([windowHandle](const Rect& local)
+            {
+                POINT point;
+                point.x = (LONG)local.x;
+                point.y = (LONG)local.y;
+                ClientToScreen(windowHandle, &point);
+                return Rect((float)point.x, (float)point.y, local.width, local.height);
+            });
+            mDockHost->registerSpace(dock.get());
+            auto headOf = [&](const char* title)
+            {
+                float tabH = (float)(int)(28.0f * s + 0.5f);
+                float tabPx = (float)(int)(13.0f * s + 0.5f);
+                float tabPad = (float)(int)(12.0f * s + 0.5f);
+                if (tabH < 1.0f) tabH = 1.0f;
+                if (tabPx < 1.0f) tabPx = 1.0f;
+                auto head = std::make_shared<UILayout>();
+                head->direction = UILayoutDirection::Horizontal;
+                head->padding = tabPad;
+                head->spacing = 0.0f;
+                head->rect = Rect(0.0f, 0.0f, 0.0f, tabH);
+                head->color = regionHead;
+                head->addChild(textOf(title, tabPx, tabPx, tabPx, ink));
+                return head;
+            };
+            auto noteBody = [&](const char* value)
+            {
+                auto body = std::make_shared<UILayout>();
+                body->direction = UILayoutDirection::Vertical;
+                body->padding = cardPad;
+                body->color = regionBody;
+                body->addChild(textOf(value, 280.0f * s, smallPx, smallPx, mute));
+                return body;
+            };
+            auto makePage = [&](const char* title, const std::shared_ptr<UIWidget>& body)
+            {
+                auto page = std::make_shared<UIDockPage>();
+                page->setHead(headOf(title));
+                page->setBody(body);
+                page->color = regionBody;
+                page->activeColor = regionHeadHover;
+                page->tabMark = accent;
+                mDockHost->observe(page);
+                return page;
+            };
+            view->rect = Rect(0.0f, 0.0f, (float)windowWidth, contentH);
+            auto controls = makePage("Controls", view);
+            dock->dockPage(controls, UIDockMode::Fill);
+            dock->dockPage(makePage("Outline", noteBody("Drag this tab to dock or float.")), UIDockMode::Fill);
+            dock->dockPage(makePage("Details", noteBody("Drop on an edge to split.")), UIDockMode::Fill);
+            dock->activate(controls.get());
+            root->children.push_back(dock);
+            mCanvas.prepare();
             mMenu = menu;
             mView = view;
+            mDock = dock;
             mClientWidth = (float)windowWidth;
             mClientHeight = (float)windowHeight;
 
@@ -690,29 +794,154 @@ namespace eokas::ui {
             mSpace.add(mCanvas.shape());
         }
 
+        void* createFloatingWindow(const std::shared_ptr<UIDockPage>& page, const Rect& screenRect)
+        {
+            int w = (int)screenRect.width;
+            int h = (int)screenRect.height;
+            if (w < 1) w = 1;
+            if (h < 1) h = 1;
+            HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, L"test-ui", L"", WS_POPUP | WS_VISIBLE,
+                (int)screenRect.x, (int)screenRect.y, w, h, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)this);
+            auto item = std::make_unique<FloatWindow>();
+            item->hwnd = hwnd;
+            item->page = page;
+            item->screenRect = screenRect;
+            item->surface = mRenderer.attach(hwnd, (uint32_t)w, (uint32_t)h);
+            item->canvas.init((uint32_t)w, (uint32_t)h);
+            if (!mFallbackFontPath.isEmpty()) item->canvas.setFallbackFontPath(mFallbackFontPath.cstr());
+            if (page) page->layoutInWindow((float)w, (float)h);
+            item->canvas.setRoot(page);
+            item->canvas.prepare();
+            item->camera = std::make_shared<Camera>();
+            item->camera->viewport.left = 0.0f;
+            item->camera->viewport.top = 0.0f;
+            item->camera->viewport.right = (float)w;
+            item->camera->viewport.bottom = (float)h;
+            item->camera->viewport.front = 0.0f;
+            item->camera->viewport.back = 1.0f;
+            item->space.add(item->camera);
+            item->space.activeCamera = item->camera;
+            item->space.add(item->canvas.shape());
+            mFloatWindows.push_back(std::move(item));
+            return hwnd;
+        }
+
+        void destroyFloatingWindow(void* windowHandle)
+        {
+            HWND hwnd = (HWND)windowHandle;
+            for (auto it = mFloatWindows.begin(); it != mFloatWindows.end(); ++it)
+            {
+                if (it->get() == nullptr || (*it)->hwnd != hwnd) continue;
+                // Mouse-up on this window is still on the stack. Drop the page now,
+                // and destroy the HWND only after that handler returns.
+                (*it)->page.reset();
+                (*it)->canvas.setRoot(nullptr);
+                mClosingFloatWindows.push_back(std::move(*it));
+                mFloatWindows.erase(it);
+                ShowWindow(hwnd, SW_HIDE);
+                return;
+            }
+        }
+
+        void flushClosingFloatWindows()
+        {
+            if (mClosingFloatWindows.empty()) return;
+            auto closing = std::move(mClosingFloatWindows);
+            mClosingFloatWindows.clear();
+            for (auto& item : closing)
+            {
+                if (!item) continue;
+                HWND hwnd = item->hwnd;
+                item->hwnd = nullptr;
+                item->page.reset();
+                item->canvas.setRoot(nullptr);
+                item->canvas.quit();
+                mRenderer.detach(item->surface);
+                if (!hwnd) continue;
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                DestroyWindow(hwnd);
+            }
+        }
+
+        bool isClosingFloatWindow(HWND hwnd) const
+        {
+            for (auto& item : mClosingFloatWindows)
+            {
+                if (item && item->hwnd == hwnd) return true;
+            }
+            return false;
+        }
+
+        UICanvas* floatingCanvas(HWND hwnd)
+        {
+            for (auto& item : mFloatWindows)
+            {
+                if (item && item->hwnd == hwnd) return &item->canvas;
+            }
+            return nullptr;
+        }
+
+        void placeFloatingWindows()
+        {
+            for (auto& item : mFloatWindows)
+            {
+                if (!item || !item->hwnd) continue;
+                SetWindowPos(item->hwnd, nullptr, (int)item->screenRect.x, (int)item->screenRect.y,
+                    0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+        }
+
+        void renderFloatingWindows()
+        {
+            for (auto& item : mFloatWindows)
+            {
+                if (!item || !item->surface || !item->page || !item->camera) continue;
+                RECT client = {};
+                GetClientRect(item->hwnd, &client);
+                float w = (float)(client.right - client.left);
+                float h = (float)(client.bottom - client.top);
+                if (w < 1.0f) w = 1.0f;
+                if (h < 1.0f) h = 1.0f;
+                item->page->layoutInWindow(w, h);
+                item->camera->viewport.right = w;
+                item->camera->viewport.bottom = h;
+                item->canvas.flush();
+                mRenderer.render(item->surface, item->space);
+            }
+        }
+
         void quit() {
+            if (mDockHost)
+            {
+                mDockHost->closeAll();
+            }
+            this->flushClosingFloatWindows();
             mCanvas.quit();
             mRenderer.detach(mSurface);
         }
 
         void tick(float delta) {
             (void)delta;
+            this->flushClosingFloatWindows();
 
             if (mSections)
             {
                 fitVertical(*mSections);
             }
 
-            if (mMenu && mView && mMenu->rect.height > 0.0f)
+            if (mMenu && mDock && mMenu->rect.height > 0.0f)
             {
                 float top = mMenu->rect.height;
-                mView->rect.x = 0.0f;
-                mView->rect.y = top;
-                mView->rect.width = mClientWidth;
-                mView->rect.height = mClientHeight - top;
+                mDock->rect.x = 0.0f;
+                mDock->rect.y = top;
+                mDock->rect.width = mClientWidth;
+                mDock->rect.height = mClientHeight - top;
             }
 
             mCanvas.flush();
+            this->placeFloatingWindows();
+            this->renderFloatingWindows();
             mRenderer.render(mSurface, mSpace);
         }
     };

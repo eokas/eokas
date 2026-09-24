@@ -11,9 +11,11 @@ namespace eokas
             return;
         }
 
-        float bake = (float)font->pixelSize();
-        float scale = (fontSize > 0.0f ? fontSize : bake) / bake;
-        float baseline = floorf(rect.y + font->ascender() * scale + 0.5f);
+        float scale = 1.0f;
+        float ascender = 0.0f;
+        float descender = 0.0f;
+        font->drawMetrics(fontSize, scale, ascender, descender);
+        float baseline = floorf(rect.y + ascender + 0.5f);
         float cursorX = floorf(rect.x + 0.5f);
         size_t index = 0;
         while (index < text.length())
@@ -23,7 +25,7 @@ namespace eokas
             {
                 continue;
             }
-            const UIFontGlyph& g = font->glyph(codepoint);
+            const UIFontGlyph& g = font->glyphSized(codepoint, fontSize);
             if (g.uv.width > 0.0f && g.uv.height > 0.0f)
             {
                 float destX = floorf(cursorX + g.bearingX * scale + 0.5f);

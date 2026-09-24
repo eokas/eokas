@@ -117,23 +117,26 @@ namespace eokas
 
         for (auto& entry : groups)
         {
-            uint32_t pixelSize = (uint32_t)UIText::kDefaultFontSize;
+            uint32_t pixelSize = 0;
+            std::map<uint32_t, uint32_t> sizes;
             for (UIText* text : entry.second)
             {
-                if (text->fontSize > (float)pixelSize)
-                {
-                    pixelSize = (uint32_t)text->fontSize;
-                }
+                uint32_t px = (uint32_t)(text->fontSize + 0.5f);
+                if (px < 1) px = 1;
+                sizes[px] = px;
+                if (px > pixelSize) pixelSize = px;
             }
+            if (pixelSize == 0) pixelSize = (uint32_t)UIText::kDefaultFontSize;
 
             UIFont* font = this->loadFont(entry.first.cstr(), pixelSize);
+            for (auto& size : sizes) font->prepareSize(size.first);
             for (UIText* text : entry.second)
             {
                 text->font = font;
             }
         }
 
-        if (mShape && !mFonts.empty() && !mShape->texture)
+        if (mShape && !mFonts.empty())
         {
             UIFont* font = mFonts.front().get();
             mShape->setPendingUpload(font->atlasRgba(), font->atlasSize());

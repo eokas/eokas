@@ -16,5 +16,6 @@
 #include "UIInput.h"
 #include "UIDropdown.h"
 #include "UIRegion.h"
+#include "UIDocking.h"
 
 #endif//_EOKAS_UI_MAIN_H_

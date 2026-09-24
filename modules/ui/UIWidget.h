@@ -53,6 +53,7 @@ namespace eokas
         std::function<void()> onPointerRelease;
         std::function<void()> onClick;
         std::function<void()> onDoubleClick;
+        std::function<void(float, float, int)> onPointerDrag;
 
         virtual ~UIWidget() = default;
         virtual void render(UIShape& shape);

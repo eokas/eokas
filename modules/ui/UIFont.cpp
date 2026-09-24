@@ -2,6 +2,7 @@
 
 #include <ft2build.h>
 #include <freetype/freetype.h>
+#include <cmath>
 #include <cstring>
 #include <map>
 
@@ -59,6 +60,7 @@ namespace eokas
             close();
             return false;
         }
+        mAtlasDirty = true;
         return true;
     }
 
@@ -115,6 +117,7 @@ namespace eokas
         mRowH = 0;
         mAtlas.clear();
         mDynamic.clear();
+        mSizes.clear();
         mAtlasDirty = false;
         memset(mGlyphs, 0, sizeof(mGlyphs));
         memset(&mPlaceholder, 0, sizeof(mPlaceholder));
@@ -160,6 +163,99 @@ namespace eokas
     float UIFont::lineHeight() const
     {
         return mLineHeight;
+    }
+
+    bool UIFont::setPixelSize(uint32_t pixelSize) const
+    {
+        if (mFace == nullptr || pixelSize == 0) return false;
+        if (FT_Set_Pixel_Sizes((FT_Face)mFace, 0, pixelSize) != 0) return false;
+        if (mFallback != nullptr && FT_Set_Pixel_Sizes((FT_Face)mFallback, 0, pixelSize) != 0) return false;
+        return true;
+    }
+
+    bool UIFont::prepareSize(uint32_t pixelSize)
+    {
+        if (mFace == nullptr || pixelSize == 0) return false;
+        if (pixelSize == mPixelSize || mSizes.find(pixelSize) != mSizes.end()) return true;
+        if (!this->setPixelSize(pixelSize)) return false;
+
+        SizeRun run;
+        memset(run.glyphs, 0, sizeof(run.glyphs));
+        FT_Face face = (FT_Face)mFace;
+        run.ascender = (float)(face->size->metrics.ascender >> 6);
+        run.descender = (float)(face->size->metrics.descender >> 6);
+        run.lineHeight = (float)(face->size->metrics.height >> 6);
+        for (uint32_t code = kFirstChar; code <= kLastChar; code++)
+        {
+            UIFontGlyph& slot = run.glyphs[code - kFirstChar];
+            if (!this->packGlyph(code, false, slot)) slot = mPlaceholder;
+        }
+        mSizes.emplace(pixelSize, std::move(run));
+        this->setPixelSize(mPixelSize);
+        mAtlasDirty = true;
+        return true;
+    }
+
+    bool UIFont::hasSize(uint32_t pixelSize) const
+    {
+        return pixelSize != 0 && (pixelSize == mPixelSize || mSizes.find(pixelSize) != mSizes.end());
+    }
+
+    float UIFont::ascenderFor(uint32_t pixelSize) const
+    {
+        if (pixelSize == mPixelSize) return mAscender;
+        auto found = mSizes.find(pixelSize);
+        if (found == mSizes.end()) return mAscender;
+        return found->second.ascender;
+    }
+
+    float UIFont::descenderFor(uint32_t pixelSize) const
+    {
+        if (pixelSize == mPixelSize) return mDescender;
+        auto found = mSizes.find(pixelSize);
+        if (found == mSizes.end()) return mDescender;
+        return found->second.descender;
+    }
+
+    void UIFont::drawMetrics(float fontSize, float& scale, float& ascender, float& descender) const
+    {
+        uint32_t px = (uint32_t)floorf(fontSize + 0.5f);
+        if (px < 1) px = 1;
+        if (this->hasSize(px))
+        {
+            scale = fontSize > 0.0f ? fontSize / (float)px : 1.0f;
+            ascender = this->ascenderFor(px) * scale;
+            descender = this->descenderFor(px) * scale;
+            return;
+        }
+        float bake = mPixelSize > 0 ? (float)mPixelSize : 1.0f;
+        scale = fontSize > 0.0f ? fontSize / bake : 1.0f;
+        ascender = mAscender * scale;
+        descender = mDescender * scale;
+    }
+
+    const UIFontGlyph& UIFont::glyphFor(uint32_t codepoint, uint32_t pixelSize) const
+    {
+        auto found = mSizes.find(pixelSize);
+        if (found == mSizes.end()) return this->glyph(codepoint);
+        SizeRun& run = found->second;
+        if (codepoint >= kFirstChar && codepoint <= kLastChar) return run.glyphs[codepoint - kFirstChar];
+        auto dynamic = run.dynamic.find(codepoint);
+        if (dynamic != run.dynamic.end()) return dynamic->second;
+        if (!this->setPixelSize(pixelSize)) return mPlaceholder;
+        UIFontGlyph baked;
+        bool packed = this->packGlyph(codepoint, false, baked);
+        this->setPixelSize(mPixelSize);
+        if (!packed) return mPlaceholder;
+        mAtlasDirty = true;
+        return run.dynamic.emplace(codepoint, baked).first->second;
+    }
+
+    const UIFontGlyph& UIFont::glyphSized(uint32_t codepoint, float fontSize) const
+    {
+        uint32_t px = (uint32_t)floorf(fontSize + 0.5f);
+        if (px >= 1 && px != mPixelSize && this->hasSize(px)) return this->glyphFor(codepoint, px);
+        return this->glyph(codepoint);
     }
 
     const UIFontGlyph& UIFont::glyph(char c) const

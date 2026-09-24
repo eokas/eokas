@@ -13,6 +13,35 @@ const int windowHeight = 720;
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     eokas::ui::Graphics* graphics = reinterpret_cast<eokas::ui::Graphics*>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
+    if (graphics)
+    {
+        if (graphics->isClosingFloatWindow(hWnd))
+        {
+            if (message == WM_CLOSE) return 0;
+            return DefWindowProcW(hWnd, message, wParam, lParam);
+        }
+        if (eokas::UICanvas* floating = graphics->floatingCanvas(hWnd))
+        {
+            if (message == WM_CLOSE) return 0;
+            if (message == WM_MOUSEMOVE)
+            {
+                floating->onMouseMove((float)(short)LOWORD(lParam), (float)(short)HIWORD(lParam));
+                return 0;
+            }
+            if (message == WM_LBUTTONDOWN)
+            {
+                SetCapture(hWnd);
+                floating->onMouseDown((float)(short)LOWORD(lParam), (float)(short)HIWORD(lParam), 0);
+                return 0;
+            }
+            if (message == WM_LBUTTONUP)
+            {
+                floating->onMouseUp((float)(short)LOWORD(lParam), (float)(short)HIWORD(lParam), 0);
+                if (IsWindow(hWnd) && GetCapture() == hWnd) ReleaseCapture();
+                return 0;
+            }
+        }
+    }
 
     switch (message)
     {
@@ -43,12 +72,29 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         return 0;
     }
+    case WM_SETCURSOR:
+    {
+        if (graphics && LOWORD(lParam) == HTCLIENT)
+        {
+            POINT pt;
+            GetCursorPos(&pt);
+            ScreenToClient(hWnd, &pt);
+            bool vertical = false;
+            if (graphics->splitterCursor(hWnd, (float)pt.x, (float)pt.y, vertical))
+            {
+                SetCursor(LoadCursor(nullptr, vertical ? IDC_SIZENS : IDC_SIZEWE));
+                return TRUE;
+            }
+        }
+        return DefWindowProcW(hWnd, message, wParam, lParam);
+    }
     case WM_MOUSEMOVE:
     {
         if (graphics)
         {
             float x = (float)(short)LOWORD(lParam);
             float y = (float)(short)HIWORD(lParam);
+            graphics->hoverDock(hWnd, x, y);
             graphics->canvas().onMouseMove(x, y);
         }
         return 0;
