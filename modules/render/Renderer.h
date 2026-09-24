@@ -15,12 +15,15 @@ namespace eokas
         Renderer() = default;
         ~Renderer();
 
-        bool create(void* windowHandle, uint32_t width, uint32_t height);
+        bool create();
         void destroy();
         bool isAvailable() const { return mDevice != nullptr; }
         Device::Ref device() const { return mDevice; }
 
-        void render(Space& space);
+        Surface::Ref attach(void* windowHandle, uint32_t width, uint32_t height);
+        void detach(Surface::Ref& surface);
+        void resize(const Surface::Ref& surface, uint32_t width, uint32_t height);
+        void render(const Surface::Ref& surface, Space& space);
 
     private:
         void ensureResources(Space& space);

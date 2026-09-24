@@ -352,13 +352,27 @@ namespace eokas
         virtual void finish() = 0;
     };
     
+    constexpr uint32_t kFrameCount = 2;
+
+    struct Surface
+    {
+        using Ref = std::shared_ptr<Surface>;
+
+        virtual ~Surface() = default;
+        virtual void* getWindowHandle() const = 0;
+        virtual uint32_t getWidth() const = 0;
+        virtual uint32_t getHeight() const = 0;
+        virtual RenderTarget::Ref getActiveRenderTarget() = 0;
+        virtual RenderTarget::Ref getActiveDepthTarget() = 0;
+        virtual void present() = 0;
+        virtual void resize(uint32_t width, uint32_t height) = 0;
+    };
+
     struct Device
     {
         using Ref = std::shared_ptr<Device>;
-        
-        virtual RenderTarget::Ref getActiveRenderTarget() = 0;
-        virtual RenderTarget::Ref getActiveDepthTarget() = 0;
-        virtual uint32_t getFrameCount() const = 0;
+
+        virtual Surface::Ref createSurface(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight) = 0;
         virtual uint32_t getFrameIndex() const = 0;
         virtual StaticBuffer::Ref createStaticBuffer(uint32_t length) = 0;
         virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) = 0;
@@ -370,14 +384,13 @@ namespace eokas
         virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) = 0;
         virtual CommandBuffer::Ref createCommandBuffer() = 0;
         virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) = 0;
-        virtual void present() = 0;
         virtual void waitForGPU() = 0;
         virtual void waitForNextFrame() = 0;
     };
     
     struct GPUFactory
     {
-        static Device::Ref createDevice(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight);
+        static Device::Ref createDevice();
     };
 }
 

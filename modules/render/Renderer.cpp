@@ -9,19 +9,38 @@ namespace eokas
         destroy();
     }
 
-    bool Renderer::create(void* windowHandle, uint32_t width, uint32_t height)
+    bool Renderer::create()
     {
         destroy();
-        mDevice = GPUFactory::createDevice(windowHandle, width, height);
+        mDevice = GPUFactory::createDevice();
         return mDevice != nullptr;
     }
 
     void Renderer::destroy()
     {
-        if (mDevice)
-            mDevice->waitForGPU();
         mCommandBuffer.reset();
         mDevice.reset();
+    }
+
+    Surface::Ref Renderer::attach(void* windowHandle, uint32_t width, uint32_t height)
+    {
+        if (!mDevice)
+            return nullptr;
+        return mDevice->createSurface(windowHandle, width, height);
+    }
+
+    void Renderer::detach(Surface::Ref& surface)
+    {
+        if (!surface)
+            return;
+        surface.reset();
+    }
+
+    void Renderer::resize(const Surface::Ref& surface, uint32_t width, uint32_t height)
+    {
+        if (!surface)
+            return;
+        surface->resize(width, height);
     }
 
     void Renderer::ensureResources(Space& space)
@@ -64,9 +83,9 @@ namespace eokas
         }
     }
 
-    void Renderer::render(Space& space)
+    void Renderer::render(const Surface::Ref& surface, Space& space)
     {
-        if (!mDevice)
+        if (!mDevice || !surface)
             return;
 
         mDevice->waitForGPU();
@@ -102,8 +121,8 @@ namespace eokas
             mCommandBuffer->reset();
 
         mCommandBuffer->setViewport(cam->viewport);
-        RenderTarget::Ref rt = mDevice->getActiveRenderTarget();
-        RenderTarget::Ref ds = mDevice->getActiveDepthTarget();
+        RenderTarget::Ref rt = surface->getActiveRenderTarget();
+        RenderTarget::Ref ds = surface->getActiveDepthTarget();
         Barrier begin{rt, ResourceState::Present, ResourceState::RenderTarget};
         mCommandBuffer->barrier({begin});
         mCommandBuffer->setRenderTargets({rt}, ds);
@@ -124,7 +143,7 @@ namespace eokas
         mCommandBuffer->barrier({end});
         mCommandBuffer->finish();
         mDevice->commitCommandBuffer(mCommandBuffer);
-        mDevice->present();
+        surface->present();
         mDevice->waitForNextFrame();
     }
 }

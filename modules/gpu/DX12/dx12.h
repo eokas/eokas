@@ -24,8 +24,7 @@ using namespace Microsoft::WRL;
 namespace eokas
 {
     struct DX12Device;
-    
-    const uint32_t kFrameBufferCount = 2;
+    struct DX12Surface;
     
     struct DX12Utils
     {
@@ -94,6 +93,36 @@ namespace eokas
         virtual uint32_t getLength() const override;
         virtual void* map() override;
         virtual void unmap() override;
+    };
+
+    struct DX12Surface : public Surface
+    {
+        DX12Device& mDevice;
+        void* mWindowHandle = nullptr;
+        uint32_t mWidth = 0;
+        uint32_t mHeight = 0;
+
+        ComPtr <IDXGISwapChain3> mSwapChain;
+        uint32_t mFrameBufferIndex = 0;
+
+        std::shared_ptr<DX12DescriptorHeap> mRTVHeap;
+        std::shared_ptr<DX12DescriptorHeap> mDSVHeap;
+        DX12RenderTarget::Ref mRenderTargets[kFrameCount];
+        DX12RenderTarget::Ref mDepthTargets[kFrameCount];
+
+        DX12Surface(DX12Device& device, void* windowHandle, uint32_t windowWidth, uint32_t windowHeight);
+        virtual ~DX12Surface();
+
+        void createTargets();
+        void detach();
+
+        virtual void* getWindowHandle() const override;
+        virtual uint32_t getWidth() const override;
+        virtual uint32_t getHeight() const override;
+        virtual RenderTarget::Ref getActiveRenderTarget() override;
+        virtual RenderTarget::Ref getActiveDepthTarget() override;
+        virtual void present() override;
+        virtual void resize(uint32_t width, uint32_t height) override;
     };
 
     struct DX12DynamicBuffer : public DynamicBuffer
@@ -229,25 +258,17 @@ namespace eokas
         ComPtr <ID3D12Device4> mDevice;
         ComPtr <ID3D12DebugDevice> mDebugDevice;
         ComPtr <ID3D12CommandQueue> mCommandQueue;
-        ComPtr <IDXGISwapChain3> mSwapChain;
-        uint32_t mFrameBufferIndex;
-        
-        std::shared_ptr<DX12DescriptorHeap> mRTVHeap;
-        std::shared_ptr<DX12DescriptorHeap> mDSVHeap;
-        DX12RenderTarget::Ref mRenderTargets[kFrameBufferCount];
-        DX12RenderTarget::Ref mDepthTargets[kFrameBufferCount];
-        ComPtr <ID3D12CommandAllocator> mCommandAllocators[kFrameBufferCount];
+        ComPtr <ID3D12CommandAllocator> mCommandAllocators[kFrameCount];
         
         ComPtr <ID3D12Fence> mFence;
-        UINT64 mFenceValues[kFrameBufferCount];
-        HANDLE mFenceEvent;
+        UINT64 mFenceValues[kFrameCount];
+        HANDLE mFenceEvent = nullptr;
+        uint32_t mFrameIndex = 0;
+        std::vector<DX12Surface*> mSurfaces;
         
-        DX12Device(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight);
+        DX12Device();
         virtual ~DX12Device();
         
-        virtual RenderTarget::Ref getActiveRenderTarget() override;
-        virtual RenderTarget::Ref getActiveDepthTarget() override;
-        virtual uint32_t getFrameCount() const override;
         virtual uint32_t getFrameIndex() const override;
         virtual StaticBuffer::Ref createStaticBuffer(uint32_t length) override;
         virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) override;
@@ -259,9 +280,9 @@ namespace eokas
         virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) override;
         virtual CommandBuffer::Ref createCommandBuffer() override;
         virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) override;
-        virtual void present() override;
         virtual void waitForGPU() override;
         virtual void waitForNextFrame() override;
+        virtual Surface::Ref createSurface(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight) override;
     };
 }
 

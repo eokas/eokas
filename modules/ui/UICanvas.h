@@ -30,6 +30,7 @@ namespace eokas
         void onMouseMove(float x, float y);
         void onMouseDown(float x, float y, int button);
         void onMouseUp(float x, float y, int button);
+        void onMouseWheel(float x, float y, float deltaX, float deltaY);
         void onChar(uint32_t codepoint);
         void setFallbackFontPath(const char* path);
         void onKeyDown(UIKey key, const UIKeyMods& mods);
@@ -40,7 +41,10 @@ namespace eokas
         String resolveAssetPath(const char* relativePath) const;
         void collectTexts(UIWidget* widget, std::vector<UIText*>& texts);
         UIFont* loadFont(const char* fontPath, uint32_t pixelSize);
-        UIWidget* hitTestNode(UIWidget* widget, float x, float y);
+        UIWidget* hitTestNode(UIWidget* widget, float x, float y, float originX, float originY);
+        bool findWidget(UIWidget* node, UIWidget* target, float originX, float originY, float& outX, float& outY) const;
+        void dispatchDrag(float x, float y);
+        bool routeWheel(UIWidget* widget, float x, float y, float originX, float originY, float deltaX, float deltaY);
         void resetPointerState(UIWidget* widget);
         bool containsWidget(UIWidget* node, UIWidget* target) const;
         bool focusAlive();

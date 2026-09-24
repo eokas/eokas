@@ -7,8 +7,8 @@
 
 const wchar_t* windowTitle = L"test-ui";
 const wchar_t* windowClass = L"test-ui";
-const int windowWidth = 800;
-const int windowHeight = 640;
+const int windowWidth = 1000;
+const int windowHeight = 720;
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -19,6 +19,28 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_CLOSE:
     {
         PostQuitMessage(0);
+        return 0;
+    }
+    case WM_MOUSEWHEEL:
+    {
+        if (graphics)
+        {
+            POINT pt;
+            pt.x = (short)LOWORD(lParam);
+            pt.y = (short)HIWORD(lParam);
+            ScreenToClient(hWnd, &pt);
+            float notches = (float)(short)HIWORD(wParam) / 120.0f;
+            float step = -notches * 48.0f;
+            bool shift = (LOWORD(wParam) & MK_SHIFT) != 0;
+            if (shift)
+            {
+                graphics->canvas().onMouseWheel((float)pt.x, (float)pt.y, step, 0.0f);
+            }
+            else
+            {
+                graphics->canvas().onMouseWheel((float)pt.x, (float)pt.y, 0.0f, step);
+            }
+        }
         return 0;
     }
     case WM_MOUSEMOVE:

@@ -12,6 +12,7 @@ namespace eokas
     class Graphics
     {
         Renderer mRenderer;
+        Surface::Ref mSurface;
         Space mSpace;
         StaticMeshPrimitive::Ref mBoxLeft;
         StaticMeshPrimitive::Ref mBoxRight;
@@ -20,7 +21,8 @@ namespace eokas
     public:
         void init(HWND windowHandle, int32_t windowWidth, int32_t windowHeight)
         {
-            mRenderer.create(windowHandle, windowWidth, windowHeight);
+            mRenderer.create();
+            mSurface = mRenderer.attach(windowHandle, (uint32_t)windowWidth, (uint32_t)windowHeight);
 
             auto camera = std::make_shared<Camera>();
             camera->transform.position = Vector3(0.0f, 0.6f, -2.2f);
@@ -71,6 +73,7 @@ namespace eokas
 
         void quit()
         {
+            mRenderer.detach(mSurface);
         }
 
         void tick(float delta)
@@ -85,7 +88,7 @@ namespace eokas
             if (mBoxRight)
                 mBoxRight->transform.rotation = rot;
 
-            mRenderer.render(mSpace);
+            mRenderer.render(mSurface, mSpace);
         }
     };
 }

@@ -40,6 +40,7 @@ namespace eokas
         Rect rect;
         Color color { 1.0f, 1.0f, 1.0f, 1.0f };
         bool visible = true;
+        bool floating = false;
         bool interactive = true;
         bool hovered = false;
         bool pressed = false;

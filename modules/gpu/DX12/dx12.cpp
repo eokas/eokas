@@ -422,7 +422,7 @@ namespace eokas
         : mDevice(device)
         , mLength(length)
         , mFrameSize(alignUp(length, kConstantBufferAlignment))
-        , mFrameCount(device.getFrameCount())
+        , mFrameCount(kFrameCount)
     {
         auto& dxDevice = device.mDevice;
 
@@ -956,7 +956,7 @@ namespace eokas
         : mDevice(device)
     {
         auto& dxDevice = device.mDevice;
-        auto& dxCommandAllocator = device.mCommandAllocators[device.mFrameBufferIndex];
+        auto& dxCommandAllocator = device.mCommandAllocators[device.mFrameIndex];
         _ThrowIfFailed(dxDevice->CreateCommandList(
             0, D3D12_COMMAND_LIST_TYPE_DIRECT, dxCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList)));
     }
@@ -964,13 +964,12 @@ namespace eokas
     void DX12CommandBuffer::reset()
     {
         mUploadResources.clear();
-        auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameBufferIndex];
+        auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameIndex];
         ID3D12PipelineState* pso = nullptr;
         if (auto* current = dynamic_cast<DX12PipelineObject*>(mCurrentPipeline.get()))
         {
             pso = current->mPipelineState.Get();
         }
-        _ThrowIfFailed(dxCommandAllocator->Reset());
         _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), pso));
         if (mCurrentPipeline)
         {
@@ -1311,7 +1310,7 @@ namespace eokas
         mUploadResources.push_back(upload);
     }
     
-    DX12Device::DX12Device(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
+    DX12Device::DX12Device()
     {
         UINT dxgiFactoryFlags = 0U;
 
@@ -1336,7 +1335,6 @@ namespace eokas
         
         // Create DXGI Factory
         _ThrowIfFailed(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&mDXGIFactory)));
-        _ThrowIfFailed(mDXGIFactory->MakeWindowAssociation((HWND) windowHandle, DXGI_MWA_NO_ALT_ENTER));
         
         // Enum Adapter and Create Device
         for (UINT adapterIndex = 0; DXGI_ERROR_NOT_FOUND != mDXGIFactory->EnumAdapters1(adapterIndex, &mDXGIAdapter); adapterIndex++)
@@ -1365,10 +1363,39 @@ namespace eokas
         queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
         _ThrowIfFailed(mDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&mCommandQueue)));
         
-        // Create Swap Chain
+        for (UINT i = 0; i < kFrameCount; i++)
+        {
+            _ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&mCommandAllocators[i])));
+        }
+        
+        memset(mFenceValues, 0, sizeof(UINT64) * kFrameCount);
+        _ThrowIfFailed(mDevice->CreateFence(mFenceValues[mFrameIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)));
+        mFenceValues[mFrameIndex]++;
+        mFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (mFenceEvent == nullptr)
+        {
+            _ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
+        }
+    }
+    
+    DX12Device::~DX12Device()
+    {
+        this->waitForGPU();
+        CloseHandle(mFenceEvent);
+        mFenceEvent = nullptr;
+    }
+    
+    DX12Surface::DX12Surface(DX12Device& device, void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
+        : mDevice(device)
+        , mWindowHandle(windowHandle)
+        , mWidth(windowWidth)
+        , mHeight(windowHeight)
+    {
+        _ThrowIfFailed(mDevice.mDXGIFactory->MakeWindowAssociation((HWND) windowHandle, DXGI_MWA_NO_ALT_ENTER));
+
         ComPtr<IDXGISwapChain> swapchain;
         DXGI_SWAP_CHAIN_DESC swapchainDesc = {};
-        swapchainDesc.BufferCount = kFrameBufferCount;
+        swapchainDesc.BufferCount = kFrameCount;
         swapchainDesc.BufferDesc.Width = windowWidth;
         swapchainDesc.BufferDesc.Height = windowHeight;
         swapchainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -1377,31 +1404,48 @@ namespace eokas
         swapchainDesc.SampleDesc.Count = 1;
         swapchainDesc.OutputWindow = (HWND) windowHandle;
         swapchainDesc.Windowed = TRUE;
-        _ThrowIfFailed(mDXGIFactory->CreateSwapChain(mCommandQueue.Get(), &swapchainDesc, &swapchain));
+        _ThrowIfFailed(mDevice.mDXGIFactory->CreateSwapChain(mDevice.mCommandQueue.Get(), &swapchainDesc, &swapchain));
         _ThrowIfFailed(swapchain.As(&mSwapChain));
-        mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
-        
-        // Create RTV Heap
-        u32_t numHandlePerHeap = max(kFrameBufferCount, 8);
-        mRTVHeap = std::make_shared<DX12DescriptorHeap>(*this, DX12DescriptorHeap::Usage::RTV, numHandlePerHeap);
-        
-        // Get RenderTarget and Create RTV
-        for (UINT i = 0; i < kFrameBufferCount; i++)
+
+        createTargets();
+        mDevice.mSurfaces.push_back(this);
+    }
+
+    DX12Surface::~DX12Surface()
+    {
+        mDevice.waitForGPU();
+        for (uint32_t i = 0; i < kFrameCount; i++)
+        {
+            mRenderTargets[i].reset();
+            mDepthTargets[i].reset();
+        }
+        mRTVHeap.reset();
+        mDSVHeap.reset();
+        mSwapChain.Reset();
+        detach();
+    }
+
+    void DX12Surface::createTargets()
+    {
+        u32_t numHandlePerHeap = max(kFrameCount, 8);
+        mRTVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::RTV, numHandlePerHeap);
+
+        for (UINT i = 0; i < kFrameCount; i++)
         {
             mRenderTargets[i] = std::make_shared<DX12RenderTarget>();
             DX12RenderTarget* dxRT = dynamic_cast<DX12RenderTarget*>(mRenderTargets[i].get());
             _ThrowIfFailed(mSwapChain->GetBuffer(i, IID_PPV_ARGS(&dxRT->mResource)));
             dxRT->mView = mRTVHeap->acquire();
-            mDevice->CreateRenderTargetView(dxRT->mResource.Get(), nullptr, dxRT->mView);
+            mDevice.mDevice->CreateRenderTargetView(dxRT->mResource.Get(), nullptr, dxRT->mView);
         }
 
-        mDSVHeap = std::make_shared<DX12DescriptorHeap>(*this, DX12DescriptorHeap::Usage::DSV, kFrameBufferCount);
-        for (UINT i = 0; i < kFrameBufferCount; i++)
+        mDSVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::DSV, kFrameCount);
+        for (UINT i = 0; i < kFrameCount; i++)
         {
             D3D12_RESOURCE_DESC depthDesc = {};
             depthDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-            depthDesc.Width = windowWidth;
-            depthDesc.Height = windowHeight;
+            depthDesc.Width = mWidth;
+            depthDesc.Height = mHeight;
             depthDesc.DepthOrArraySize = 1;
             depthDesc.MipLevels = 1;
             depthDesc.Format = DX12Utils::transferFormat(Format::D32_FLOAT);
@@ -1418,7 +1462,7 @@ namespace eokas
 
             mDepthTargets[i] = std::make_shared<DX12RenderTarget>();
             DX12RenderTarget* dxDS = dynamic_cast<DX12RenderTarget*>(mDepthTargets[i].get());
-            _ThrowIfFailed(mDevice->CreateCommittedResource(
+            _ThrowIfFailed(mDevice.mDevice->CreateCommittedResource(
                 &heapProps,
                 D3D12_HEAP_FLAG_NONE,
                 &depthDesc,
@@ -1429,51 +1473,79 @@ namespace eokas
             D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
             dsvDesc.Format = DX12Utils::transferFormat(Format::D32_FLOAT);
             dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-            mDevice->CreateDepthStencilView(dxDS->mResource.Get(), &dsvDesc, dxDS->mView);
+            mDevice.mDevice->CreateDepthStencilView(dxDS->mResource.Get(), &dsvDesc, dxDS->mView);
         }
-        
-        // Create CommandAllocators
-        for (UINT i = 0; i < kFrameBufferCount; i++)
-        {
-            _ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&mCommandAllocators[i])));
-        }
-        
-        // Create Fence
-        memset(mFenceValues, 0, sizeof(UINT64) * kFrameBufferCount);
-        _ThrowIfFailed(mDevice->CreateFence(mFenceValues[mFrameBufferIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)));
-        mFenceValues[mFrameBufferIndex]++;
-        mFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        if (mFenceEvent == nullptr)
-        {
-            _ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
-        }
+
+        mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
     }
-    
-    DX12Device::~DX12Device()
+
+    void DX12Surface::detach()
     {
-        this->waitForGPU();
-        CloseHandle(mFenceEvent);
-        mFenceEvent = nullptr;
+        for (auto it = mDevice.mSurfaces.begin(); it != mDevice.mSurfaces.end(); ++it)
+        {
+            if (*it == this)
+            {
+                mDevice.mSurfaces.erase(it);
+                break;
+            }
+        }
     }
-    
-    RenderTarget::Ref DX12Device::getActiveRenderTarget()
+
+    void* DX12Surface::getWindowHandle() const
+    {
+        return mWindowHandle;
+    }
+
+    uint32_t DX12Surface::getWidth() const
+    {
+        return mWidth;
+    }
+
+    uint32_t DX12Surface::getHeight() const
+    {
+        return mHeight;
+    }
+
+    RenderTarget::Ref DX12Surface::getActiveRenderTarget()
     {
         return mRenderTargets[mFrameBufferIndex];
     }
 
-    RenderTarget::Ref DX12Device::getActiveDepthTarget()
+    RenderTarget::Ref DX12Surface::getActiveDepthTarget()
     {
         return mDepthTargets[mFrameBufferIndex];
     }
 
-    uint32_t DX12Device::getFrameCount() const
+    void DX12Surface::present()
     {
-        return kFrameBufferCount;
+        HRESULT hr = mSwapChain->Present(1, 0);
+        if (FAILED(hr))
+        {
+            _ThrowIfFailed(mDevice.mDevice->GetDeviceRemovedReason());
+        }
+        mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
+    }
+
+    void DX12Surface::resize(uint32_t width, uint32_t height)
+    {
+        mDevice.waitForGPU();
+        for (uint32_t i = 0; i < kFrameCount; i++)
+        {
+            mRenderTargets[i].reset();
+            mDepthTargets[i].reset();
+        }
+        mRTVHeap.reset();
+        mDSVHeap.reset();
+
+        _ThrowIfFailed(mSwapChain->ResizeBuffers(kFrameCount, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
+        mWidth = width;
+        mHeight = height;
+        createTargets();
     }
 
     uint32_t DX12Device::getFrameIndex() const
     {
-        return mFrameBufferIndex;
+        return mFrameIndex;
     }
 
     StaticBuffer::Ref DX12Device::createStaticBuffer(uint32_t length)
@@ -1532,47 +1604,51 @@ namespace eokas
         mCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
     }
     
-    void DX12Device::present()
-    {
-        HRESULT hr = mSwapChain->Present(1, 0);
-        if (FAILED(hr))
-        {
-            _ThrowIfFailed(mDevice->GetDeviceRemovedReason());
-        }
-    }
-    
     void DX12Device::waitForGPU()
     {
-        const UINT64 currentFenceValue = mFenceValues[mFrameBufferIndex];
+        const UINT64 currentFenceValue = mFenceValues[mFrameIndex];
         
         _ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), currentFenceValue));
         
         _ThrowIfFailed(mFence->SetEventOnCompletion(currentFenceValue, mFenceEvent));
         WaitForSingleObject(mFenceEvent, INFINITE);
         
-        mFenceValues[mFrameBufferIndex] = currentFenceValue + 1;
+        mFenceValues[mFrameIndex] = currentFenceValue + 1;
+        _ThrowIfFailed(mCommandAllocators[mFrameIndex]->Reset());
     }
     
     void DX12Device::waitForNextFrame()
     {
-        const UINT64 currentFenceValue = mFenceValues[mFrameBufferIndex];
-        
+        const UINT64 currentFenceValue = mFenceValues[mFrameIndex];
         _ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), currentFenceValue));
-        
-        mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
-        
+
+        mFrameIndex = (mFrameIndex + 1) % kFrameCount;
+
         const UINT64 completed = mFence->GetCompletedValue();
-        if (completed < mFenceValues[mFrameBufferIndex])
+        if (completed < mFenceValues[mFrameIndex])
         {
-            _ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValues[mFrameBufferIndex], mFenceEvent));
+            _ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValues[mFrameIndex], mFenceEvent));
             WaitForSingleObject(mFenceEvent, INFINITE);
         }
-        
-        mFenceValues[mFrameBufferIndex] = currentFenceValue + 1;
+
+        mFenceValues[mFrameIndex] = currentFenceValue + 1;
+        _ThrowIfFailed(mCommandAllocators[mFrameIndex]->Reset());
+    }
+
+    Surface::Ref DX12Device::createSurface(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
+    {
+        for (DX12Surface* existing : mSurfaces)
+        {
+            if (existing->mWindowHandle == windowHandle)
+            {
+                throw std::runtime_error("Device: surface already exists for this window.");
+            }
+        }
+        return std::make_shared<DX12Surface>(*this, windowHandle, windowWidth, windowHeight);
     }
     
-    Device::Ref GPUFactory::createDevice(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
+    Device::Ref GPUFactory::createDevice()
     {
-        return std::make_shared<DX12Device>(windowHandle, windowWidth, windowHeight);
+        return std::make_shared<DX12Device>();
     }
 }

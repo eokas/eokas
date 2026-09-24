@@ -1,4 +1,5 @@
 #include "UICanvas.h"
+#include "UIView.h"
 
 #include <cstddef>
 #include <map>
@@ -192,14 +193,14 @@ namespace eokas
 
     UIWidget* UICanvas::hitTest(float x, float y)
     {
-        return this->hitTestNode(mRoot.get(), x, y);
+        return this->hitTestNode(mRoot.get(), x, y, 0.0f, 0.0f);
     }
 
     void UICanvas::onMouseMove(float x, float y)
     {
         if (mPressed != nullptr)
         {
-            mPressed->triggerPointerDrag(x, y, mPressedButton);
+            this->dispatchDrag(x, y);
         }
 
         UIWidget* hit = this->hitTest(x, y);
@@ -233,17 +234,18 @@ namespace eokas
         mPressedButton = button;
         if (button == 0)
         {
+            bool insideFocus = mFocused != nullptr && this->containsWidget(mFocused, mPressed);
             if (mPressed->acceptsKeyFocus())
             {
                 this->setFocus(mPressed);
             }
-            else
+            else if (!insideFocus)
             {
                 this->setFocus(nullptr);
             }
         }
         mPressed->triggerPointerPress();
-        mPressed->triggerPointerDrag(x, y, button);
+        this->dispatchDrag(x, y);
     }
 
     void UICanvas::onMouseUp(float x, float y, int button)
@@ -261,6 +263,110 @@ namespace eokas
         mPressed = nullptr;
         mPressedButton = -1;
         this->onMouseMove(x, y);
+    }
+
+    void UICanvas::onMouseWheel(float x, float y, float deltaX, float deltaY)
+    {
+        this->routeWheel(mRoot.get(), x, y, 0.0f, 0.0f, deltaX, deltaY);
+    }
+
+    void UICanvas::dispatchDrag(float x, float y)
+    {
+        if (mPressed == nullptr)
+        {
+            return;
+        }
+        float ox = 0.0f;
+        float oy = 0.0f;
+        this->findWidget(mRoot.get(), mPressed, 0.0f, 0.0f, ox, oy);
+        mPressed->triggerPointerDrag(x - ox, y - oy, mPressedButton);
+    }
+
+    bool UICanvas::findWidget(UIWidget* node, UIWidget* target, float originX, float originY, float& outX, float& outY) const
+    {
+        if (node == nullptr)
+        {
+            return false;
+        }
+        if (node == target)
+        {
+            outX = originX;
+            outY = originY;
+            return true;
+        }
+        if (UIView* view = dynamic_cast<UIView*>(node))
+        {
+            const std::shared_ptr<UIWidget>& content = view->root();
+            float cx = originX + content->rect.x;
+            float cy = originY + content->rect.y;
+            for (auto& child : content->children)
+            {
+                if (this->findWidget(child.get(), target, cx, cy, outX, outY))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        for (auto& child : node->children)
+        {
+            if (this->findWidget(child.get(), target, originX, originY, outX, outY))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool UICanvas::routeWheel(UIWidget* widget, float x, float y, float originX, float originY, float deltaX, float deltaY)
+    {
+        if (widget == nullptr || !widget->visible)
+        {
+            return false;
+        }
+
+        if (UIView* view = dynamic_cast<UIView*>(widget))
+        {
+            const std::shared_ptr<UIWidget>& content = view->root();
+            float cx = originX + content->rect.x;
+            float cy = originY + content->rect.y;
+            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            {
+                if (*it && (*it)->floating && this->routeWheel(it->get(), x, y, cx, cy, deltaX, deltaY))
+                {
+                    return true;
+                }
+            }
+            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            {
+                if (*it && !(*it)->floating && this->routeWheel(it->get(), x, y, cx, cy, deltaX, deltaY))
+                {
+                    return true;
+                }
+            }
+            Vector2 local(x - originX, y - originY);
+            if (!view->rect.contains(local))
+            {
+                return false;
+            }
+            return view->scrollBy(deltaX, deltaY);
+        }
+
+        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
+        {
+            if (*it && (*it)->floating && this->routeWheel(it->get(), x, y, originX, originY, deltaX, deltaY))
+            {
+                return true;
+            }
+        }
+        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
+        {
+            if (*it && !(*it)->floating && this->routeWheel(it->get(), x, y, originX, originY, deltaX, deltaY))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     void UICanvas::setFallbackFontPath(const char* path)
@@ -350,6 +456,13 @@ namespace eokas
         {
             this->collectTexts(child.get(), texts);
         }
+        if (UIView* view = dynamic_cast<UIView*>(widget))
+        {
+            for (auto& child : view->root()->children)
+            {
+                this->collectTexts(child.get(), texts);
+            }
+        }
     }
 
     String UICanvas::resolveAssetPath(const char* relativePath) const
@@ -376,18 +489,67 @@ namespace eokas
         return given;
     }
 
-    UIWidget* UICanvas::hitTestNode(UIWidget* widget, float x, float y)
+    UIWidget* UICanvas::hitTestNode(UIWidget* widget, float x, float y, float originX, float originY)
     {
         if (widget == nullptr || !widget->visible)
         {
             return nullptr;
         }
 
+        if (UIView* view = dynamic_cast<UIView*>(widget))
+        {
+            const std::shared_ptr<UIWidget>& content = view->root();
+            float cx = originX + content->rect.x;
+            float cy = originY + content->rect.y;
+            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            {
+                if (*it && (*it)->floating)
+                {
+                    UIWidget* hit = this->hitTestNode(it->get(), x, y, cx, cy);
+                    if (hit != nullptr)
+                    {
+                        return hit;
+                    }
+                }
+            }
+
+            Vector2 local(x - originX, y - originY);
+            if (view->scrollbarContains(local.x, local.y))
+            {
+                return view;
+            }
+            Rect vp = view->viewport();
+            if (!vp.contains(local))
+            {
+                if (widget->interactive && widget->rect.contains(local))
+                {
+                    return widget;
+                }
+                return nullptr;
+            }
+            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            {
+                if (*it && !(*it)->floating)
+                {
+                    UIWidget* hit = this->hitTestNode(it->get(), x, y, cx, cy);
+                    if (hit != nullptr)
+                    {
+                        return hit;
+                    }
+                }
+            }
+            if (widget->interactive && widget->rect.contains(local))
+            {
+                return widget;
+            }
+            return nullptr;
+        }
+
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
-            if (*it)
+            if (*it && (*it)->floating)
             {
-                UIWidget* hit = this->hitTestNode(it->get(), x, y);
+                UIWidget* hit = this->hitTestNode(it->get(), x, y, originX, originY);
                 if (hit != nullptr)
                 {
                     return hit;
@@ -395,7 +557,20 @@ namespace eokas
             }
         }
 
-        if (widget->interactive && widget->rect.contains(Vector2(x, y)))
+        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
+        {
+            if (*it && !(*it)->floating)
+            {
+                UIWidget* hit = this->hitTestNode(it->get(), x, y, originX, originY);
+                if (hit != nullptr)
+                {
+                    return hit;
+                }
+            }
+        }
+
+        Vector2 local(x - originX, y - originY);
+        if (widget->interactive && widget->rect.contains(local))
         {
             return widget;
         }
@@ -409,6 +584,14 @@ namespace eokas
             return;
         }
         widget->resetPointerState();
+        if (UIView* view = dynamic_cast<UIView*>(widget))
+        {
+            for (auto& child : view->root()->children)
+            {
+                this->resetPointerState(child.get());
+            }
+            return;
+        }
         for (auto& child : widget->children)
         {
             this->resetPointerState(child.get());
@@ -424,6 +607,17 @@ namespace eokas
         if (node == target)
         {
             return true;
+        }
+        if (UIView* view = dynamic_cast<UIView*>(node))
+        {
+            for (auto& child : view->root()->children)
+            {
+                if (this->containsWidget(child.get(), target))
+                {
+                    return true;
+                }
+            }
+            return false;
         }
         for (auto& child : node->children)
         {

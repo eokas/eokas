@@ -19,6 +19,7 @@ namespace eokas::gpu {
     
     class Graphics {
         Device::Ref mDevice;
+        Surface::Ref mSurface;
         Viewport mViewport;
         PipelineObject::Ref mPipelineObject;
         PipelineBindings::Ref mPipelineBindings;
@@ -42,7 +43,8 @@ namespace eokas::gpu {
     
     public:
         void init(HWND windowHandle, int32_t windowWidth, int32_t windowHeight) {
-            mDevice = GPUFactory::createDevice(windowHandle, windowWidth, windowHeight);
+            mDevice = GPUFactory::createDevice();
+            mSurface = mDevice->createSurface(windowHandle, windowWidth, windowHeight);
             
             mViewport.left = 0;
             mViewport.top = 0;
@@ -177,8 +179,8 @@ namespace eokas::gpu {
                 mCommandBuffer->setPipelineBindings(mPipelineBindings);
                 mCommandBuffer->setViewport(mViewport);
                 
-                RenderTarget::Ref renderTarget = mDevice->getActiveRenderTarget();
-                RenderTarget::Ref depthTarget = mDevice->getActiveDepthTarget();
+                RenderTarget::Ref renderTarget = mSurface->getActiveRenderTarget();
+                RenderTarget::Ref depthTarget = mSurface->getActiveDepthTarget();
                 
                 Barrier begin;
                 begin.resource = renderTarget;
@@ -205,7 +207,7 @@ namespace eokas::gpu {
             }
             
             mDevice->commitCommandBuffer(mCommandBuffer);
-            mDevice->present();
+            mSurface->present();
             mDevice->waitForNextFrame();
         }
         

@@ -10,7 +10,14 @@ namespace eokas
         }
         for (auto& child : children)
         {
-            if (child)
+            if (child && !child->floating && !shape.outsideClip(child->rect))
+            {
+                child->render(shape);
+            }
+        }
+        for (auto& child : children)
+        {
+            if (child && child->floating)
             {
                 child->render(shape);
             }

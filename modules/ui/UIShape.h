@@ -24,6 +24,12 @@ namespace eokas
 
         void begin();
         void setTexture(Texture::Ref tex);
+        Vector2 offset() const { return mOffset; }
+        void pushOffset(const Vector2& next);
+        void popOffset();
+        void pushClip(const Rect& screenClip);
+        void popClip();
+        bool outsideClip(const Rect& local) const;
         void addQuad(const Rect& screen, const Rect& uv, const Color& color);
         void addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color);
         void end();
@@ -35,6 +41,9 @@ namespace eokas
 
         std::vector<UIVertex> mVertices;
         std::vector<uint32_t> mIndices;
+        std::vector<Vector2> mOffsetStack;
+        std::vector<Rect> mClipStack;
+        Vector2 mOffset { 0.0f, 0.0f };
         std::vector<uint8_t> mPendingUploadRgba;
         uint32_t mMaxQuads = 2048;
         uint32_t mPendingAtlasSize = 0;
