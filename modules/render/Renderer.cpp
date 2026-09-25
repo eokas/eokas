@@ -135,6 +135,7 @@ namespace eokas
             if (!p || !p->visible || !p->ready())
                 continue;
             p->material->setUniformBuffer("Transform", p->objectUniforms);
+            p->upload(mCommandBuffer);
             p->material->bind(mCommandBuffer);
             p->encode(mCommandBuffer);
         }

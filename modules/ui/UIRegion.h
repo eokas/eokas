@@ -17,6 +17,7 @@ namespace eokas
         void setHead(const std::shared_ptr<UIWidget>& widget);
         const std::shared_ptr<UIWidget>& body() const { return mBody; }
         void setBody(const std::shared_ptr<UIWidget>& widget);
+        void layout(const Rect& rect) override;
         void render(UIShape& shape) override;
 
         std::function<void(bool)> onExpandedChanged;
@@ -28,7 +29,6 @@ namespace eokas
         std::shared_ptr<UIWidget> mBody;
 
         void syncChildren();
-        void layoutParts();
     };
 }
 

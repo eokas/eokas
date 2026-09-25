@@ -4,7 +4,7 @@
 #include "./value.h"
 #include "./schema.h"
 
-namespace eokas::datapot
+namespace eokas::rose
 {
     class Library
     {

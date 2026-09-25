@@ -18,6 +18,7 @@ namespace eokas
         virtual ~Primitive() = default;
         virtual void createResources(Device::Ref device);
         virtual void updateUniforms(const Camera& cam);
+        virtual void upload(CommandBuffer::Ref cmd) { (void)cmd; }
         virtual void encode(CommandBuffer::Ref cmd) = 0;
         virtual bool ready() const;
     };

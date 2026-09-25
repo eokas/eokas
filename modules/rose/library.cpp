@@ -2,7 +2,7 @@
 #include "./schema.h"
 #include "./value.h"
 
-namespace eokas::datapot
+namespace eokas::rose
 {
     Library::Library(const String &name)
         : mName(name)
@@ -41,7 +41,7 @@ namespace eokas::datapot
 
     bool Library::load(BinaryStream &stream)
     {
-        static const String MAGIC = "DATAPOT";
+        static const String MAGIC = "ROSE";
         static const i32_t VERSION = 1;
 
         if (!stream.isOpen())
@@ -102,7 +102,7 @@ namespace eokas::datapot
             return true;
         };
 
-        auto readValueList = [this, &readValue](BinaryStream &stream, std::vector<Value> &list)-> bool
+        auto readValueList = [this, &readValue](BinaryStream &stream, auto &list)-> bool
         {
             u32_t count = -1;
             if (!stream.read(count)) return false;
@@ -174,7 +174,7 @@ namespace eokas::datapot
 
     bool Library::save(BinaryStream &stream)
     {
-        static const String MAGIC_TOKEN = "DATAPOT";
+        static const String MAGIC_TOKEN = "ROSE";
         static const i32_t VERSION = 1;
 
         if (!stream.isOpen())
@@ -213,7 +213,7 @@ namespace eokas::datapot
             }
         }
 
-        auto saveValueList = [this](BinaryStream &stream, const std::vector<Value> &list)
+        auto saveValueList = [this](BinaryStream &stream, const auto &list)
         {
             stream.write(u32_t(list.size()));
             for (const auto &value: list)

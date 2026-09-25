@@ -6,7 +6,8 @@
 #include "UICanvas.h"
 #include "UIImage.h"
 #include "UIText.h"
-#include "UILayout.h"
+#include "UIList.h"
+#include "UIGrid.h"
 #include "UIView.h"
 #include "UIFont.h"
 #include "UIMenu.h"
@@ -17,5 +18,6 @@
 #include "UIDropdown.h"
 #include "UIRegion.h"
 #include "UIDocking.h"
+#include "UIApp.h"
 
 #endif//_EOKAS_UI_MAIN_H_

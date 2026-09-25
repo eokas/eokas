@@ -1,7 +1,7 @@
 #include "./value.h"
 #include "./schema.h"
 
-namespace eokas::datapot
+namespace eokas::rose
 {
     ValueHeap::ValueHeap(SchemaHeap &schemaHeap)
         : mSchemaHeap(schemaHeap) {}
@@ -259,7 +259,7 @@ namespace eokas::datapot
         if (!ptr->schema->is(SchemaType::String))
             return false;
         i64_t index = ptr->value.i64;
-        if (index < 0 || index > this->strings.size())
+        if (index < 0 || index >= this->strings.size())
             return false;
         val = this->strings.at(index);
         return true;

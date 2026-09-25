@@ -5,7 +5,7 @@
 #pragma once
 #include "base/main.h"
 
-namespace eokas::datapot
+namespace eokas::rose
 {
     class Library;
 

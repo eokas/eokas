@@ -109,13 +109,13 @@ namespace eokas {
     // compute the byte count of a pixel-format
 #define _PixelFormatSize(pixFmt) ((((u32_t)(pixFmt)) & 0x0000FF00) >> 8)
 
-#define _R4G4B4A4(r, g, b, a) (((r)&0x0F<<12) | ((g)&0x0F<<8) | ((b)&0x0F<<4) | ((a)&0x0F))
+#define _R4G4B4A4(r, g, b, a) ((((r)&0x0F)<<12) | (((g)&0x0F)<<8) | (((b)&0x0F)<<4) | ((a)&0x0F))
 #define _R4G4B4A4_R(color) ((color)>>12&0x0F)
 #define _R4G4B4A4_G(color) ((color)>>8&0x0F)
 #define _R4G4B4A4_B(color) ((color)>>4&0x0F)
 #define _R4G4B4A4_A(color) ((color)&0x0F)
 
-#define _R5G5B5A1(r, g, b, a) (((r)&0x1F<<11) | ((g)&0x1F<<6) | ((b)&0x1F<<1) | ((a)&0x01))
+#define _R5G5B5A1(r, g, b, a) ((((r)&0x1F)<<11) | (((g)&0x1F)<<6) | (((b)&0x1F)<<1) | ((a)&0x01))
 #define _R5G5B5A1_R(color) ((color)>>11&0x1F)
 #define _R5G5B5A1_G(color) ((color)>>6&0x1F)
 #define _R5G5B5A1_B(color) ((color)>>1&0x1F)
@@ -126,12 +126,12 @@ namespace eokas {
 #define _R5G5B5X1_G(color) _R5G5B5A1_G(color)
 #define _R5G5B5X1_B(color) _R5G5B5A1_B(color)
 
-#define _R5G6B5(r, g, b) (((r)&0x1F<<11) | ((g)&0x3F<<5) | ((b)&0x1F))
+#define _R5G6B5(r, g, b) ((((r)&0x1F)<<11) | (((g)&0x3F)<<5) | ((b)&0x1F))
 #define _R5G6B5_R(color) ((color)>>11&0x1F)
 #define _R5G6B5_G(color) ((color)>>5&0x3F)
 #define _R5G6B5_B(color) ((color)&0x1F)
 
-#define _R8G8B8A8(r, g, b, a) (((r)&0xFF<<24) | ((g)&0xFF<<16) | ((b)&0xFF<<8) | ((a)&0xFF))
+#define _R8G8B8A8(r, g, b, a) ((((r)&0xFF)<<24) | (((g)&0xFF)<<16) | (((b)&0xFF)<<8) | ((a)&0xFF))
 #define _R8G8B8A8_R(color) ((color)>>24&0xFF)
 #define _R8G8B8A8_G(color) ((color)>>16&0xFF)
 #define _R8G8B8A8_B(color) ((color)>>8&0xFF)
@@ -142,7 +142,7 @@ namespace eokas {
 #define _R8G8B8X8_G(color) _R8G8B8A8_G(color)
 #define _R8G8B8X8_B(color) _R8G8B8A8_B(color)
 
-#define _R16G16B16A16(r, g, b, a) (((r)&0xFFFF<<48) | ((g)&0xFFFF<<32) | ((b)&0xFFFF<<16) | ((a)&0xFFFF))
+#define _R16G16B16A16(r, g, b, a) ((((r)&0xFFFF)<<48) | (((g)&0xFFFF)<<32) | (((b)&0xFFFF)<<16) | ((a)&0xFFFF))
 #define _R16G16B16A16_R(color) ((color)>>48&0xFFFF)
 #define _R16G16B16A16_G(color) ((color)>>32&0xFFFF)
 #define _R16G16B16A16_B(color) ((color)>>16&0xFFFF)

@@ -22,6 +22,7 @@ namespace eokas
 
         void setLabel(const String& text);
         UIText* label() const;
+        void layout(const Rect& rect) override;
         void render(UIShape& shape) override;
         void triggerClick() override;
 
@@ -30,7 +31,6 @@ namespace eokas
         bool selected = false;
         std::shared_ptr<UIText> mLabel;
 
-        void layoutLabel();
     };
 
     class UIDropdown : public UIWidget
@@ -66,6 +66,7 @@ namespace eokas
         String labelOf(int index) const;
         UIText* caption() const;
         bool acceptsKeyFocus() const override { return true; }
+        void layout(const Rect& rect) override;
         void render(UIShape& shape) override;
         void triggerClick() override;
         void triggerBlur() override;

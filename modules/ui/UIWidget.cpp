@@ -2,6 +2,19 @@
 
 namespace eokas
 {
+    void UIWidget::layout(const Rect& rect)
+    {
+        this->rect = rect;
+        for (auto& child : children)
+        {
+            if (!child)
+            {
+                continue;
+            }
+            child->layout(child->rect);
+        }
+    }
+
     void UIWidget::render(UIShape& shape)
     {
         if (!visible)

@@ -1976,6 +1976,67 @@ namespace eokas {
         f32_t rz = Math::lerp(a.z, b.z, t.z);
         return Vector3(rx, ry, rz);
     }
+
+    Quaternion Math::lerp(const Quaternion& a, const Quaternion& b, f32_t t) {
+        Quaternion result(
+            Math::lerp(a.x, b.x, t),
+            Math::lerp(a.y, b.y, t),
+            Math::lerp(a.z, b.z, t),
+            Math::lerp(a.w, b.w, t));
+        f32_t mag = result.magnitude();
+        if (mag > 0.0f) {
+            result.x /= mag;
+            result.y /= mag;
+            result.z /= mag;
+            result.w /= mag;
+        }
+        return result;
+    }
+
+    Vector3 Math::slerp(const Vector3& a, const Vector3& b, f32_t t) {
+        f32_t ma = a.magnitude();
+        f32_t mb = b.magnitude();
+        if (ma <= 0.0f || mb <= 0.0f) {
+            return Math::lerp(a, b, t);
+        }
+        Vector3 na = a * (1.0f / ma);
+        Vector3 nb = b * (1.0f / mb);
+        f32_t dot = Math::clamp(Vector3::dot(na, nb), -1.0f, 1.0f);
+        Vector3 rel = nb - na * dot;
+        f32_t relMag = rel.magnitude();
+        if (relMag <= 0.0f) {
+            return Math::lerp(a, b, t);
+        }
+        rel = rel * (1.0f / relMag);
+        f32_t theta = acosf(dot) * t;
+        f32_t length = Math::lerp(ma, mb, t);
+        return (na * cosf(theta) + rel * sinf(theta)) * length;
+    }
+
+    Quaternion Math::slerp(const Quaternion& a, const Quaternion& b, f32_t t) {
+        f32_t dot = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+        Quaternion end = b;
+        if (dot < 0.0f) {
+            dot = -dot;
+            end = -b;
+        }
+        if (dot > 0.9995f) {
+            return Math::lerp(a, end, t);
+        }
+        dot = Math::clamp(dot, -1.0f, 1.0f);
+        f32_t theta = acosf(dot);
+        f32_t sinTheta = sinf(theta);
+        if (sinTheta == 0.0f) {
+            return a;
+        }
+        f32_t w1 = sinf((1.0f - t) * theta) / sinTheta;
+        f32_t w2 = sinf(t * theta) / sinTheta;
+        return Quaternion(
+            a.x * w1 + end.x * w2,
+            a.y * w1 + end.y * w2,
+            a.z * w1 + end.z * w2,
+            a.w * w1 + end.w * w2);
+    }
     
     f32_t Math::sampleSinCurve(f32_t a, f32_t w, f32_t q, f32_t k, f32_t min, f32_t max, f32_t t) {
         f32_t x = Math::lerp(min, max, t);

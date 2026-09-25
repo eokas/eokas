@@ -37,6 +37,7 @@ namespace eokas
 
     private:
         void createResources(Device::Ref device) override;
+        void upload(CommandBuffer::Ref cmd) override;
         void encode(CommandBuffer::Ref cmd) override;
 
         std::vector<UIVertex> mVertices;

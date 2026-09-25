@@ -295,13 +295,13 @@ namespace eokas
     void UIShape::createResources(Device::Ref device)
     {
         vertexStride = sizeof(UIVertex);
-        vertexLength = mMaxQuads * 4 * vertexStride;
         indexFormat = Format::R32_UINT;
-        indexLength = mMaxQuads * 6 * sizeof(uint32_t);
+        uint32_t vertexBytes = mMaxQuads * 4 * vertexStride;
+        uint32_t indexBytes = mMaxQuads * 6 * (uint32_t)sizeof(uint32_t);
         if (!vertexBuffer)
-            vertexBuffer = device->createDynamicBuffer(vertexLength);
+            vertexBuffer = device->createDynamicBuffer(vertexBytes);
         if (!indexBuffer)
-            indexBuffer = device->createDynamicBuffer(indexLength);
+            indexBuffer = device->createDynamicBuffer(indexBytes);
 
         if (!texture && mPendingAtlasSize > 0)
         {
@@ -318,31 +318,38 @@ namespace eokas
         Primitive::createResources(device);
     }
 
+    void UIShape::upload(CommandBuffer::Ref cmd)
+    {
+        if (!mTextureDirty || !texture || !cmd)
+        {
+            return;
+        }
+        cmd->fillTexture(texture, mPendingUploadRgba);
+        mTextureDirty = false;
+    }
+
     void UIShape::encode(CommandBuffer::Ref cmd)
     {
-        if (mTextureDirty && texture && cmd)
-        {
-            cmd->fillTexture(texture, mPendingUploadRgba);
-            mTextureDirty = false;
-        }
-        if (vertexBuffer && !mVertices.empty())
+        uint32_t vertexBytes = (uint32_t)(mVertices.size() * sizeof(UIVertex));
+        uint32_t indexBytes = (uint32_t)(mIndices.size() * sizeof(uint32_t));
+        if (vertexBuffer && vertexBytes > 0)
         {
             void* ptr = vertexBuffer->map();
-            memcpy(ptr, mVertices.data(), vertexLength);
+            memcpy(ptr, mVertices.data(), vertexBytes);
             vertexBuffer->unmap();
         }
-        if (indexBuffer && !mIndices.empty())
+        if (indexBuffer && indexBytes > 0)
         {
             void* ptr = indexBuffer->map();
-            memcpy(ptr, mIndices.data(), indexLength);
+            memcpy(ptr, mIndices.data(), indexBytes);
             indexBuffer->unmap();
         }
         if (indexCount == 0)
             return;
 
         cmd->setTopology(Topology::TriangleList);
-        cmd->setVertexBuffer(vertexBuffer, vertexLength, vertexStride);
-        cmd->setIndexBuffer(indexBuffer, indexLength, indexFormat);
+        cmd->setVertexBuffer(vertexBuffer, vertexBytes, vertexStride);
+        cmd->setIndexBuffer(indexBuffer, indexBytes, indexFormat);
         cmd->drawIndexedInstanced(indexCount, 1, 0, 0, 0);
     }
 }

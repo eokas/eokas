@@ -1,6 +1,6 @@
 #include "./schema.h"
 
-namespace eokas::datapot
+namespace eokas::rose
 {
     Schema::Schema(SchemaType type, const String &name)
         : mType(type)

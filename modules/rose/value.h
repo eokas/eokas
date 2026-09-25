@@ -1,7 +1,9 @@
 #pragma once
 #include "./header.h"
 
-namespace eokas::datapot {
+#include <deque>
+
+namespace eokas::rose {
     struct Value
     {
         Schema* schema;
@@ -95,7 +97,7 @@ namespace eokas::datapot {
         ValueHeap(SchemaHeap& schemaHeap);
         virtual ~ValueHeap();
 
-        std::vector<Value> values;
+        std::deque<Value> values;
         
         std::vector<List> lists;
         std::vector<Object> objects;

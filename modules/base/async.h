@@ -2,9 +2,14 @@
 #include "./header.h"
 
 #include <atomic>
+#include <condition_variable>
 #include <future>
-#include <stdexcept>
 #include <functional>
+#include <mutex>
+#include <queue>
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
 namespace eokas {
 
@@ -60,13 +65,13 @@ namespace eokas {
         // 1, bind: .exec(std::bind(&Dog::sayHello, &dog));
         // 2, mem_fn: .exec(std::mem_fn(&Dog::sayHello), this)
         template<typename F, typename... Args>
-        auto exec(F&& f, Args&& ... args) -> future<decltype(f(args...))> {
+        auto exec(F&& f, Args&& ... args) -> std::future<decltype(f(args...))> {
             if (!mRunning)
                 throw std::runtime_error("commit on ThreadPool is stopped.");
             
             using RetType = decltype(f(args...));
             
-            auto task = std::make_shared<std::packaged_task<RetType()>>(bind(std::forward<F>(f), std::forward<Args>(args)...));
+            auto task = std::make_shared<std::packaged_task<RetType()>>(std::bind(std::forward<F>(f), std::forward<Args>(args)...));
             
             std::future<RetType> future = task->get_future();
             {

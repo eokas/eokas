@@ -1,0 +1,134 @@
+#include "Unit.h"
+#include "ui/main.h"
+
+using namespace eokas;
+
+EOKAS_TEST_CASE(ui) {
+    int clicks = 0;
+    UIWidget widget;
+    widget.rect = Rect(0, 0, 40, 20);
+    widget.onClick = [&]() { clicks += 1; };
+    widget.triggerClick();
+    EOKAS_EXPECT(clicks == 1);
+    widget.triggerPointerEnter();
+    EOKAS_EXPECT(widget.hovered);
+    widget.triggerPointerLeave();
+    EOKAS_EXPECT(!widget.hovered);
+
+    UIList list;
+    auto first = std::make_shared<UIWidget>();
+    auto second = std::make_shared<UIWidget>();
+    first->rect = Rect(0, 0, 10, 20);
+    second->rect = Rect(0, 0, 10, 30);
+    list.addChild(first);
+    list.addChild(second);
+    list.layout(Rect(0, 0, 100, 200));
+    EOKAS_EXPECT(_FloatEqual(first->rect.x, 8.0f));
+    EOKAS_EXPECT(_FloatEqual(first->rect.y, 8.0f));
+    EOKAS_EXPECT(_FloatEqual(second->rect.y, 36.0f));
+
+    UIGrid grid;
+    grid.columns = 2;
+    grid.cellWidth = 16.0f;
+    grid.cellHeight = 10.0f;
+    auto cell = std::make_shared<UIWidget>();
+    cell->rect = Rect(0, 0, 16, 10);
+    grid.addChild(cell);
+    grid.layout(Rect(0, 0, 80, 40));
+    EOKAS_EXPECT(_FloatEqual(cell->rect.width, 16.0f));
+
+    UIButton button;
+    button.setText("OK");
+    EOKAS_EXPECT(button.label() != nullptr);
+    EOKAS_EXPECT(button.label()->text == "OK");
+
+    UIMenu menu;
+    auto item = std::make_shared<UIMenuItem>();
+    item->setText("File");
+    menu.addItem(item);
+    EOKAS_EXPECT(item->label() != nullptr);
+    EOKAS_EXPECT(item->label()->text == "File");
+
+    int expandedHits = 0;
+    UIRegion region;
+    region.onExpandedChanged = [&](bool expanded) { expandedHits += expanded ? 1 : -1; };
+    region.setExpanded(false);
+    EOKAS_EXPECT(!region.expanded());
+    EOKAS_EXPECT(expandedHits == -1);
+
+    UISlider slider;
+    slider.setRange(0.0f, 10.0f);
+    slider.setValue(12.0f);
+    EOKAS_EXPECT(_FloatEqual(slider.value, 10.0f));
+
+    int toggleHits = 0;
+    UIToggle toggle;
+    toggle.onValueChanged = [&](bool) { toggleHits += 1; };
+    toggle.triggerClick();
+    EOKAS_EXPECT(toggle.value);
+    EOKAS_EXPECT(toggleHits == 1);
+
+    UIInput input;
+    input.setText("eokas");
+    EOKAS_EXPECT(input.text == "eokas");
+    EOKAS_EXPECT(input.acceptsKeyFocus());
+
+    UIDropdown dropdown;
+    dropdown.addItem(1, "One");
+    dropdown.addItem(2, "Two");
+    dropdown.setValue(2);
+    EOKAS_EXPECT(dropdown.value == 2);
+    EOKAS_EXPECT(dropdown.labelOf(2) == "Two");
+
+    UIShape shape;
+    shape.begin();
+    shape.addQuad(Rect(0, 0, 10, 10), Rect(0, 0, 1, 1), Color(1, 1, 1, 1));
+    shape.end();
+    EOKAS_EXPECT(shape.indexCount == 6);
+    EOKAS_EXPECT(shape.vertexLength == 6 * sizeof(UIVertex));
+
+    UICanvas canvas;
+    canvas.init(200, 100);
+    auto root = std::make_shared<UIWidget>();
+    root->rect = Rect(0, 0, 200, 100);
+    canvas.setRoot(root);
+    EOKAS_EXPECT(canvas.hitTest(10, 10) == root.get());
+    canvas.onMouseDown(10, 10, 0);
+    canvas.onMouseUp(10, 10, 0);
+    canvas.quit();
+
+    UIView view;
+    auto content = std::make_shared<UIWidget>();
+    content->rect = Rect(0, 0, 400, 300);
+    view.addChild(content);
+    view.rect = Rect(0, 0, 50, 40);
+    view.setScroll(4, 6);
+    EOKAS_EXPECT(_FloatEqual(view.scrollX(), 4.0f));
+    EOKAS_EXPECT(_FloatEqual(view.scrollY(), 6.0f));
+
+    UIDockSpace dock;
+    dock.layout(Rect(0, 0, 400, 300));
+    auto page = std::make_shared<UIDockPage>();
+    dock.dockPage(page, UIDockMode::Fill);
+    dock.layout(Rect(0, 0, 400, 300));
+    EOKAS_EXPECT(page->mode() == UIDockMode::Fill);
+    EOKAS_EXPECT(page->space() == &dock);
+    Rect bounds;
+    EOKAS_EXPECT(dock.pageBounds(page.get(), bounds));
+    EOKAS_EXPECT(bounds.width > 0.0f);
+    EOKAS_EXPECT(bounds.height > 0.0f);
+
+    int windows = 0;
+    UIApp app;
+    app.onCreateWindow = [&](const Rect&) {
+        windows += 1;
+        return (void*)1;
+    };
+    void* window = (void*)1;
+    UICanvas& opened = app.open(window, 320, 240);
+    EOKAS_EXPECT(app.find(window) == &opened);
+    app.layout(window, 320, 240);
+    app.close(window);
+    EOKAS_EXPECT(app.find(window) == nullptr);
+    return 0;
+}

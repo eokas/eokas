@@ -17,7 +17,7 @@ namespace eokas {
     }
     
     void App::tick(float deltaTime) {
-        mModules.quit();
+        mModules.tick(deltaTime);
     }
     
     ModuleManager& App::modules() {

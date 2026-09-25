@@ -24,8 +24,14 @@ file(GLOB EOKAS_SOURCE_FILES
 )
 
 set(EOKAS_LIBRARY_FILES
-        "base" "fbxsdk"
+        "base"
 )
+
+if(WIN32)
+    list(APPEND EOKAS_LIBRARY_FILES "libfbxsdk")
+else()
+    list(APPEND EOKAS_LIBRARY_FILES "fbxsdk")
+endif()
 
 message("EOKAS_HEADER_DIRS = ${EOKAS_HEADER_DIRS}")
 message("EOKAS_LIBRARY_DIRS = ${EOKAS_LIBRARY_DIRS}")

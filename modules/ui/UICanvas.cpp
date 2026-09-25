@@ -2,9 +2,6 @@
 #include "UIView.h"
 
 #include <cstddef>
-#include <map>
-#include <stdexcept>
-#include <vector>
 
 namespace eokas
 {
@@ -61,14 +58,6 @@ namespace eokas
         mPressed = nullptr;
         mPressedButton = -1;
         mRoot.reset();
-        for (auto& font : mFonts)
-        {
-            if (font)
-            {
-                font->close();
-            }
-        }
-        mFonts.clear();
         if (mShape)
         {
             mShape->material.reset();
@@ -91,82 +80,6 @@ namespace eokas
         mRoot = widget;
     }
 
-    void UICanvas::prepare()
-    {
-        for (auto& font : mFonts)
-        {
-            if (font)
-            {
-                font->close();
-            }
-        }
-        mFonts.clear();
-
-        std::vector<UIText*> texts;
-        this->collectTexts(mRoot.get(), texts);
-
-        std::map<String, std::vector<UIText*>> groups;
-        for (UIText* text : texts)
-        {
-            if (text == nullptr || text->fontPath.isEmpty())
-            {
-                continue;
-            }
-            groups[text->fontPath].push_back(text);
-        }
-
-        for (auto& entry : groups)
-        {
-            uint32_t pixelSize = 0;
-            std::map<uint32_t, uint32_t> sizes;
-            for (UIText* text : entry.second)
-            {
-                uint32_t px = (uint32_t)(text->fontSize + 0.5f);
-                if (px < 1) px = 1;
-                sizes[px] = px;
-                if (px > pixelSize) pixelSize = px;
-            }
-            if (pixelSize == 0) pixelSize = (uint32_t)UIText::kDefaultFontSize;
-
-            UIFont* font = this->loadFont(entry.first.cstr(), pixelSize);
-            for (auto& size : sizes) font->prepareSize(size.first);
-            for (UIText* text : entry.second)
-            {
-                text->font = font;
-            }
-        }
-
-        if (mShape && !mFonts.empty())
-        {
-            UIFont* font = mFonts.front().get();
-            mShape->setPendingUpload(font->atlasRgba(), font->atlasSize());
-        }
-    }
-
-    UIFont* UICanvas::font()
-    {
-        if (mFonts.empty())
-        {
-            return nullptr;
-        }
-        return mFonts.front().get();
-    }
-
-    void UICanvas::setTexture(Texture::Ref texture, const std::vector<uint8_t>& rgba)
-    {
-        if (!mShape || !texture)
-        {
-            return;
-        }
-
-        mShape->setTexture(texture);
-        mShape->setPendingUpload(rgba);
-        if (mShape->material)
-        {
-            mShape->material->setParameter(kUIMainTexture, texture);
-        }
-    }
-
     void UICanvas::flush()
     {
         if (!mShape)
@@ -177,14 +90,8 @@ namespace eokas
         mShape->begin();
         if (mRoot)
         {
+            mRoot->layout(mRoot->rect);
             mRoot->render(*mShape);
-        }
-        for (auto& font : mFonts)
-        {
-            if (font && font->takeAtlasDirty())
-            {
-                mShape->setPendingUpload(font->atlasRgba(), font->atlasSize());
-            }
         }
         mShape->end();
     }
@@ -196,6 +103,10 @@ namespace eokas
 
     UIWidget* UICanvas::hitTest(float x, float y)
     {
+        if (mRoot)
+        {
+            mRoot->layout(mRoot->rect);
+        }
         return this->hitTestNode(mRoot.get(), x, y, 0.0f, 0.0f);
     }
 
@@ -372,11 +283,6 @@ namespace eokas
         return false;
     }
 
-    void UICanvas::setFallbackFontPath(const char* path)
-    {
-        mFallbackFontPath = path != nullptr ? path : "";
-    }
-
     void UICanvas::onChar(uint32_t codepoint)
     {
         if (!this->focusAlive())
@@ -420,76 +326,6 @@ namespace eokas
     UIWidget* UICanvas::focus() const
     {
         return mFocused;
-    }
-
-    UIFont* UICanvas::loadFont(const char* fontPath, uint32_t pixelSize)
-    {
-        String path = this->resolveAssetPath(fontPath);
-        auto font = std::make_unique<UIFont>();
-        if (!font->open(path.cstr(), pixelSize))
-        {
-            throw std::runtime_error("Failed to load UI font.");
-        }
-
-        if (!mFallbackFontPath.isEmpty())
-        {
-            String fallback = this->resolveAssetPath(mFallbackFontPath.cstr());
-            font->attachFallback(fallback.cstr());
-        }
-
-        UIFont* ptr = font.get();
-        mFonts.push_back(std::move(font));
-        return ptr;
-    }
-
-    void UICanvas::collectTexts(UIWidget* widget, std::vector<UIText*>& texts)
-    {
-        if (widget == nullptr)
-        {
-            return;
-        }
-
-        UIText* text = dynamic_cast<UIText*>(widget);
-        if (text != nullptr)
-        {
-            texts.push_back(text);
-        }
-
-        for (auto& child : widget->children)
-        {
-            this->collectTexts(child.get(), texts);
-        }
-        if (UIView* view = dynamic_cast<UIView*>(widget))
-        {
-            for (auto& child : view->root()->children)
-            {
-                this->collectTexts(child.get(), texts);
-            }
-        }
-    }
-
-    String UICanvas::resolveAssetPath(const char* relativePath) const
-    {
-        String given = relativePath;
-        if (File::exists(given))
-        {
-            return given;
-        }
-
-        String exeDir = File::basePath(Process::executingPath());
-        String fromExe = File::combinePath(exeDir, relativePath);
-        if (File::exists(fromExe))
-        {
-            return fromExe;
-        }
-
-        String fromBuildDir = File::combinePath(File::basePath(exeDir), relativePath);
-        if (File::exists(fromBuildDir))
-        {
-            return fromBuildDir;
-        }
-
-        return given;
     }
 
     UIWidget* UICanvas::hitTestNode(UIWidget* widget, float x, float y, float originX, float originY)

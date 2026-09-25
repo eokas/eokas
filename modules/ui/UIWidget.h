@@ -51,14 +51,17 @@ namespace eokas
         std::function<void()> onPointerLeave;
         std::function<void()> onPointerPress;
         std::function<void()> onPointerRelease;
+        std::function<void(float, float, int)> onPointerDrag;
         std::function<void()> onClick;
         std::function<void()> onDoubleClick;
-        std::function<void(float, float, int)> onPointerDrag;
+        
 
         virtual ~UIWidget() = default;
+        virtual void layout(const Rect& rect);
         virtual void render(UIShape& shape);
-        void triggerPointerEnter();
-        void triggerPointerLeave();
+
+        virtual void triggerPointerEnter();
+        virtual void triggerPointerLeave();
         virtual void triggerPointerPress();
         virtual void triggerPointerRelease();
         virtual void triggerPointerDrag(float x, float y, int button);

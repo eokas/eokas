@@ -1,6 +1,6 @@
 #include "UIDocking.h"
 #include "UIFont.h"
-#include "UILayout.h"
+#include "UIList.h"
 #include "UIText.h"
 #include <cmath>
 
@@ -90,7 +90,7 @@ namespace eokas
             if (!head) return;
             float padX = 8.0f;
             float spacing = 0.0f;
-            if (UILayout* layout = dynamic_cast<UILayout*>(head))
+            if (UIList* layout = dynamic_cast<UIList*>(head))
             {
                 padX = layout->padding;
                 spacing = layout->spacing;
@@ -111,15 +111,11 @@ namespace eokas
                     w = ceilf(textAdvance(text));
                     h = textLine(text);
                     if (w < 1.0f) w = 1.0f;
-                    text->rect.width = w;
-                    text->rect.height = h;
                 }
                 if (right > x && x + w > right) w = right - x;
                 float y = head->rect.y + (head->rect.height - h) * 0.5f;
                 if (y < head->rect.y) y = head->rect.y;
-                child->rect.x = snap(x);
-                child->rect.y = snap(y);
-                child->rect.width = w;
+                child->layout(Rect(snap(x), snap(y), w, h));
                 x += w;
             }
         }
@@ -127,7 +123,7 @@ namespace eokas
         float headContentWidth(UIWidget* head)
         {
             if (!head) return 48.0f;
-            if (UILayout* layout = dynamic_cast<UILayout*>(head))
+            if (UIList* layout = dynamic_cast<UIList*>(head))
             {
                 float content = 0.0f;
                 bool first = true;
@@ -271,11 +267,12 @@ namespace eokas
             mHead->visible = visible;
             mHead->interactive = true;
             mHead->rect = headRect;
+            placeHeadContent(mHead.get());
         }
         if (mBody)
         {
             mBody->visible = showBody && visible;
-            mBody->rect = bodyRect;
+            mBody->layout(bodyRect);
         }
         if (!showBody)
         {
@@ -296,19 +293,26 @@ namespace eokas
         rect = Rect(x0, y0, x1 - x0, y1 - y0);
     }
 
-    void UIDockPage::layoutInWindow(float width, float height)
+    void UIDockPage::layout(const Rect& rect)
     {
         float headH = 28.0f;
         if (mHead && mHead->rect.height > 0.0f) headH = snap(mHead->rect.height);
-        float w = snap(width);
-        float h = snap(height);
+        float w = snap(rect.width);
+        float h = snap(rect.height);
         if (w < 1.0f) w = 1.0f;
         if (h < 1.0f) h = 1.0f;
         if (headH > h) headH = h;
         if (headH < 0.0f) headH = 0.0f;
         float bodyH = h - headH;
-        this->place(Rect(0.0f, 0.0f, w, headH), Rect(0.0f, headH, w, bodyH), true, false);
-        rect = Rect(0.0f, 0.0f, w, h);
+        float x = snap(rect.x);
+        float y = snap(rect.y);
+        this->place(Rect(x, y, w, headH), Rect(x, y + headH, w, bodyH), true, false);
+        this->rect = Rect(x, y, w, h);
+    }
+
+    void UIDockPage::layoutInWindow(float width, float height)
+    {
+        this->layout(Rect(0.0f, 0.0f, width, height));
     }
 
     void UIDockPage::render(UIShape& shape)
@@ -328,7 +332,6 @@ namespace eokas
         if (mBody && mBody->visible && !shape.outsideClip(mBody->rect)) mBody->render(shape);
         if (mHead && mHead->visible)
         {
-            placeHeadContent(mHead.get());
             Vector2 origin = shape.offset();
             float hx = snap(mHead->rect.x);
             float hy = snap(mHead->rect.y);
@@ -779,7 +782,11 @@ namespace eokas
         }
     }
 
-    void UIDockSpace::layout() { this->layoutTree(); }
+    void UIDockSpace::layout(const Rect& rect)
+    {
+        this->rect = rect;
+        this->layoutTree();
+    }
 
     bool UIDockSpace::pageBounds(UIDockPage* page, Rect& bounds)
     {
@@ -827,7 +834,7 @@ namespace eokas
             this->splitRoot(page, mode);
         }
         this->reconcile(mRoot.get(), UIDockMode::Fill);
-        this->layoutTree();
+        this->layout(this->rect);
     }
 
     void UIDockSpace::activate(UIDockPage* page)
@@ -838,12 +845,12 @@ namespace eokas
         {
             if (leaf->pages[i].get() == page) leaf->active = i;
         }
-        this->layoutTree();
+        this->layout(this->rect);
     }
 
     bool UIDockSpace::showPreview(float localX, float localY)
     {
-        this->layoutTree();
+        this->layout(this->rect);
         Node* leaf = this->findLeaf(mRoot.get(), localX, localY);
         if (!leaf) leaf = this->nearestLeaf(mRoot.get(), localX, localY);
         if (!leaf)
@@ -892,7 +899,7 @@ namespace eokas
         if (mode == UIDockMode::Fill) this->fillLeaf(leaf, page);
         else this->splitLeaf(leaf, page, mode);
         this->reconcile(mRoot.get(), UIDockMode::Fill);
-        this->layoutTree();
+        this->layout(this->rect);
     }
 
     void UIDockSpace::renderNode(Node* node, UIShape& shape, const Vector2& origin)
@@ -978,7 +985,6 @@ namespace eokas
     void UIDockSpace::render(UIShape& shape)
     {
         if (!visible) return;
-        this->layoutTree();
         Vector2 origin = shape.offset();
         Rect screen(origin.x + rect.x, origin.y + rect.y, rect.width, rect.height);
         shape.pushClip(screen);
@@ -1011,7 +1017,7 @@ namespace eokas
         if (inner <= 0.0f) return;
         float first = pointer - mSplitterGrab - origin;
         mDragSplitter->ratio = this->fitRatio(first / inner, span);
-        this->layoutTree();
+        this->layout(this->rect);
     }
 
     void UIDockSpace::triggerPointerRelease()
@@ -1020,184 +1026,4 @@ namespace eokas
         mDragSplitter = nullptr;
     }
 
-    UIDockHost::~UIDockHost() { this->closeAll(); }
-
-    void UIDockHost::registerSpace(UIDockSpace* space)
-    {
-        if (!space) return;
-        for (auto* item : mSpaces) if (item == space) return;
-        space->onDestroy = [this](UIDockSpace& closing) { this->unregisterSpace(&closing); };
-        mSpaces.push_back(space);
-    }
-
-    void UIDockHost::unregisterSpace(UIDockSpace* space)
-    {
-        for (auto it = mSpaces.begin(); it != mSpaces.end(); ++it)
-        {
-            if (*it != space) continue;
-            mSpaces.erase(it);
-            break;
-        }
-        if (mPreviewSpace == space) mPreviewSpace = nullptr;
-        if (mSourceSpace == space) mSourceSpace = nullptr;
-    }
-
-    void UIDockHost::observe(const std::shared_ptr<UIDockPage>& page)
-    {
-        if (!page) return;
-        page->onDrag = [this](UIDockPage& target, float x, float y, int button)
-        {
-            return this->dragPage(&target, x, y, button);
-        };
-        page->onDragEnd = [this](UIDockPage& target) { this->releasePage(&target); };
-    }
-
-    UIDockHost::Slot* UIDockHost::slotOf(UIDockPage* page)
-    {
-        for (auto& slot : mFloating) if (slot.page.get() == page) return &slot;
-        return nullptr;
-    }
-
-    void UIDockHost::destroySlot(Slot& slot)
-    {
-        void* window = slot.window;
-        slot.window = nullptr;
-        slot.page.reset();
-        if (window && onDestroyFloatingWindow) onDestroyFloatingWindow(window);
-    }
-
-    void UIDockHost::closeAll()
-    {
-        mDragging = false;
-        mDragPage = nullptr;
-        mSourceSpace = nullptr;
-        mPreviewSpace = nullptr;
-        for (auto& slot : mFloating) this->destroySlot(slot);
-        mFloating.clear();
-    }
-
-    void UIDockHost::toScreenPoint(UIDockPage* page, float x, float y, float& screenX, float& screenY)
-    {
-        if (mSourceSpace)
-        {
-            Rect screen = mSourceSpace->toScreen(Rect(x, y, 0.0f, 0.0f));
-            screenX = screen.x;
-            screenY = screen.y;
-            return;
-        }
-        if (Slot* slot = this->slotOf(page))
-        {
-            screenX = slot->screenRect.x + x;
-            screenY = slot->screenRect.y + y;
-            return;
-        }
-        screenX = x;
-        screenY = y;
-    }
-
-    void UIDockHost::beginFloat(UIDockPage* page, float screenX, float screenY)
-    {
-        if (!page) return;
-        if (Slot* slot = this->slotOf(page))
-        {
-            mGrabScreenX = screenX - slot->screenRect.x;
-            mGrabScreenY = screenY - slot->screenRect.y;
-            return;
-        }
-        Rect window(screenX, screenY, 320.0f, 240.0f);
-        std::shared_ptr<UIDockPage> held;
-        if (page->space())
-        {
-            UIDockSpace* space = page->space();
-            space->layout();
-            Rect local;
-            if (space->pageBounds(page, local)) window = space->toScreen(local);
-            held = space->takePage(page);
-        }
-        if (!held) return;
-        if (onPrepareContent) onPrepareContent();
-        void* windowHandle = nullptr;
-        if (onCreateFloatingWindow) windowHandle = onCreateFloatingWindow(held, window);
-        mGrabScreenX = screenX - window.x;
-        mGrabScreenY = screenY - window.y;
-        mFloating.push_back(Slot{ held, windowHandle, window });
-        if (windowHandle && onPlaceFloatingWindow) onPlaceFloatingWindow(windowHandle, window);
-    }
-
-    void UIDockHost::updateFloat(UIDockPage* page, float screenX, float screenY)
-    {
-        Slot* slot = this->slotOf(page);
-        if (!slot) return;
-        slot->screenRect.x = screenX - mGrabScreenX;
-        slot->screenRect.y = screenY - mGrabScreenY;
-        if (slot->window && onPlaceFloatingWindow) onPlaceFloatingWindow(slot->window, slot->screenRect);
-        UIDockSpace* hit = nullptr;
-        for (auto* space : mSpaces)
-        {
-            if (!space) continue;
-            Rect screen = space->toScreen(space->rect);
-            if (!screen.contains(Vector2(screenX, screenY))) continue;
-            float localX = space->rect.x + (screenX - screen.x);
-            float localY = space->rect.y + (screenY - screen.y);
-            if (space->showPreview(localX, localY)) hit = space;
-            else space->clearPreview();
-        }
-        if (mPreviewSpace && mPreviewSpace != hit) mPreviewSpace->clearPreview();
-        mPreviewSpace = hit;
-    }
-
-    bool UIDockHost::dragPage(UIDockPage* page, float x, float y, int button)
-    {
-        if (button != 0 || !page) return false;
-        if (!mDragging || mDragPage != page)
-        {
-            mDragging = true;
-            mDragPage = page;
-            mDragMoved = false;
-            mSourceSpace = page->space();
-            mDragSlop = mSourceSpace ? mSourceSpace->dragSlop : 4.0f;
-            this->toScreenPoint(page, x, y, mPressScreenX, mPressScreenY);
-        }
-        float screenX = 0.0f;
-        float screenY = 0.0f;
-        this->toScreenPoint(page, x, y, screenX, screenY);
-        float dx = screenX - mPressScreenX;
-        float dy = screenY - mPressScreenY;
-        if (!mDragMoved && (dx * dx + dy * dy) < mDragSlop * mDragSlop) return false;
-        if (!mDragMoved) this->beginFloat(page, screenX, screenY);
-        mDragMoved = true;
-        this->updateFloat(page, screenX, screenY);
-        return true;
-    }
-
-    void UIDockHost::releasePage(UIDockPage* page)
-    {
-        if (mDragPage != page) return;
-        mDragging = false;
-        mDragPage = nullptr;
-        mSourceSpace = nullptr;
-        Slot* slot = this->slotOf(page);
-        if (mDragMoved && mPreviewSpace && slot)
-        {
-            auto held = slot->page;
-            void* window = slot->window;
-            UIDockSpace* space = mPreviewSpace;
-            mPreviewSpace = nullptr;
-            for (auto it = mFloating.begin(); it != mFloating.end(); ++it)
-            {
-                if (it->page.get() != page) continue;
-                mFloating.erase(it);
-                break;
-            }
-            space->acceptDrop(held);
-            if (onPrepareContent) onPrepareContent();
-            if (window && onDestroyFloatingWindow) onDestroyFloatingWindow(window);
-        }
-        else if (mPreviewSpace)
-        {
-            mPreviewSpace->clearPreview();
-            mPreviewSpace = nullptr;
-        }
-        mDragMoved = false;
-    }
 }

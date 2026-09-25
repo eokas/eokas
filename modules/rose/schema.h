@@ -2,7 +2,7 @@
 #include "./header.h"
 #include "./value.h"
 
-namespace eokas::datapot
+namespace eokas::rose
 {
     enum class SchemaType
     {

@@ -67,6 +67,18 @@ namespace eokas
         rect.height = content->rect.height + paddingY * 2.0f;
     }
 
+    void UIMenuItem::layout(const Rect& rect)
+    {
+        this->rect = rect;
+        if (!content)
+        {
+            return;
+        }
+        float x = floorf(rect.x + paddingX + 0.5f);
+        float y = floorf(rect.y + paddingY + 0.5f);
+        content->layout(Rect(x, y, content->rect.width, content->rect.height));
+    }
+
     void UIMenuItem::render(UIShape& shape)
     {
         if (!visible)
@@ -76,31 +88,92 @@ namespace eokas
 
         Color bg = hovered ? hoverColor : background;
         shape.addQuad(rect, UIFont::solidUV(), bg);
-
-        if (content)
-        {
-            content->rect.x = floorf(rect.x + paddingX + 0.5f);
-            content->rect.y = floorf(rect.y + paddingY + 0.5f);
-        }
         UIWidget::render(shape);
     }
 
     UIMenu::UIMenu()
     {
-        layout = std::make_shared<UILayout>();
-        layout->direction = direction;
-        layout->padding = padding;
-        layout->spacing = spacing;
-        layout->color = Color(0.0f, 0.0f, 0.0f, 0.0f);
-        children.push_back(layout);
+        list = std::make_shared<UIList>();
+        list->direction = direction;
+        list->padding = padding;
+        list->spacing = spacing;
+        list->color = Color(0.0f, 0.0f, 0.0f, 0.0f);
+        children.push_back(list);
     }
 
     void UIMenu::addItem(const std::shared_ptr<UIMenuItem>& item)
     {
-        if (layout && item)
+        if (list && item)
         {
-            layout->addChild(item);
+            list->addChild(item);
         }
+    }
+
+    void UIMenu::layout(const Rect& rect)
+    {
+        this->rect = rect;
+        if (!list)
+        {
+            return;
+        }
+
+        list->direction = direction;
+        list->padding = padding;
+        list->spacing = spacing;
+
+        float maxItemWidth = 0.0f;
+        float maxItemHeight = 0.0f;
+        float sumItemHeight = 0.0f;
+        int itemCount = 0;
+        for (auto& child : list->children)
+        {
+            UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
+            if (item == nullptr || !item->visible)
+            {
+                continue;
+            }
+            item->syncSize();
+            if (item->rect.width > maxItemWidth)
+            {
+                maxItemWidth = item->rect.width;
+            }
+            if (item->rect.height > maxItemHeight)
+            {
+                maxItemHeight = item->rect.height;
+            }
+            sumItemHeight += item->rect.height;
+            itemCount += 1;
+        }
+
+        float gap = itemCount > 1 ? spacing * (float)(itemCount - 1) : 0.0f;
+        if (direction == UIDirection::Horizontal)
+        {
+            this->rect.height = padding * 2.0f + maxItemHeight;
+        }
+        else
+        {
+            this->rect.width = padding * 2.0f + maxItemWidth;
+            this->rect.height = padding * 2.0f + sumItemHeight + gap;
+        }
+
+        for (auto& child : list->children)
+        {
+            UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
+            if (item == nullptr || !item->visible)
+            {
+                continue;
+            }
+            if (direction == UIDirection::Horizontal)
+            {
+                item->rect.height = maxItemHeight;
+            }
+            else
+            {
+                item->rect.width = maxItemWidth;
+            }
+        }
+
+        list->layout(this->rect);
     }
 
     void UIMenu::render(UIShape& shape)
@@ -108,67 +181,6 @@ namespace eokas
         if (!visible)
         {
             return;
-        }
-
-        if (layout)
-        {
-            layout->direction = direction;
-            layout->padding = padding;
-            layout->spacing = spacing;
-
-            float maxItemWidth = 0.0f;
-            float maxItemHeight = 0.0f;
-            float sumItemHeight = 0.0f;
-            int itemCount = 0;
-            for (auto& child : layout->children)
-            {
-                UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
-                if (item == nullptr || !item->visible)
-                {
-                    continue;
-                }
-                item->syncSize();
-                if (item->rect.width > maxItemWidth)
-                {
-                    maxItemWidth = item->rect.width;
-                }
-                if (item->rect.height > maxItemHeight)
-                {
-                    maxItemHeight = item->rect.height;
-                }
-                sumItemHeight += item->rect.height;
-                itemCount += 1;
-            }
-
-            float gap = itemCount > 1 ? spacing * (float)(itemCount - 1) : 0.0f;
-            if (direction == UILayoutDirection::Horizontal)
-            {
-                rect.height = padding * 2.0f + maxItemHeight;
-            }
-            else
-            {
-                rect.width = padding * 2.0f + maxItemWidth;
-                rect.height = padding * 2.0f + sumItemHeight + gap;
-            }
-
-            for (auto& child : layout->children)
-            {
-                UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
-                if (item == nullptr || !item->visible)
-                {
-                    continue;
-                }
-                if (direction == UILayoutDirection::Horizontal)
-                {
-                    item->rect.height = maxItemHeight;
-                }
-                else
-                {
-                    item->rect.width = maxItemWidth;
-                }
-            }
-
-            layout->rect = rect;
         }
 
         if (color.a > 0.0f)

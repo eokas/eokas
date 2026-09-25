@@ -107,8 +107,7 @@ namespace eokas {
         char buf[DIGEST_SIZE * 2 + 1];
         for (int i = 0; i < DIGEST_SIZE; i++)
         {
-            // sprintf(buf + i * 2, "%02x", digest[i]);
-            snprintf(buf + i * 2, 2, "%02x", digest[i]);
+            snprintf(buf + i * 2, 3, "%02x", digest[i]);
         }
         buf[DIGEST_SIZE * 2] = 0;
 
@@ -351,8 +350,7 @@ namespace eokas {
         char buf[SHA256::DIGEST_SIZE * 2 + 1];
         for (int i = 0; i < SHA256::DIGEST_SIZE; i++)
         {
-            // sprintf(buf + i * 2, "%02x", digest[i]);
-            snprintf(buf + i * 2, 2, "%02x", digest[i]);
+            snprintf(buf + i * 2, 3, "%02x", digest[i]);
         }
         buf[SHA256::DIGEST_SIZE * 2] = 0;
 

@@ -56,7 +56,7 @@ namespace eokas
     
     void RawMesh::setWeight(const VertexID& vertexId, const Weight& weight)
     {
-        if(vertexId < this->vertices.size())
+        if(vertexId >= this->vertices.size())
             return;
         
         if(this->weights.size() < this->vertices.size())

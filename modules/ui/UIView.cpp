@@ -1,6 +1,5 @@
 #include "UIView.h"
 #include "UIFont.h"
-#include "UILayout.h"
 
 namespace eokas
 {
@@ -27,22 +26,6 @@ namespace eokas
                 return hi;
             }
             return value;
-        }
-
-        void layoutTree(UIWidget* widget)
-        {
-            if (widget == nullptr || dynamic_cast<UIView*>(widget) != nullptr)
-            {
-                return;
-            }
-            if (UILayout* layout = dynamic_cast<UILayout*>(widget))
-            {
-                layout->layout();
-            }
-            for (auto& child : widget->children)
-            {
-                layoutTree(child.get());
-            }
         }
 
         float thumbSpan(float inner, float minScroll, float maxScroll)
@@ -169,13 +152,21 @@ namespace eokas
         }
     }
 
-    void UIView::updateMetrics()
+    void UIView::layout(const Rect& rect)
     {
+        this->rect = rect;
         for (auto& child : mRoot->children)
         {
-            layoutTree(child.get());
+            if (child)
+            {
+                child->layout(child->rect);
+            }
         }
+        this->updateMetrics();
+    }
 
+    void UIView::updateMetrics()
+    {
         bool any = false;
         float minX = 0.0f;
         float minY = 0.0f;
@@ -336,7 +327,6 @@ namespace eokas
         {
             return;
         }
-        this->updateMetrics();
         if (color.a > 0.0f)
         {
             shape.addQuad(rect, UIFont::solidUV(), color);

@@ -37,16 +37,16 @@ namespace eokas
             {
                 return;
             }
-            text->rect.height = snap(lineHeight(text));
-            text->rect.width = area.width;
-            text->rect.x = snap(area.x + paddingX);
+            float height = snap(lineHeight(text));
+            float width = area.width;
+            float x = snap(area.x + paddingX);
             float innerH = area.height - paddingY * 2.0f;
             if (innerH < 0.0f)
             {
                 innerH = 0.0f;
             }
-            float y = area.y + paddingY + (innerH - text->rect.height) * 0.5f;
-            text->rect.y = snap(y);
+            float y = snap(area.y + paddingY + (innerH - height) * 0.5f);
+            text->layout(Rect(x, y, width, height));
         }
     }
 
@@ -66,8 +66,9 @@ namespace eokas
         return mLabel.get();
     }
 
-    void UIDropdownItem::layoutLabel()
+    void UIDropdownItem::layout(const Rect& rect)
     {
+        this->rect = rect;
         placeLabel(mLabel.get(), rect, paddingX, paddingY);
     }
 
@@ -91,7 +92,6 @@ namespace eokas
             bg = selectedColor;
         }
         shape.addQuad(rect, UIFont::solidUV(), bg);
-        this->layoutLabel();
         if (mLabel)
         {
             mLabel->render(shape);
@@ -318,7 +318,7 @@ namespace eokas
         float y = rect.y + rect.height;
         dropdown->visible = expanded && visible;
         dropdown->interactive = interactive;
-        dropdown->rect = Rect(rect.x, snap(y), rect.width, rowH * (float)mItems.size());
+        float panelY = snap(y);
         for (auto& item : mItems)
         {
             if (!item)
@@ -328,7 +328,6 @@ namespace eokas
             item->visible = dropdown->visible;
             item->interactive = interactive;
             item->selected = item->index == value;
-            item->rect = Rect(rect.x, snap(y), rect.width, rowH);
             item->paddingX = paddingX;
             item->paddingY = paddingY;
             item->background = popupColor;
@@ -336,8 +335,10 @@ namespace eokas
             item->pressedColor = itemPressedColor;
             item->selectedColor = itemSelectedColor;
             this->copyFont(item->label());
+            item->layout(Rect(rect.x, snap(y), rect.width, rowH));
             y += rowH;
         }
+        dropdown->layout(Rect(rect.x, panelY, rect.width, rowH * (float)mItems.size()));
     }
 
     int UIDropdown::neighbor(int direction) const
@@ -420,6 +421,14 @@ namespace eokas
             chevronColor);
     }
 
+    void UIDropdown::layout(const Rect& rect)
+    {
+        this->rect = rect;
+        this->syncCaption();
+        this->layoutCaption();
+        this->syncPopup();
+    }
+
     void UIDropdown::render(UIShape& shape)
     {
         if (!visible)
@@ -438,9 +447,6 @@ namespace eokas
         shape.addQuad(rect, UIFont::solidUV(), bg);
         this->drawBorder(shape, rect);
         this->drawChevron(shape);
-        this->syncCaption();
-        this->layoutCaption();
-        this->syncPopup();
         UIWidget::render(shape);
     }
 

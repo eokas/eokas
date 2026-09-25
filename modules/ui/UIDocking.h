@@ -38,6 +38,7 @@ namespace eokas
         void setHead(const std::shared_ptr<UIWidget>& widget);
         const std::shared_ptr<UIWidget>& body() const { return mBody; }
         void setBody(const std::shared_ptr<UIWidget>& widget);
+        void layout(const Rect& rect) override;
         void render(UIShape& shape) override;
         void layoutInWindow(float width, float height);
         void place(const Rect& headRect, const Rect& bodyRect, bool showBody, bool tabActive);
@@ -75,7 +76,7 @@ namespace eokas
 
         void setScreenMapper(const std::function<Rect(const Rect&)>& mapper);
         Rect toScreen(const Rect& local) const;
-        void layout();
+        void layout(const Rect& rect) override;
         bool pageBounds(UIDockPage* page, Rect& bounds);
 
         void addPage(const std::shared_ptr<UIDockPage>& page);
@@ -131,52 +132,6 @@ namespace eokas
         void layoutNode(Node* node, const Rect& area);
         void layoutLeaf(Node* node);
         void renderNode(Node* node, UIShape& shape, const Vector2& origin);
-    };
-
-    class UIDockHost
-    {
-    public:
-        UIDockHost() = default;
-        ~UIDockHost();
-
-        std::function<void*(const std::shared_ptr<UIDockPage>& page, const Rect& screenRect)> onCreateFloatingWindow;
-        std::function<void(void* windowHandle, const Rect& screenRect)> onPlaceFloatingWindow;
-        std::function<void(void* windowHandle)> onDestroyFloatingWindow;
-        std::function<void()> onPrepareContent;
-
-        void registerSpace(UIDockSpace* space);
-        void unregisterSpace(UIDockSpace* space);
-        void observe(const std::shared_ptr<UIDockPage>& page);
-        void closeAll();
-
-    private:
-        struct Slot
-        {
-            std::shared_ptr<UIDockPage> page;
-            void* window = nullptr;
-            Rect screenRect;
-        };
-
-        std::vector<UIDockSpace*> mSpaces;
-        std::vector<Slot> mFloating;
-        UIDockPage* mDragPage = nullptr;
-        UIDockSpace* mSourceSpace = nullptr;
-        bool mDragging = false;
-        bool mDragMoved = false;
-        float mPressScreenX = 0.0f;
-        float mPressScreenY = 0.0f;
-        float mGrabScreenX = 0.0f;
-        float mGrabScreenY = 0.0f;
-        float mDragSlop = 4.0f;
-        UIDockSpace* mPreviewSpace = nullptr;
-
-        Slot* slotOf(UIDockPage* page);
-        void toScreenPoint(UIDockPage* page, float x, float y, float& screenX, float& screenY);
-        void beginFloat(UIDockPage* page, float screenX, float screenY);
-        void updateFloat(UIDockPage* page, float screenX, float screenY);
-        void destroySlot(Slot& slot);
-        bool dragPage(UIDockPage* page, float x, float y, int button);
-        void releasePage(UIDockPage* page);
     };
 }
 

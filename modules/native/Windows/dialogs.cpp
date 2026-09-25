@@ -24,7 +24,24 @@ namespace eokas
         return false;
     }
 
-    bool Dialogs::OpenFileDialog(String& selectedPath, const std::map<String, String>& filters)
+    void Dialogs::alert(const String& title, const String& message)
+    {
+        std::wstring titleW = String::utf8ToUnicode(title.cstr(), false);
+        std::wstring messageW = String::utf8ToUnicode(message.cstr(), false);
+        MessageBoxW(nullptr, messageW.c_str(), titleW.c_str(), MB_OK | MB_ICONINFORMATION);
+    }
+
+    int Dialogs::confirm(const String& title, const String& message)
+    {
+        std::wstring titleW = String::utf8ToUnicode(title.cstr(), false);
+        std::wstring messageW = String::utf8ToUnicode(message.cstr(), false);
+        int result = MessageBoxW(nullptr, messageW.c_str(), titleW.c_str(), MB_YESNOCANCEL | MB_ICONQUESTION);
+        if (result == IDYES) return 1;
+        if (result == IDNO) return -1;
+        return 0;
+    }
+
+    bool Dialogs::openFileDialog(String& selectedPath, const std::map<String, String>& filters)
     {
         ComPtr<IFileDialog> pFileDialog = NULL;
         if(FAILED(CoCreateInstance(CLSID_FileOpenDialog, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFileDialog))))
@@ -64,7 +81,7 @@ namespace eokas
         return GetStringFromShellItem(selectedPath, pItem);
     }
 
-    bool Dialogs::OpenFolderDialog(String& selectedPath, const String& defaultPath)
+    bool Dialogs::openFolderDialog(String& selectedPath, const String& defaultPath)
     {
         ComPtr<IFileOpenDialog> pFileDialog = nullptr;
         if(FAILED(CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pFileDialog))))

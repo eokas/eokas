@@ -1,7 +1,7 @@
 #ifndef _EOKAS_UI_MENU_H_
 #define _EOKAS_UI_MENU_H_
 
-#include "UILayout.h"
+#include "UIList.h"
 #include "UIText.h"
 
 namespace eokas
@@ -20,19 +20,21 @@ namespace eokas
         void setText(const String& text);
         UIText* label() const;
         void syncSize();
+        void layout(const Rect& rect) override;
         void render(UIShape& shape) override;
     };
 
     class UIMenu : public UIWidget
     {
     public:
-        UILayoutDirection direction = UILayoutDirection::Horizontal;
+        UIDirection direction = UIDirection::Horizontal;
         float padding = 2.0f;
         float spacing = 0.0f;
-        std::shared_ptr<UILayout> layout;
+        std::shared_ptr<UIList> list;
 
         UIMenu();
         void addItem(const std::shared_ptr<UIMenuItem>& item);
+        void layout(const Rect& rect) override;
         void render(UIShape& shape) override;
     };
 }

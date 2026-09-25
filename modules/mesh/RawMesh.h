@@ -172,7 +172,7 @@ namespace eokas
         template<typename T>
         Attribute<T>& getAttribute(const AttributeID& attributeId)
         {
-            auto attribute = this->attributes.at(attributeId);
+            auto& attribute = this->attributes.at(attributeId);
             return std::get<Attribute<T>>(attribute);
         }
         

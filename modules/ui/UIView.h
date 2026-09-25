@@ -23,6 +23,7 @@ namespace eokas
         Rect viewport() const;
         bool scrollbarContains(float localX, float localY) const;
 
+        void layout(const Rect& rect) override;
         void render(UIShape& shape) override;
         void triggerPointerDrag(float x, float y, int button) override;
         void triggerPointerRelease() override;
