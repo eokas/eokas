@@ -1,5 +1,5 @@
 #include "UIList.h"
-#include "UIFont.h"
+#include "../UIFont.h"
 #include <cmath>
 
 namespace eokas

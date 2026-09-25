@@ -1,7 +1,7 @@
 #ifndef _EOKAS_UI_TEXT_H_
 #define _EOKAS_UI_TEXT_H_
 
-#include "UIWidget.h"
+#include "../UIWidget.h"
 
 namespace eokas
 {

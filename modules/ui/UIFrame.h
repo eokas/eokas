@@ -1,5 +1,5 @@
-#ifndef _EOKAS_UI_CANVAS_H_
-#define _EOKAS_UI_CANVAS_H_
+#ifndef _EOKAS_UI_FRAME_H_
+#define _EOKAS_UI_FRAME_H_
 
 #include "UIWidget.h"
 #include "UIShape.h"
@@ -7,7 +7,7 @@
 
 namespace eokas
 {
-    class UICanvas
+    class UIFrame
     {
     public:
         void init(uint32_t width, uint32_t height);
@@ -51,4 +51,4 @@ namespace eokas
     };
 }
 
-#endif//_EOKAS_UI_CANVAS_H_
+#endif//_EOKAS_UI_FRAME_H_

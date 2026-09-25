@@ -1,5 +1,5 @@
 #include "UIButton.h"
-#include "UIFont.h"
+#include "../UIFont.h"
 #include <cmath>
 
 namespace eokas

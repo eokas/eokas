@@ -32,7 +32,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             if (message == WM_CLOSE) return 0;
             return DefWindowProcW(hWnd, message, wParam, lParam);
         }
-        if (eokas::UICanvas* floating = graphics->floatingCanvas(hWnd))
+        if (eokas::UIFrame* floating = graphics->floatingFrame(hWnd))
         {
             if (message == WM_CLOSE) return 0;
             if (message == WM_MOUSEMOVE)
@@ -75,11 +75,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             bool shift = (LOWORD(wParam) & MK_SHIFT) != 0;
             if (shift)
             {
-                graphics->canvas().onMouseWheel((float)pt.x, (float)pt.y, step, 0.0f);
+                graphics->frame().onMouseWheel((float)pt.x, (float)pt.y, step, 0.0f);
             }
             else
             {
-                graphics->canvas().onMouseWheel((float)pt.x, (float)pt.y, 0.0f, step);
+                graphics->frame().onMouseWheel((float)pt.x, (float)pt.y, 0.0f, step);
             }
         }
         return 0;
@@ -107,7 +107,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             float x = (float)(short)LOWORD(lParam);
             float y = (float)(short)HIWORD(lParam);
             graphics->hoverDock(hWnd, x, y);
-            graphics->canvas().onMouseMove(x, y);
+            graphics->frame().onMouseMove(x, y);
         }
         return 0;
     }
@@ -118,7 +118,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             SetCapture(hWnd);
             float x = (float)(short)LOWORD(lParam);
             float y = (float)(short)HIWORD(lParam);
-            graphics->canvas().onMouseDown(x, y, 0);
+            graphics->frame().onMouseDown(x, y, 0);
         }
         return 0;
     }
@@ -128,7 +128,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             float x = (float)(short)LOWORD(lParam);
             float y = (float)(short)HIWORD(lParam);
-            graphics->canvas().onMouseUp(x, y, 0);
+            graphics->frame().onMouseUp(x, y, 0);
             ReleaseCapture();
         }
         return 0;
@@ -139,7 +139,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             float x = (float)(short)LOWORD(lParam);
             float y = (float)(short)HIWORD(lParam);
-            graphics->canvas().onMouseDown(x, y, 1);
+            graphics->frame().onMouseDown(x, y, 1);
         }
         return 0;
     }
@@ -149,7 +149,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         {
             float x = (float)(short)LOWORD(lParam);
             float y = (float)(short)HIWORD(lParam);
-            graphics->canvas().onMouseUp(x, y, 1);
+            graphics->frame().onMouseUp(x, y, 1);
         }
         return 0;
     }
@@ -185,7 +185,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 bool textKey = key == eokas::UIKey::A || key == eokas::UIKey::C || key == eokas::UIKey::X || key == eokas::UIKey::V;
                 if (!textKey || mods.ctrl)
                 {
-                    graphics->canvas().onKeyDown(key, mods);
+                    graphics->frame().onKeyDown(key, mods);
                     return 0;
                 }
             }
@@ -217,7 +217,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 
             if (codepoint >= 32 && codepoint != 127)
             {
-                graphics->canvas().onChar(codepoint);
+                graphics->frame().onChar(codepoint);
                 return 0;
             }
         }

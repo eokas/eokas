@@ -29,7 +29,7 @@ namespace eokas::ui {
         std::vector<std::unique_ptr<FloatWindow>> mClosingFloatWindows;
         std::unique_ptr<UIApp> mHost;
         Space mSpace;
-        UICanvas* mCanvas = nullptr;
+        UIFrame* mFrame = nullptr;
         std::shared_ptr<UIMenu> mMenu;
         std::shared_ptr<UIView> mView;
         std::shared_ptr<UIDockSpace> mDock;
@@ -39,7 +39,7 @@ namespace eokas::ui {
         float mClientHeight = 0.0f;
 
     public:
-        UICanvas& canvas() { return *mCanvas; }
+        UIFrame& frame() { return *mFrame; }
 
         bool splitterCursor(HWND hwnd, float x, float y, bool& vertical) const
         {
@@ -73,7 +73,7 @@ namespace eokas::ui {
                     if (item && item->hwnd == handle) item->screenRect = screenRect;
                 }
             };
-            mCanvas = &mHost->open(windowHandle, (uint32_t)windowWidth, (uint32_t)windowHeight);
+            mFrame = &mHost->open(windowHandle, (uint32_t)windowWidth, (uint32_t)windowHeight);
             const char* fallbacks[] = {
                 "C:/Windows/Fonts/msyh.ttc",
                 "C:/Windows/Fonts/msyh.ttf",
@@ -677,7 +677,7 @@ namespace eokas::ui {
             page->refit();
             view->addChild(page);
 
-            mCanvas->setRoot(root);
+            mFrame->setRoot(root);
             mHost->prepare();
 
             fileItem->syncSize();
@@ -743,11 +743,319 @@ namespace eokas::ui {
                 mHost->observe(page);
                 return page;
             };
+            const int dataColumns = 8;
+            const int dataRows = 20;
+            const float headerWidth = 56.0f * s;
+            const float columnWidth = 128.0f * s;
+            const float rowHeight = 36.0f * s;
+            const Color gridColor(0.45f, 0.50f, 0.62f, 1.0f);
+            const Color headerFill = regionHead;
+            const Color headerHover = regionHeadHover;
+            const Color cellFill(0.145f, 0.157f, 0.196f, 1.0f);
+            const Color pickedHead(0.275f, 0.400f, 0.680f, 1.0f);
+            const Color pickedCell(0.176f, 0.216f, 0.314f, 1.0f);
+            const Color pickedCellHover(0.204f, 0.251f, 0.361f, 1.0f);
+            const char* samples[4][4] = {
+                { "Name", "Dept", "Score", "Note" },
+                { "Ada", "UI", "98", "Lead" },
+                { "Lin", "Core", "87", "Review" },
+                { "Chen", "Tools", "91", "" },
+            };
+            auto sheetView = std::make_shared<UIView>();
+            sheetView->color = canvas;
+            sheetView->scrollbarThickness = 8.0f * s;
+            sheetView->scrollbarColor = Color(0.40f, 0.44f, 0.52f, 1.0f);
+            sheetView->scrollbarTrackColor = Color(0.078f, 0.086f, 0.110f, 1.0f);
+            sheetView->scrollbarPressedColor = accent;
+            auto sheet = std::make_shared<UITable>();
+            sheet->color = regionBody;
+            sheet->cellSpacing = 0.0f;
+            sheet->cellPadding = 0.0f;
+            sheet->border = UITableBorder(1.0f, 1.0f, 0.0f, 0.0f, gridColor);
+            sheet->addColumn(headerWidth);
+            for (int column = 0; column < dataColumns; ++column)
+            {
+                sheet->addColumn(columnWidth);
+            }
+            for (int row = 0; row < dataRows + 1; ++row)
+            {
+                sheet->addRow(rowHeight);
+            }
+            struct SheetSlot
+            {
+                UITableCell* cell = nullptr;
+                std::shared_ptr<UIInput> input;
+            };
+            struct SheetPick
+            {
+                bool column = false;
+                int index = -1;
+            };
+            const int sheetRows = dataRows + 1;
+            const int sheetColumns = dataColumns + 1;
+            std::vector<SheetSlot> slots((size_t)sheetRows * (size_t)sheetColumns);
+            for (int row = 0; row < sheetRows; ++row)
+            {
+                for (int column = 0; column < sheetColumns; ++column)
+                {
+                    bool lastColumn = column == dataColumns;
+                    bool lastRow = row == dataRows;
+                    bool header = row == 0 || column == 0;
+                    float span = column == 0 ? headerWidth : columnWidth;
+                    float right = lastColumn ? 1.0f : 0.0f;
+                    float bottom = lastRow ? 1.0f : 0.0f;
+                    float innerW = span - 1.0f - right;
+                    float innerH = rowHeight - 1.0f - bottom;
+                    if (innerW < 0.0f)
+                    {
+                        innerW = 0.0f;
+                    }
+                    if (innerH < 0.0f)
+                    {
+                        innerH = 0.0f;
+                    }
+                    auto input = std::make_shared<UIInput>();
+                    input->rect = Rect(0.0f, 0.0f, innerW, innerH);
+                    input->paddingX = 8.0f * s;
+                    input->paddingY = 8.0f * s;
+                    input->borderThickness = header ? 0.0f : 1.0f;
+                    input->background = header ? headerFill : cellFill;
+                    input->hoverColor = header ? headerFill : fieldHover;
+                    input->borderColor = accent;
+                    input->placeholderColor = mute;
+                    input->caretColor = ink;
+                    input->selectionColor = Color(0.275f, 0.400f, 0.680f, 1.0f);
+                    input->readOnly = header;
+                    input->interactive = !header;
+                    input->writeClipboard = writeClipboard;
+                    input->readClipboard = readClipboard;
+                    if (UIText* label = input->label())
+                    {
+                        label->fontPath = fontPath;
+                        label->fontSize = smallPx;
+                        label->color = header ? mute : ink;
+                    }
+                    if (row == 0 && column > 0)
+                    {
+                        char title[2] = { (char)('A' + column - 1), '\0' };
+                        input->setText(title);
+                    }
+                    else if (column == 0 && row > 0)
+                    {
+                        input->setText(String::valueToString(row));
+                    }
+                    else if (row > 0 && column > 0 && row <= 4 && column <= 4)
+                    {
+                        input->setText(samples[row - 1][column - 1]);
+                    }
+                    UITableCell* cell = sheet->cell(row, column);
+                    cell->color = header ? headerFill : cellFill;
+                    if (lastColumn || lastRow)
+                    {
+                        cell->setBorder(UITableBorder(1.0f, 1.0f, right, bottom, gridColor));
+                    }
+                    sheet->setContent(row, column, input);
+                    slots[(size_t)(row * sheetColumns + column)].cell = cell;
+                    slots[(size_t)(row * sheetColumns + column)].input = input;
+                }
+            }
+            auto pick = std::make_shared<SheetPick>();
+            auto paint = [slots, pick, sheetColumns, headerFill, cellFill, fieldHover, pickedHead, pickedCell, pickedCellHover, mute, ink]()
+            {
+                int count = (int)slots.size();
+                for (int i = 0; i < count; ++i)
+                {
+                    int row = sheetColumns > 0 ? i / sheetColumns : 0;
+                    int column = sheetColumns > 0 ? i % sheetColumns : 0;
+                    UIInput* input = slots[(size_t)i].input.get();
+                    UITableCell* cell = slots[(size_t)i].cell;
+                    if (input == nullptr || cell == nullptr)
+                    {
+                        continue;
+                    }
+                    bool header = row == 0 || column == 0;
+                    bool headOn = pick->index >= 0 && ((pick->column && row == 0 && column == pick->index) || (!pick->column && column == 0 && row == pick->index));
+                    bool bodyOn = pick->index >= 0 && row > 0 && column > 0 && ((pick->column && column == pick->index) || (!pick->column && row == pick->index));
+                    Color fill = cellFill;
+                    Color hover = fieldHover;
+                    Color text = ink;
+                    if (headOn)
+                    {
+                        fill = pickedHead;
+                        hover = pickedHead;
+                        text = ink;
+                    }
+                    else if (header)
+                    {
+                        fill = headerFill;
+                        hover = headerFill;
+                        text = mute;
+                    }
+                    else if (bodyOn)
+                    {
+                        fill = pickedCell;
+                        hover = pickedCellHover;
+                    }
+                    input->background = fill;
+                    input->hoverColor = hover;
+                    cell->color = fill;
+                    if (UIText* label = input->label())
+                    {
+                        label->color = header ? text : ink;
+                    }
+                }
+            };
+            for (int i = 0; i < (int)slots.size(); ++i)
+            {
+                int row = i / sheetColumns;
+                int column = i % sheetColumns;
+                bool columnHead = row == 0 && column > 0;
+                bool rowHead = column == 0 && row > 0;
+                UITableCell* cell = slots[(size_t)i].cell;
+                std::shared_ptr<UIInput> input = slots[(size_t)i].input;
+                if (cell == nullptr || !input)
+                {
+                    continue;
+                }
+                if (columnHead || rowHead)
+                {
+                    cell->interactive = true;
+                    int index = columnHead ? column : row;
+                    cell->onClick = [pick, paint, columnHead, index]()
+                    {
+                        pick->column = columnHead;
+                        pick->index = index;
+                        paint();
+                    };
+                    cell->onPointerEnter = [input, cell, pick, columnHead, index, headerHover]()
+                    {
+                        bool on = pick->index >= 0 && pick->column == columnHead && pick->index == index;
+                        if (on)
+                        {
+                            return;
+                        }
+                        input->background = headerHover;
+                        cell->color = headerHover;
+                    };
+                    cell->onPointerLeave = [paint]()
+                    {
+                        paint();
+                    };
+                }
+            }
+            float sheetW = headerWidth + columnWidth * (float)dataColumns;
+            float sheetH = rowHeight * (float)(dataRows + 1);
+            sheet->rect = Rect(0.0f, 0.0f, sheetW, sheetH);
+            sheetView->addChild(sheet);
+            auto detailsView = std::make_shared<UIView>();
+            detailsView->color = canvas;
+            detailsView->scrollbarThickness = 8.0f * s;
+            detailsView->scrollbarColor = Color(0.40f, 0.44f, 0.52f, 1.0f);
+            detailsView->scrollbarTrackColor = Color(0.078f, 0.086f, 0.110f, 1.0f);
+            detailsView->scrollbarPressedColor = accent;
+            const float propNameW = 280.0f * s;
+            const float propValueW = 220.0f * s;
+            const float treeRowH = 32.0f * s;
+            const float treeIndent = 18.0f * s;
+            const float treePad = 6.0f * s;
+            auto tree = std::make_shared<UITable>();
+            tree->color = regionBody;
+            tree->cellSpacing = 0.0f;
+            tree->cellPadding = treePad;
+            tree->border = UITableBorder(1.0f, 1.0f, 0.0f, 0.0f, gridColor);
+            tree->disclosure = mute;
+            tree->addColumn(propNameW);
+            tree->addColumn(propValueW);
+            tree->setColumnIndent(0, treeIndent);
+            auto paintLine = [&](UITableRow* line, bool group)
+            {
+                Color fill = group ? headerFill : cellFill;
+                for (int column = 0; column < 2; ++column)
+                {
+                    UITableCell* item = line->cell(column);
+                    if (item == nullptr)
+                    {
+                        continue;
+                    }
+                    item->color = fill;
+                    float right = column == 1 ? 1.0f : 0.0f;
+                    item->setBorder(UITableBorder(1.0f, 1.0f, right, 0.0f, gridColor));
+                }
+            };
+            auto bindName = [&](UITableRow* line, const char* name, bool group)
+            {
+                float shift = (float)(line->depth() + 1) * treeIndent;
+                float innerW = propNameW - 1.0f - treePad * 2.0f - shift;
+                float innerH = treeRowH - 1.0f - treePad * 2.0f;
+                if (innerW < 1.0f) innerW = 1.0f;
+                if (innerH < 1.0f) innerH = 1.0f;
+                line->setContent(0, textOf(name, innerW, innerH, smallPx, group ? mute : ink));
+            };
+            auto bindValue = [&](UITableRow* line, const char* value)
+            {
+                float innerW = propValueW - 2.0f - treePad * 2.0f;
+                float innerH = treeRowH - 1.0f - treePad * 2.0f;
+                if (innerW < 1.0f) innerW = 1.0f;
+                if (innerH < 1.0f) innerH = 1.0f;
+                auto input = std::make_shared<UIInput>();
+                input->rect = Rect(0.0f, 0.0f, innerW, innerH);
+                input->paddingX = 8.0f * s;
+                input->paddingY = 4.0f * s;
+                input->borderThickness = 0.0f;
+                input->background = cellFill;
+                input->hoverColor = fieldHover;
+                input->borderColor = accent;
+                input->caretColor = ink;
+                input->placeholderColor = mute;
+                input->selectionColor = Color(0.275f, 0.400f, 0.680f, 1.0f);
+                input->writeClipboard = writeClipboard;
+                input->readClipboard = readClipboard;
+                if (UIText* label = input->label())
+                {
+                    label->fontPath = fontPath;
+                    label->fontSize = smallPx;
+                    label->color = ink;
+                }
+                input->setText(value);
+                line->setContent(1, input);
+            };
+            auto addLine = [&](UITableRow* parent, const char* name, const char* value, bool group) -> UITableRow*
+            {
+                UITableRow* line = parent != nullptr ? parent->addRow(treeRowH) : tree->addRow(treeRowH);
+                paintLine(line, group);
+                bindName(line, name, group);
+                if (!group && value != nullptr)
+                {
+                    bindValue(line, value);
+                }
+                return line;
+            };
+            UITableRow* transform = addLine(nullptr, "Transform", nullptr, true);
+            UITableRow* position = addLine(transform, "Position", nullptr, true);
+            addLine(position, "X", "0", false);
+            addLine(position, "Y", "1.5", false);
+            addLine(position, "Z", "0", false);
+            UITableRow* rotation = addLine(transform, "Rotation", nullptr, true);
+            addLine(rotation, "X", "0", false);
+            addLine(rotation, "Y", "45", false);
+            addLine(rotation, "Z", "0", false);
+            rotation->setExpanded(false);
+            UITableRow* scale = addLine(transform, "Scale", nullptr, true);
+            addLine(scale, "X", "1", false);
+            addLine(scale, "Y", "1", false);
+            addLine(scale, "Z", "1", false);
+            UITableRow* renderer = addLine(nullptr, "Renderer", nullptr, true);
+            addLine(renderer, "Visible", "true", false);
+            addLine(renderer, "Mesh", "Cube", false);
+            addLine(renderer, "Cast Shadows", "On", false);
+            tree->refit();
+            detailsView->addChild(tree);
             view->rect = Rect(0.0f, 0.0f, (float)windowWidth, contentH);
             auto controls = makePage("Controls", view);
             dock->dockPage(controls, UIDockMode::Fill);
+            dock->dockPage(makePage("Table", sheetView), UIDockMode::Fill);
             dock->dockPage(makePage("Outline", noteBody("Drag this tab to dock or float.")), UIDockMode::Fill);
-            dock->dockPage(makePage("Details", noteBody("Drop on an edge to split.")), UIDockMode::Fill);
+            dock->dockPage(makePage("Details", detailsView), UIDockMode::Fill);
             dock->activate(controls.get());
             root->children.push_back(dock);
             mHost->prepare();
@@ -767,7 +1075,7 @@ namespace eokas::ui {
             mSpace.clearColor = canvas;
             mSpace.add(camera);
             mSpace.activeCamera = camera;
-            mSpace.add(mCanvas->shape());
+            mSpace.add(mFrame->shape());
         }
 
         void* createFloatingWindow(const Rect& screenRect)
@@ -838,7 +1146,7 @@ namespace eokas::ui {
             return false;
         }
 
-        UICanvas* floatingCanvas(HWND hwnd)
+        UIFrame* floatingFrame(HWND hwnd)
         {
             if (!mHost) return nullptr;
             for (auto& item : mFloatWindows)
@@ -864,8 +1172,8 @@ namespace eokas::ui {
             for (auto& item : mFloatWindows)
             {
                 if (!item || !item->surface || !item->camera || !item->hwnd) continue;
-                UICanvas* canvas = mHost->find(item->hwnd);
-                if (!canvas || !canvas->root()) continue;
+                UIFrame* frame = mHost->find(item->hwnd);
+                if (!frame || !frame->root()) continue;
                 RECT client = {};
                 GetClientRect(item->hwnd, &client);
                 float w = (float)(client.right - client.left);
@@ -877,10 +1185,10 @@ namespace eokas::ui {
                 item->camera->viewport.bottom = h;
                 if (!item->shapeReady)
                 {
-                    item->space.add(canvas->shape());
+                    item->space.add(frame->shape());
                     item->shapeReady = true;
                 }
-                canvas->flush();
+                frame->flush();
             }
         }
 
@@ -890,8 +1198,8 @@ namespace eokas::ui {
             for (auto& item : mFloatWindows)
             {
                 if (!item || !item->surface || !item->camera || !item->hwnd) continue;
-                UICanvas* canvas = mHost->find(item->hwnd);
-                if (!canvas || !canvas->root()) continue;
+                UIFrame* frame = mHost->find(item->hwnd);
+                if (!frame || !frame->root()) continue;
                 if (!item->shown)
                 {
                     mRenderer.render(item->surface, item->space);
@@ -909,14 +1217,14 @@ namespace eokas::ui {
                 this->flushClosingFloatWindows();
                 mHost->flushClosing();
                 mHost->close(mHostWindow);
-                mCanvas = nullptr;
+                mFrame = nullptr;
             }
             mRenderer.detach(mSurface);
         }
 
         void tick(float delta) {
             (void)delta;
-            // Swapchain teardown waits for the GPU. Canvas resources referenced by
+            // Swapchain teardown waits for the GPU. Frame resources referenced by
             // that work must be released only after the wait.
             this->flushClosingFloatWindows();
             if (mHost) mHost->flushClosing();
@@ -935,7 +1243,7 @@ namespace eokas::ui {
                 mDock->rect.height = mClientHeight - top;
             }
 
-            if (mCanvas) mCanvas->flush();
+            if (mFrame) mFrame->flush();
             this->flushFloatingWindows();
             if (mHost) mHost->publishAtlas();
             mRenderer.render(mSurface, mSpace);

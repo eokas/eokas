@@ -1,6 +1,6 @@
 #include "UIApp.h"
-#include "UIText.h"
-#include "UIView.h"
+#include "widgets/UIText.h"
+#include "widgets/UIView.h"
 
 #include <map>
 #include <stdexcept>
@@ -12,9 +12,9 @@ namespace eokas
         this->closeAll();
         for (auto& slot : mWindows)
         {
-            if (slot.canvas)
+            if (slot.frame)
             {
-                slot.canvas->quit();
+                slot.frame->quit();
             }
         }
         mWindows.clear();
@@ -22,14 +22,14 @@ namespace eokas
         this->closeFonts();
     }
 
-    UICanvas& UIApp::open(void* window, uint32_t width, uint32_t height)
+    UIFrame& UIApp::open(void* window, uint32_t width, uint32_t height)
     {
         Slot slot;
         slot.window = window;
-        slot.canvas = std::make_unique<UICanvas>();
-        slot.canvas->init(width, height);
+        slot.frame = std::make_unique<UIFrame>();
+        slot.frame->init(width, height);
         mWindows.push_back(std::move(slot));
-        return *mWindows.back().canvas;
+        return *mWindows.back().frame;
     }
 
     void UIApp::close(void* window)
@@ -40,29 +40,29 @@ namespace eokas
             {
                 continue;
             }
-            if (it->canvas)
+            if (it->frame)
             {
-                it->canvas->quit();
+                it->frame->quit();
             }
             mWindows.erase(it);
             return;
         }
     }
 
-    UICanvas* UIApp::find(void* window)
+    UIFrame* UIApp::find(void* window)
     {
         for (auto& slot : mWindows)
         {
-            if (slot.window == window && slot.canvas)
+            if (slot.window == window && slot.frame)
             {
-                return slot.canvas.get();
+                return slot.frame.get();
             }
         }
         for (auto& slot : mFloating)
         {
-            if (slot.window == window && slot.canvas)
+            if (slot.window == window && slot.frame)
             {
-                return slot.canvas.get();
+                return slot.frame.get();
             }
         }
         return nullptr;
@@ -78,13 +78,13 @@ namespace eokas
         this->closeFonts();
 
         std::vector<UIText*> texts;
-        for (UICanvas* canvas : this->liveCanvases())
+        for (UIFrame* frame : this->liveFrames())
         {
-            if (canvas == nullptr || !canvas->root())
+            if (frame == nullptr || !frame->root())
             {
                 continue;
             }
-            this->collectTexts(canvas->root().get(), texts);
+            this->collectTexts(frame->root().get(), texts);
         }
 
         std::map<String, std::vector<UIText*>> groups;
@@ -123,13 +123,13 @@ namespace eokas
             return;
         }
         UIFont* font = mFonts.front().get();
-        for (UICanvas* canvas : this->liveCanvases())
+        for (UIFrame* frame : this->liveFrames())
         {
-            if (canvas == nullptr)
+            if (frame == nullptr)
             {
                 continue;
             }
-            if (UIShape::Ref shape = canvas->shape())
+            if (UIShape::Ref shape = frame->shape())
             {
                 shape->setPendingUpload(font->atlasRgba(), font->atlasSize());
             }
@@ -150,16 +150,16 @@ namespace eokas
         {
             return;
         }
-        std::vector<UICanvas*> canvases = this->liveCanvases();
+        std::vector<UIFrame*> frames = this->liveFrames();
         for (UIFont* font : dirty)
         {
-            for (UICanvas* canvas : canvases)
+            for (UIFrame* frame : frames)
             {
-                if (canvas == nullptr)
+                if (frame == nullptr)
                 {
                     continue;
                 }
-                if (UIShape::Ref shape = canvas->shape())
+                if (UIShape::Ref shape = frame->shape())
                 {
                     shape->setPendingUpload(font->atlasRgba(), font->atlasSize());
                 }
@@ -184,11 +184,11 @@ namespace eokas
     {
         auto closing = std::move(mClosing);
         mClosing.clear();
-        for (auto& canvas : closing)
+        for (auto& frame : closing)
         {
-            if (canvas)
+            if (frame)
             {
-                canvas->quit();
+                frame->quit();
             }
         }
     }
@@ -233,18 +233,18 @@ namespace eokas
         mFloating.clear();
     }
 
-    std::vector<UICanvas*> UIApp::liveCanvases()
+    std::vector<UIFrame*> UIApp::liveFrames()
     {
-        std::vector<UICanvas*> canvases;
+        std::vector<UIFrame*> frames;
         for (auto& slot : mWindows)
         {
-            if (slot.canvas) canvases.push_back(slot.canvas.get());
+            if (slot.frame) frames.push_back(slot.frame.get());
         }
         for (auto& slot : mFloating)
         {
-            if (slot.canvas) canvases.push_back(slot.canvas.get());
+            if (slot.frame) frames.push_back(slot.frame.get());
         }
-        return canvases;
+        return frames;
     }
 
     UIApp::Slot* UIApp::slotOf(UIDockPage* page)
@@ -253,20 +253,20 @@ namespace eokas
         return nullptr;
     }
 
-    void UIApp::destroySlot(Slot& slot, bool deferCanvas)
+    void UIApp::destroySlot(Slot& slot, bool deferFrame)
     {
         void* window = slot.window;
         slot.window = nullptr;
-        if (slot.canvas)
+        if (slot.frame)
         {
-            slot.canvas->setRoot(nullptr);
-            if (deferCanvas)
+            slot.frame->setRoot(nullptr);
+            if (deferFrame)
             {
-                mClosing.push_back(std::move(slot.canvas));
+                mClosing.push_back(std::move(slot.frame));
             }
             else
             {
-                slot.canvas->quit();
+                slot.frame->quit();
             }
         }
         slot.page.reset();
@@ -326,19 +326,19 @@ namespace eokas
         if (!held) return;
         void* windowHandle = nullptr;
         if (onCreateWindow) windowHandle = onCreateWindow(window);
-        auto canvas = std::make_unique<UICanvas>();
+        auto frame = std::make_unique<UIFrame>();
         uint32_t width = (uint32_t)window.width;
         uint32_t height = (uint32_t)window.height;
         if (width < 1) width = 1;
         if (height < 1) height = 1;
-        canvas->init(width, height);
+        frame->init(width, height);
         held->layoutInWindow((float)width, (float)height);
-        canvas->setRoot(held);
+        frame->setRoot(held);
         mGrabScreenX = screenX - window.x;
         mGrabScreenY = screenY - window.y;
         Slot created;
         created.window = windowHandle;
-        created.canvas = std::move(canvas);
+        created.frame = std::move(frame);
         created.page = held;
         created.screenRect = window;
         mFloating.push_back(std::move(created));
@@ -403,7 +403,7 @@ namespace eokas
         {
             auto held = slot->page;
             void* window = slot->window;
-            std::unique_ptr<UICanvas> canvas = std::move(slot->canvas);
+            std::unique_ptr<UIFrame> frame = std::move(slot->frame);
             UIDockSpace* space = mPreviewSpace;
             mPreviewSpace = nullptr;
             for (auto it = mFloating.begin(); it != mFloating.end(); ++it)
@@ -413,10 +413,10 @@ namespace eokas
                 break;
             }
             space->acceptDrop(held);
-            if (canvas)
+            if (frame)
             {
-                canvas->setRoot(nullptr);
-                mClosing.push_back(std::move(canvas));
+                frame->setRoot(nullptr);
+                mClosing.push_back(std::move(frame));
             }
             this->prepare();
             if (window && onDestroyWindow) onDestroyWindow(window);

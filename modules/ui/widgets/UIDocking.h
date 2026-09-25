@@ -1,7 +1,7 @@
 #ifndef _EOKAS_UI_DOCKING_H_
 #define _EOKAS_UI_DOCKING_H_
 
-#include "UIWidget.h"
+#include "../UIWidget.h"
 #include <functional>
 #include <memory>
 #include <vector>

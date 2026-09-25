@@ -1,25 +1,50 @@
 #include "app/app.h"
-#include "native/dialogs.h"
 
 namespace eokas {
+    App::~App() {
+        this->quit();
+    }
+
+    String App::defaultConfigPath() {
+        String exeDir = File::basePath(Process::executingPath());
+        String relative = File::combinePath(exeDir, "../config/app.json");
+        return File::absolutePath(relative);
+    }
+
     bool App::init() {
-        String configJson;
-        if(!File::readText("../config/config.json", configJson))
+        return this->init(App::defaultConfigPath());
+    }
+
+    bool App::init(const String& configPath) {
+        AppConfig loaded;
+        if (!AppConfig::load(configPath, loaded))
             return false;
-        HomNode json = JSON::parse(configJson);
-        
-        mModules.init();
+        mConfig = loaded;
+
+        if (!mModules.init())
+            return false;
+
+        for (const AppConfig::ModuleEntry& entry : mConfig.modules) {
+            if (mModules.loadModule(entry.name) == nullptr && entry.required) {
+                this->quit();
+                return false;
+            }
+        }
         return true;
     }
-    
+
     void App::quit() {
         mModules.quit();
     }
-    
+
     void App::tick(float deltaTime) {
         mModules.tick(deltaTime);
     }
-    
+
+    const AppConfig& App::config() const {
+        return mConfig;
+    }
+
     ModuleManager& App::modules() {
         return mModules;
     }

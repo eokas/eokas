@@ -1,7 +1,7 @@
 #ifndef _EOKAS_UI_IMAGE_H_
 #define _EOKAS_UI_IMAGE_H_
 
-#include "UIWidget.h"
+#include "../UIWidget.h"
 
 namespace eokas
 {

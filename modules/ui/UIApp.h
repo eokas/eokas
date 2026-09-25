@@ -1,8 +1,8 @@
 #ifndef _EOKAS_UI_APP_H_
 #define _EOKAS_UI_APP_H_
 
-#include "UICanvas.h"
-#include "UIDocking.h"
+#include "UIFrame.h"
+#include "widgets/UIDocking.h"
 #include "UIFont.h"
 #include <functional>
 #include <memory>
@@ -22,9 +22,9 @@ namespace eokas
         std::function<void(void* window, const Rect& rect)> onPlaceWindow;
         std::function<void(void* window)> onDestroyWindow;
 
-        UICanvas& open(void* window, uint32_t width, uint32_t height);
+        UIFrame& open(void* window, uint32_t width, uint32_t height);
         void close(void* window);
-        UICanvas* find(void* window);
+        UIFrame* find(void* window);
         void setFallbackFontPath(const char* path);
         void prepare();
         void publishAtlas();
@@ -40,14 +40,14 @@ namespace eokas
         struct Slot
         {
             void* window = nullptr;
-            std::unique_ptr<UICanvas> canvas;
+            std::unique_ptr<UIFrame> frame;
             std::shared_ptr<UIDockPage> page;
             Rect screenRect;
         };
 
         std::vector<Slot> mWindows;
         std::vector<Slot> mFloating;
-        std::vector<std::unique_ptr<UICanvas>> mClosing;
+        std::vector<std::unique_ptr<UIFrame>> mClosing;
         std::vector<UIDockSpace*> mSpaces;
         std::vector<std::unique_ptr<UIFont>> mFonts;
         String mFallbackFontPath;
@@ -62,9 +62,9 @@ namespace eokas
         float mDragSlop = 4.0f;
         UIDockSpace* mPreviewSpace = nullptr;
 
-        std::vector<UICanvas*> liveCanvases();
+        std::vector<UIFrame*> liveFrames();
         Slot* slotOf(UIDockPage* page);
-        void destroySlot(Slot& slot, bool deferCanvas);
+        void destroySlot(Slot& slot, bool deferFrame);
         void closeFonts();
         void toScreenPoint(UIDockPage* page, float x, float y, float& screenX, float& screenY);
         void beginFloat(UIDockPage* page, float screenX, float screenY);

@@ -142,7 +142,6 @@ namespace eokas {
                         c = this->nextChar();
                     }
                 } else {
-                    c = this->nextChar();
                     while (_ascil_is_number(c)) {
                         str += c;
                         c = this->nextChar();

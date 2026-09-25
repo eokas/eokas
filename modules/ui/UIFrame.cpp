@@ -1,5 +1,5 @@
-#include "UICanvas.h"
-#include "UIView.h"
+#include "UIFrame.h"
+#include "widgets/UIView.h"
 
 #include <cstddef>
 
@@ -10,7 +10,7 @@ namespace eokas
         constexpr const char* kUIShaderPath = "../shaders/UI.hlsl";
     }
 
-    void UICanvas::init(uint32_t width, uint32_t height)
+    void UIFrame::init(uint32_t width, uint32_t height)
     {
         mWidth = (float)width;
         mHeight = (float)height;
@@ -50,7 +50,7 @@ namespace eokas
         mShape->material->setBlendState(blend);
     }
 
-    void UICanvas::quit()
+    void UIFrame::quit()
     {
         this->setFocus(nullptr);
         this->resetPointerState(mRoot.get());
@@ -65,12 +65,12 @@ namespace eokas
         mShape.reset();
     }
 
-    const std::shared_ptr<UIWidget>& UICanvas::root() const
+    const std::shared_ptr<UIWidget>& UIFrame::root() const
     {
         return mRoot;
     }
 
-    void UICanvas::setRoot(const std::shared_ptr<UIWidget>& widget)
+    void UIFrame::setRoot(const std::shared_ptr<UIWidget>& widget)
     {
         this->setFocus(nullptr);
         this->resetPointerState(mRoot.get());
@@ -80,7 +80,7 @@ namespace eokas
         mRoot = widget;
     }
 
-    void UICanvas::flush()
+    void UIFrame::flush()
     {
         if (!mShape)
         {
@@ -96,12 +96,12 @@ namespace eokas
         mShape->end();
     }
 
-    UIShape::Ref UICanvas::shape() const
+    UIShape::Ref UIFrame::shape() const
     {
         return mShape;
     }
 
-    UIWidget* UICanvas::hitTest(float x, float y)
+    UIWidget* UIFrame::hitTest(float x, float y)
     {
         if (mRoot)
         {
@@ -110,7 +110,7 @@ namespace eokas
         return this->hitTestNode(mRoot.get(), x, y, 0.0f, 0.0f);
     }
 
-    void UICanvas::onMouseMove(float x, float y)
+    void UIFrame::onMouseMove(float x, float y)
     {
         if (mPressed != nullptr)
         {
@@ -133,7 +133,7 @@ namespace eokas
         }
     }
 
-    void UICanvas::onMouseDown(float x, float y, int button)
+    void UIFrame::onMouseDown(float x, float y, int button)
     {
         this->onMouseMove(x, y);
         if (mPressed != nullptr || mHovered == nullptr)
@@ -162,7 +162,7 @@ namespace eokas
         this->dispatchDrag(x, y);
     }
 
-    void UICanvas::onMouseUp(float x, float y, int button)
+    void UIFrame::onMouseUp(float x, float y, int button)
     {
         UIWidget* hit = this->hitTest(x, y);
         UIWidget* pressed = mPressed;
@@ -179,12 +179,12 @@ namespace eokas
         this->onMouseMove(x, y);
     }
 
-    void UICanvas::onMouseWheel(float x, float y, float deltaX, float deltaY)
+    void UIFrame::onMouseWheel(float x, float y, float deltaX, float deltaY)
     {
         this->routeWheel(mRoot.get(), x, y, 0.0f, 0.0f, deltaX, deltaY);
     }
 
-    void UICanvas::dispatchDrag(float x, float y)
+    void UIFrame::dispatchDrag(float x, float y)
     {
         if (mPressed == nullptr)
         {
@@ -196,7 +196,7 @@ namespace eokas
         mPressed->triggerPointerDrag(x - ox, y - oy, mPressedButton);
     }
 
-    bool UICanvas::findWidget(UIWidget* node, UIWidget* target, float originX, float originY, float& outX, float& outY) const
+    bool UIFrame::findWidget(UIWidget* node, UIWidget* target, float originX, float originY, float& outX, float& outY) const
     {
         if (node == nullptr)
         {
@@ -232,7 +232,7 @@ namespace eokas
         return false;
     }
 
-    bool UICanvas::routeWheel(UIWidget* widget, float x, float y, float originX, float originY, float deltaX, float deltaY)
+    bool UIFrame::routeWheel(UIWidget* widget, float x, float y, float originX, float originY, float deltaX, float deltaY)
     {
         if (widget == nullptr || !widget->visible)
         {
@@ -283,7 +283,7 @@ namespace eokas
         return false;
     }
 
-    void UICanvas::onChar(uint32_t codepoint)
+    void UIFrame::onChar(uint32_t codepoint)
     {
         if (!this->focusAlive())
         {
@@ -292,7 +292,7 @@ namespace eokas
         mFocused->triggerChar(codepoint);
     }
 
-    void UICanvas::onKeyDown(UIKey key, const UIKeyMods& mods)
+    void UIFrame::onKeyDown(UIKey key, const UIKeyMods& mods)
     {
         if (key == UIKey::Escape)
         {
@@ -306,7 +306,7 @@ namespace eokas
         mFocused->triggerKey(key, mods);
     }
 
-    void UICanvas::setFocus(UIWidget* widget)
+    void UIFrame::setFocus(UIWidget* widget)
     {
         if (mFocused == widget)
         {
@@ -323,12 +323,12 @@ namespace eokas
         }
     }
 
-    UIWidget* UICanvas::focus() const
+    UIWidget* UIFrame::focus() const
     {
         return mFocused;
     }
 
-    UIWidget* UICanvas::hitTestNode(UIWidget* widget, float x, float y, float originX, float originY)
+    UIWidget* UIFrame::hitTestNode(UIWidget* widget, float x, float y, float originX, float originY)
     {
         if (widget == nullptr || !widget->visible)
         {
@@ -416,7 +416,7 @@ namespace eokas
         return nullptr;
     }
 
-    void UICanvas::resetPointerState(UIWidget* widget)
+    void UIFrame::resetPointerState(UIWidget* widget)
     {
         if (widget == nullptr)
         {
@@ -437,7 +437,7 @@ namespace eokas
         }
     }
 
-    bool UICanvas::containsWidget(UIWidget* node, UIWidget* target) const
+    bool UIFrame::containsWidget(UIWidget* node, UIWidget* target) const
     {
         if (node == nullptr || target == nullptr)
         {
@@ -468,7 +468,7 @@ namespace eokas
         return false;
     }
 
-    bool UICanvas::focusAlive()
+    bool UIFrame::focusAlive()
     {
         if (mFocused == nullptr)
         {
