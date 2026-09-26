@@ -13,8 +13,7 @@ namespace eokas
 
     bool UIRectangle::contains(const Vector2& point) const
     {
-        Vector2 end = rect.origin + rect.size;
-        return point.x >= rect.origin.x && point.x <= end.x && point.y >= rect.origin.y && point.y <= end.y;
+        return UIWidget::contains(point);
     }
 
     void UIRectangle::render(UIPrimitive& primitive)

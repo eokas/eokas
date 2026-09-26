@@ -145,7 +145,7 @@ namespace eokas::ui {
                 cell->direction = UIDirection::Vertical;
                 cell->padding = 0.0f;
                 cell->spacing = 0.0f;
-                cell->fill = clear;
+                cell->color = clear;
                 cell->rect = Rect(0.0f, 0.0f, width, height);
                 float gap = (height - child->rect.size.y) * 0.5f;
                 if (gap < 0.0f)
@@ -153,7 +153,7 @@ namespace eokas::ui {
                     gap = 0.0f;
                 }
                 auto spacer = std::make_shared<UIWidget>();
-                spacer->interactive = false;
+                spacer->pickable = false;
                 spacer->rect = Rect(0.0f, 0.0f, width, gap);
                 cell->addChild(spacer);
                 cell->addChild(child);
@@ -165,7 +165,7 @@ namespace eokas::ui {
                 layout->direction = UIDirection::Vertical;
                 layout->padding = 0.0f;
                 layout->spacing = cardGap;
-                layout->fill = clear;
+                layout->color = clear;
                 layout->rect = Rect(0.0f, 0.0f, width, 0.0f);
                 return layout;
             };
@@ -175,21 +175,21 @@ namespace eokas::ui {
                 layout->direction = UIDirection::Vertical;
                 layout->padding = cardPad;
                 layout->spacing = 12.0f * s;
-                layout->fill = cardColor;
+                layout->color = cardColor;
                 layout->rect = Rect(0.0f, 0.0f, width, 0.0f);
                 return layout;
             };
 
             auto root = std::make_shared<UIWidget>();
             root->rect = Rect(0.0f, 0.0f, (float)windowWidth, (float)windowHeight);
-            root->interactive = false;
+            root->pickable = false;
 
             auto menu = std::make_shared<UIMenu>();
             menu->rect = Rect(0.0f, 0.0f, (float)windowWidth, 0.0f);
             menu->direction = UIDirection::Horizontal;
             menu->padding = 4.0f * s;
             menu->spacing = 2.0f * s;
-            menu->fill = menuBar;
+            menu->color = menuBar;
 
             auto status = textOf("Ready", 240.0f * s, smallPx, smallPx, mute);
             UIText* statusPtr = status.get();
@@ -224,7 +224,7 @@ namespace eokas::ui {
             fileMenu->direction = UIDirection::Vertical;
             fileMenu->padding = 4.0f * s;
             fileMenu->spacing = 2.0f * s;
-            fileMenu->fill = popup;
+            fileMenu->color = popup;
             fileMenu->floating = true;
             fileMenu->visible = false;
             auto newItem = addItem(*fileMenu, "New", popup);
@@ -264,7 +264,7 @@ namespace eokas::ui {
 
             auto view = std::make_shared<UIView>();
             view->rect = Rect(0.0f, 0.0f, (float)windowWidth, (float)windowHeight);
-            view->fill = canvas;
+            view->color = canvas;
             view->scrollbarThickness = 8.0f * s;
             view->scrollbar = Color(0.40f, 0.44f, 0.52f, 1.0f);
             view->scrollbarTrack = Color(0.078f, 0.086f, 0.110f, 1.0f);
@@ -353,7 +353,7 @@ namespace eokas::ui {
                 row->direction = UIDirection::Horizontal;
                 row->padding = 0.0f;
                 row->spacing = spacing;
-                row->fill = clear;
+                row->color = clear;
                 row->rect = Rect(0.0f, 0.0f, width, height);
                 return row;
             };
@@ -542,7 +542,7 @@ namespace eokas::ui {
                 col->direction = UIDirection::Vertical;
                 col->padding = 0.0f;
                 col->spacing = 8.0f * s;
-                col->fill = clear;
+                col->color = clear;
                 col->rect = Rect(0.0f, 0.0f, dialCol, dialRowH);
                 auto caption = textOf(name, dialCol, smallPx, smallPx, mute);
                 auto slider = std::make_shared<UISlider>();
@@ -587,15 +587,15 @@ namespace eokas::ui {
                 auto region = std::make_shared<UIRegion>();
                 region->rect = Rect(0.0f, 0.0f, cardInner, 0.0f);
                 region->setSpacing(0.0f);
-                region->fill = clear;
+                region->color = clear;
 
                 auto head = std::make_shared<UIList>();
                 head->direction = UIDirection::Horizontal;
                 head->rect = Rect(0.0f, 0.0f, cardInner, headH);
                 head->padding = headPad;
                 head->spacing = 0.0f;
-                head->fill = regionHead;
-                head->interactive = true;
+                head->color = regionHead;
+                head->pickable = true;
 
                 String titleText = title;
                 auto titleLabel = textOf("", cardInner - headPad * 2.0f, fontPx, fontPx, ink);
@@ -607,7 +607,7 @@ namespace eokas::ui {
                 body->rect = Rect(0.0f, 0.0f, cardInner, bodyH);
                 body->padding = bodyPad;
                 body->spacing = bodyGap;
-                body->fill = regionBody;
+                body->color = regionBody;
                 body->addChild(textOf("Stays in the flow while open.", bodyInner, smallPx, smallPx, mute));
 
                 auto action = addButton("Mark", 96.0f * s, false);
@@ -634,11 +634,11 @@ namespace eokas::ui {
                 };
                 head->onPointerEnter = [headPtr, regionHeadHover]()
                 {
-                    headPtr->fill = regionHeadHover;
+                    headPtr->color = regionHeadHover;
                 };
                 head->onPointerLeave = [headPtr, regionHead]()
                 {
-                    headPtr->fill = regionHead;
+                    headPtr->color = regionHead;
                 };
                 return region;
             };
@@ -661,7 +661,7 @@ namespace eokas::ui {
             page->direction = UIDirection::Vertical;
             page->padding = pagePad;
             page->spacing = 14.0f * s;
-            page->fill = clear;
+            page->color = clear;
             page->rect = Rect(0.0f, 0.0f, (float)windowWidth, 0.0f);
             page->addChild(textOf("Controls", innerW, titlePx, titlePx, ink));
             page->addChild(textOf("Menus, fields, and folding sections.", innerW, smallPx, smallPx, mute));
@@ -719,7 +719,7 @@ namespace eokas::ui {
                 head->padding = tabPad;
                 head->spacing = 0.0f;
                 head->rect = Rect(0.0f, 0.0f, 0.0f, tabH);
-                head->fill = regionHead;
+                head->color = regionHead;
                 head->addChild(textOf(title, tabPx, tabPx, tabPx, ink));
                 return head;
             };
@@ -728,7 +728,7 @@ namespace eokas::ui {
                 auto body = std::make_shared<UIList>();
                 body->direction = UIDirection::Vertical;
                 body->padding = cardPad;
-                body->fill = regionBody;
+                body->color = regionBody;
                 body->addChild(textOf(value, 280.0f * s, smallPx, smallPx, mute));
                 return body;
             };
@@ -737,7 +737,7 @@ namespace eokas::ui {
                 auto page = std::make_shared<UIDockPage>();
                 page->setHead(headOf(title));
                 page->setBody(body);
-                page->fill = regionBody;
+                page->color = regionBody;
                 page->activeFill = regionHeadHover;
                 page->tabMark = accent;
                 mHost->observe(page);
@@ -762,13 +762,13 @@ namespace eokas::ui {
                 { "Chen", "Tools", "91", "" },
             };
             auto sheetView = std::make_shared<UIView>();
-            sheetView->fill = canvas;
+            sheetView->color = canvas;
             sheetView->scrollbarThickness = 8.0f * s;
             sheetView->scrollbar = Color(0.40f, 0.44f, 0.52f, 1.0f);
             sheetView->scrollbarTrack = Color(0.078f, 0.086f, 0.110f, 1.0f);
             sheetView->scrollbarPressed = accent;
             auto sheet = std::make_shared<UITable>();
-            sheet->fill = regionBody;
+            sheet->color = regionBody;
             sheet->cellSpacing = 0.0f;
             sheet->cellPadding = 0.0f;
             sheet->border = UITableBorder(1.0f, 1.0f, 0.0f, 0.0f, gridColor);
@@ -826,7 +826,7 @@ namespace eokas::ui {
                     input->caret.color = ink;
                     input->selection = Color(0.275f, 0.400f, 0.680f, 1.0f);
                     input->readOnly = header;
-                    input->interactive = !header;
+                    input->pickable = !header;
                     input->writeClipboard = writeClipboard;
                     input->readClipboard = readClipboard;
                     if (UIText* label = input->label())
@@ -849,7 +849,7 @@ namespace eokas::ui {
                         input->setText(samples[row - 1][column - 1]);
                     }
                     UITableCell* cell = sheet->cell(row, column);
-                    cell->fill = header ? headerFill : cellFill;
+                    cell->color = header ? headerFill : cellFill;
                     if (lastColumn || lastRow)
                     {
                         cell->setBorder(UITableBorder(1.0f, 1.0f, right, bottom, gridColor));
@@ -898,7 +898,7 @@ namespace eokas::ui {
                     }
                     input->background = fill;
                     input->hoverFill = hover;
-                    cell->fill = fill;
+                    cell->color = fill;
                     if (UIText* label = input->label())
                     {
                         label->style.color = header ? text : ink;
@@ -919,7 +919,7 @@ namespace eokas::ui {
                 }
                 if (columnHead || rowHead)
                 {
-                    cell->interactive = true;
+                    cell->pickable = true;
                     int index = columnHead ? column : row;
                     cell->onClick = [pick, paint, columnHead, index]()
                     {
@@ -935,7 +935,7 @@ namespace eokas::ui {
                             return;
                         }
                         input->background = headerHover;
-                        cell->fill = headerHover;
+                        cell->color = headerHover;
                     };
                     cell->onPointerLeave = [paint]()
                     {
@@ -948,7 +948,7 @@ namespace eokas::ui {
             sheet->rect = Rect(0.0f, 0.0f, sheetW, sheetH);
             sheetView->addChild(sheet);
             auto detailsView = std::make_shared<UIView>();
-            detailsView->fill = canvas;
+            detailsView->color = canvas;
             detailsView->scrollbarThickness = 8.0f * s;
             detailsView->scrollbar = Color(0.40f, 0.44f, 0.52f, 1.0f);
             detailsView->scrollbarTrack = Color(0.078f, 0.086f, 0.110f, 1.0f);
@@ -959,7 +959,7 @@ namespace eokas::ui {
             const float treeIndent = 18.0f * s;
             const float treePad = 6.0f * s;
             auto tree = std::make_shared<UITable>();
-            tree->fill = regionBody;
+            tree->color = regionBody;
             tree->cellSpacing = 0.0f;
             tree->cellPadding = treePad;
             tree->border = UITableBorder(1.0f, 1.0f, 0.0f, 0.0f, gridColor);
@@ -977,7 +977,7 @@ namespace eokas::ui {
                     {
                         continue;
                     }
-                    item->fill = fill;
+                    item->color = fill;
                     float right = column == 1 ? 1.0f : 0.0f;
                     item->setBorder(UITableBorder(1.0f, 1.0f, right, 0.0f, gridColor));
                 }
@@ -1051,8 +1051,8 @@ namespace eokas::ui {
             tree->refit();
             detailsView->addChild(tree);
             auto board = std::make_shared<UIWidget>();
-            board->interactive = false;
-            board->fill = clear;
+            board->pickable = false;
+            board->color = clear;
             auto canvasNode = [&](const char* title, float x, float y, const Color& fill, const Color& hover, const Color& press, bool drag)
             {
                 auto node = std::make_shared<UIButton>();
@@ -1073,13 +1073,13 @@ namespace eokas::ui {
                 return node;
             };
             auto stage = std::make_shared<UICanvas>();
-            stage->fill = cardColor;
+            stage->color = cardColor;
             stage->rect = Rect(28.0f * s, 52.0f * s, 0.0f, 0.0f);
             stage->addChild(canvasNode("Drag", 0.0f, 0.0f, accent, accentHover, accentPress, true));
             stage->addChild(canvasNode("Move", 188.0f * s, 28.0f * s, neutral, neutralHover, neutralPress, true));
             stage->addChild(canvasNode("Pinned", 24.0f * s, 108.0f * s, field, fieldHover, field, false));
             auto cluster = std::make_shared<UICanvas>();
-            cluster->fill = regionHead;
+            cluster->color = regionHead;
             cluster->rect = Rect(220.0f * s, 132.0f * s, 0.0f, 0.0f);
             cluster->addChild(canvasNode("Group A", 0.0f, 0.0f, accent, accentHover, accentPress, true));
             cluster->addChild(canvasNode("Group B", 176.0f * s, 68.0f * s, neutral, neutralHover, neutralPress, true));

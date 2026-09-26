@@ -400,7 +400,7 @@ EOKAS_TEST_CASE(ui) {
     shapeFrame.init(200, 200);
     auto shapeRoot = std::make_shared<UIWidget>();
     shapeRoot->rect = Rect(0.0f, 0.0f, 200.0f, 200.0f);
-    shapeRoot->interactive = false;
+    shapeRoot->pickable = false;
     auto lowerChart = std::make_shared<UIChart>();
     auto upperChart = std::make_shared<UIChart>();
     lowerChart->setContour({ Vector2(0.0f, 0.0f), Vector2(40.0f, 0.0f), Vector2(40.0f, 40.0f), Vector2(0.0f, 40.0f) });
@@ -425,7 +425,7 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(shapeFrame.hitTest(6.0f, 6.0f) == innerChart.get());
     EOKAS_EXPECT(shapeFrame.hitTest(2.0f, 2.0f) == parentChart.get());
     EOKAS_EXPECT(shapeFrame.hitTest(55.0f, 55.0f) == nullptr);
-    parentChart->interactive = false;
+    parentChart->pickable = false;
     EOKAS_EXPECT(shapeFrame.hitTest(2.0f, 2.0f) == nullptr);
     shapeFrame.quit();
 
@@ -435,7 +435,7 @@ EOKAS_TEST_CASE(ui) {
     chartCanvas->rect = Rect(0.0f, 0.0f, 300.0f, 200.0f);
     auto anchor = std::make_shared<UIWidget>();
     anchor->rect = Rect(0.0f, 0.0f, 8.0f, 8.0f);
-    anchor->interactive = false;
+    anchor->pickable = false;
     auto picked = std::make_shared<UIChart>();
     auto idle = std::make_shared<UIChart>();
     picked->setContour({ Vector2(20.0f, 20.0f), Vector2(60.0f, 20.0f), Vector2(20.0f, 60.0f) });
@@ -582,6 +582,21 @@ EOKAS_TEST_CASE(ui) {
     link.hitSlop = 4.0f;
     EOKAS_EXPECT(link.contains(Vector2(60.0f, 10.0f)));
     EOKAS_EXPECT(!link.contains(Vector2(60.0f, 30.0f)));
+    UIFrame linkFrame;
+    linkFrame.init(200, 80);
+    auto linkRoot = std::make_shared<UIWidget>();
+    linkRoot->rect = Rect(0.0f, 0.0f, 200.0f, 80.0f);
+    linkRoot->pickable = false;
+    auto hitLink = std::make_shared<UILink>();
+    hitLink->setPoints({ Vector2(40.0f, 10.0f), Vector2(80.0f, 10.0f) });
+    hitLink->line.thickness = 2.0f;
+    hitLink->hitSlop = 4.0f;
+    linkRoot->children.push_back(hitLink);
+    linkFrame.setRoot(linkRoot);
+    EOKAS_EXPECT(hitLink->contains(Vector2(60.0f, 12.0f)));
+    EOKAS_EXPECT(!hitLink->rect.contains(Vector2(60.0f, 12.0f)));
+    EOKAS_EXPECT(linkFrame.hitTest(60.0f, 12.0f) == hitLink.get());
+    linkFrame.quit();
     link.start.target = from.get();
     link.start.anchor = UIAnchor::Right;
     link.end.target = to.get();

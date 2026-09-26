@@ -50,9 +50,9 @@ namespace eokas
 
     UIView::UIView()
     {
-        interactive = false;
+        pickable = false;
         mRoot = std::make_shared<UIWidget>();
-        mRoot->interactive = false;
+        mRoot->pickable = false;
     }
 
     void UIView::addChild(const std::shared_ptr<UIWidget>& child)
@@ -106,6 +106,67 @@ namespace eokas
             }
         }
         return false;
+    }
+
+    UIWidget* UIView::pick(const Vector2& point)
+    {
+        if (!visible || localScale.x == 0.0f || localScale.y == 0.0f)
+        {
+            return nullptr;
+        }
+        Vector2 local(
+            (point.x - rect.origin.x) / localScale.x,
+            (point.y - rect.origin.y) / localScale.y);
+        Vector2 layout = rect.origin + local;
+        bool inside = this->contains(layout);
+        bool contentScale = mRoot && mRoot->localScale.x != 0.0f && mRoot->localScale.y != 0.0f;
+        Vector2 content = Vector2::ZERO;
+        if (contentScale)
+        {
+            content = Vector2(
+                (local.x - mRoot->rect.origin.x) / mRoot->localScale.x,
+                (local.y - mRoot->rect.origin.y) / mRoot->localScale.y);
+            for (auto it = mRoot->children.rbegin(); it != mRoot->children.rend(); ++it)
+            {
+                if (*it && (*it)->floating)
+                {
+                    if (UIWidget* hit = (*it)->pick(content))
+                    {
+                        return hit;
+                    }
+                }
+            }
+        }
+        if (this->scrollbarContains(layout.x, layout.y))
+        {
+            return this;
+        }
+        if (!this->viewport().contains(layout))
+        {
+            if (pickable && inside)
+            {
+                return this;
+            }
+            return nullptr;
+        }
+        if (contentScale)
+        {
+            for (auto it = mRoot->children.rbegin(); it != mRoot->children.rend(); ++it)
+            {
+                if (*it && !(*it)->floating)
+                {
+                    if (UIWidget* hit = (*it)->pick(content))
+                    {
+                        return hit;
+                    }
+                }
+            }
+        }
+        if (pickable && inside)
+        {
+            return this;
+        }
+        return nullptr;
     }
 
     void UIView::placeRoot()
@@ -332,9 +393,9 @@ namespace eokas
             return;
         }
         primitive.pushScaleAround(rect.origin, localScale);
-        if (fill.a > 0.0f)
+        if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), fill);
+            primitive.addQuad(rect, UIFont::solidUV(), color);
         }
 
         Rect vp = this->viewport();

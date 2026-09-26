@@ -134,11 +134,12 @@ namespace eokas
 
     UIWidget* UIFrame::hitTest(float x, float y)
     {
-        if (mRoot)
+        if (!mRoot)
         {
-            mRoot->layout(mRoot->rect);
+            return nullptr;
         }
-        return this->hitTestNode(mRoot.get(), Vector2(x, y), Vector2::ZERO, Vector2(1.0f, 1.0f));
+        mRoot->layout(mRoot->rect);
+        return mRoot->pick(Vector2(x, y));
     }
 
     void UIFrame::onMouseMove(float x, float y)
@@ -424,7 +425,7 @@ namespace eokas
             {
                 return false;
             }
-            UIWidget* hit = this->hitTestNode(canvas, point, origin, scale);
+            UIWidget* hit = canvas->pick(parentLocal);
             if (UIChart* chart = dynamic_cast<UIChart*>(hit))
             {
                 Vector2 chartOrigin = Vector2::ZERO;
@@ -603,93 +604,6 @@ namespace eokas
     UIWidget* UIFrame::focus() const
     {
         return mFocused;
-    }
-
-    UIWidget* UIFrame::hitTestNode(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale)
-    {
-        if (widget == nullptr || !widget->visible || !liveScale(scale) || !liveScale(widget->localScale))
-        {
-            return nullptr;
-        }
-        Vector2 parentLocal = parentPoint(point, origin, scale);
-        Vector2 layout = layoutPoint(widget, parentLocal);
-        if (UIChart* chart = dynamic_cast<UIChart*>(widget))
-        {
-            if (!chart->contains(layout))
-            {
-                return nullptr;
-            }
-        }
-        Vector2 nextOrigin = origin + scale * widget->rect.origin;
-        Vector2 nextScale = scale * widget->localScale;
-        if (UIView* view = dynamic_cast<UIView*>(widget))
-        {
-            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->rect.origin;
-            Vector2 contentScale = nextScale * view->root()->localScale;
-            const std::shared_ptr<UIWidget>& content = view->root();
-            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
-            {
-                if (*it && (*it)->floating)
-                {
-                    if (UIWidget* hit = this->hitTestNode(it->get(), point, contentOrigin, contentScale))
-                    {
-                        return hit;
-                    }
-                }
-            }
-            if (view->scrollbarContains(layout.x, layout.y))
-            {
-                return view;
-            }
-            if (!view->viewport().contains(layout))
-            {
-                if (widget->interactive && widget->rect.contains(layout))
-                {
-                    return widget;
-                }
-                return nullptr;
-            }
-            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
-            {
-                if (*it && !(*it)->floating)
-                {
-                    if (UIWidget* hit = this->hitTestNode(it->get(), point, contentOrigin, contentScale))
-                    {
-                        return hit;
-                    }
-                }
-            }
-            if (widget->interactive && widget->rect.contains(layout))
-            {
-                return widget;
-            }
-            return nullptr;
-        }
-        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
-        {
-            if (*it && (*it)->floating)
-            {
-                if (UIWidget* hit = this->hitTestNode(it->get(), point, nextOrigin, nextScale))
-                {
-                    return hit;
-                }
-            }
-        }
-        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
-        {
-            if (*it && !(*it)->floating)
-            {
-                if (UIWidget* hit = this->hitTestNode(it->get(), point, nextOrigin, nextScale))
-                {
-                    return hit;
-                }
-            }
-        }
-        if (widget->interactive && widget->rect.contains(layout))
-        {
-            return widget;
-        }
-        return nullptr;
     }
 
     void UIFrame::resetPointerState(UIWidget* widget)

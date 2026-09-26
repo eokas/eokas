@@ -166,11 +166,11 @@ namespace eokas
 
     UIDockPage::UIDockPage()
     {
-        interactive = false;
-        fill = Color(0.16f, 0.16f, 0.18f, 1.0f);
+        pickable = false;
+        color = Color(0.16f, 0.16f, 0.18f, 1.0f);
         auto head = std::make_shared<UIWidget>();
         head->rect = Rect(0.0f, 0.0f, 0.0f, 28.0f);
-        head->fill = Color(0.24f, 0.26f, 0.32f, 1.0f);
+        head->color = Color(0.24f, 0.26f, 0.32f, 1.0f);
         this->setHead(head);
     }
 
@@ -206,7 +206,7 @@ namespace eokas
     void UIDockPage::bindHead()
     {
         if (!mHead) return;
-        mHead->interactive = true;
+        mHead->pickable = true;
         mHead->onPointerPress = [this]() { this->mSuppressClick = false; this->mDragging = false; };
         mHead->onPointerDrag = [this](float x, float y, int button)
         {
@@ -269,7 +269,7 @@ namespace eokas
         if (mHead)
         {
             mHead->visible = visible;
-            mHead->interactive = true;
+            mHead->pickable = true;
             mHead->rect = localOf(headRect);
             placeHeadContent(mHead.get());
         }
@@ -310,23 +310,23 @@ namespace eokas
         bool recolor = false;
         if (mTabActive && mHead)
         {
-            savedHead = mHead->fill;
-            mHead->fill = activeFill;
+            savedHead = mHead->color;
+            mHead->color = activeFill;
             recolor = true;
         }
         primitive.pushScaleAround(rect.origin, localScale);
         primitive.pushClip(primitive.toScreen(rect));
         primitive.pushOrigin(primitive.toScreen(rect.origin));
-        if (mBody && mBody->visible && fill.a > 0.0f)
+        if (mBody && mBody->visible && color.a > 0.0f)
         {
             primitive.pushScaleAround(mBody->rect.origin, mBody->localScale);
-            primitive.addQuad(mBody->rect, solid, fill);
+            primitive.addQuad(mBody->rect, solid, color);
             primitive.popOrigin();
         }
-        if (mHead && mHead->visible && mHead->fill.a > 0.0f)
+        if (mHead && mHead->visible && mHead->color.a > 0.0f)
         {
             primitive.pushScaleAround(mHead->rect.origin, mHead->localScale);
-            primitive.addQuad(mHead->rect, solid, mHead->fill);
+            primitive.addQuad(mHead->rect, solid, mHead->color);
             primitive.popOrigin();
         }
         if (mBody && mBody->visible && !primitive.outsideClip(mBody->finalRect())) mBody->render(primitive);
@@ -349,13 +349,13 @@ namespace eokas
         primitive.popOrigin();
         primitive.popClip();
         primitive.popOrigin();
-        if (recolor && mHead) mHead->fill = savedHead;
+        if (recolor && mHead) mHead->color = savedHead;
     }
 
     UIDockSpace::UIDockSpace()
     {
-        interactive = true;
-        fill = Color(0.14f, 0.14f, 0.16f, 1.0f);
+        pickable = true;
+        color = Color(0.14f, 0.14f, 0.16f, 1.0f);
         mRoot = std::make_unique<Node>();
     }
 
@@ -943,7 +943,7 @@ namespace eokas
                 {
                     if (page && page->head())
                     {
-                        bar = page->head()->fill;
+                        bar = page->head()->color;
                         break;
                     }
                 }

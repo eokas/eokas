@@ -8,7 +8,7 @@ namespace eokas
     class UIGrid : public UIWidget
     {
     public:
-        UIGrid() { interactive = false; }
+        UIGrid() { pickable = false; }
         float padding = 8.0f;
         float spacing = 8.0f;
         int columns = 1;

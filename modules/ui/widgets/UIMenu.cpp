@@ -99,7 +99,7 @@ namespace eokas
         list->direction = direction;
         list->padding = padding;
         list->spacing = spacing;
-        list->fill = Color(0.0f, 0.0f, 0.0f, 0.0f);
+        list->color = Color(0.0f, 0.0f, 0.0f, 0.0f);
         children.push_back(list);
     }
 
@@ -186,9 +186,9 @@ namespace eokas
         }
 
         primitive.pushScaleAround(rect.origin, localScale);
-        if (fill.a > 0.0f)
+        if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), fill);
+            primitive.addQuad(rect, UIFont::solidUV(), color);
         }
         primitive.popOrigin();
         UIWidget::render(primitive);

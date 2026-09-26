@@ -33,7 +33,6 @@ namespace eokas
         UIWidget* focus() const;
 
     private:
-        UIWidget* hitTestNode(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale);
         bool findWidget(UIWidget* node, UIWidget* target, const Vector2& origin, const Vector2& scale, Vector2& outOrigin, Vector2& outScale) const;
         bool collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const;
         UIWidget* dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const;

@@ -122,7 +122,7 @@ namespace eokas
                     {
                         continue;
                     }
-                    addCell(primitive, image.fill,
+                    addCell(primitive, image.color,
                         grid.x[col], grid.y[row], grid.x[col + 1], grid.y[row + 1],
                         grid.u[col], grid.v[row], grid.u[col + 1], grid.v[row + 1],
                         grid.halfU, grid.halfV);
@@ -141,7 +141,7 @@ namespace eokas
         SliceGrid grid;
         if (type == UIImageType::Simple || !buildSliceGrid(*this, primitive, grid))
         {
-            primitive.addQuad(rect, uv, fill);
+            primitive.addQuad(rect, uv, color);
         }
         else
         {

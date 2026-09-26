@@ -14,9 +14,9 @@ namespace eokas
 
         UIText()
         {
-            interactive = false;
+            pickable = false;
             style.fontSize = kDefaultFontSize;
-            fill.a = 0.0f;
+            color.a = 0.0f;
         }
         String text;
         UITextStyle style;

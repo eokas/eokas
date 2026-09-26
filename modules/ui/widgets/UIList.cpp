@@ -86,9 +86,9 @@ namespace eokas
             return;
         }
         primitive.pushScaleAround(rect.origin, localScale);
-        if (fill.a > 0.0f)
+        if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), fill);
+            primitive.addQuad(rect, UIFont::solidUV(), color);
         }
         primitive.popOrigin();
         UIWidget::render(primitive);

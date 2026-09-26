@@ -43,10 +43,10 @@ namespace eokas
         // Layout keeps rect.size unscaled. Children inherit this scale.
         Rect rect;
         Vector2 localScale { 1.0f, 1.0f };
-        Color fill { Color(1.0f, 1.0f, 1.0f, 1.0f) };
+        Color color { Color(1.0f, 1.0f, 1.0f, 1.0f) };
         bool visible = true;
         bool floating = false;
-        bool interactive = true;
+        bool pickable = true;
         bool dragable = false;
         bool hovered = false;
         bool pressed = false;
@@ -66,6 +66,8 @@ namespace eokas
         Rect finalRect() const;
         virtual void layout(const Rect& rect);
         virtual void render(UIPrimitive& primitive);
+        virtual bool contains(const Vector2& point) const;
+        virtual UIWidget* pick(const Vector2& point);
 
         virtual void triggerPointerEnter();
         virtual void triggerPointerLeave();

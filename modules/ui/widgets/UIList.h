@@ -14,7 +14,7 @@ namespace eokas
     class UIList : public UIWidget
     {
     public:
-        UIList() { interactive = false; }
+        UIList() { pickable = false; }
         UIDirection direction = UIDirection::Vertical;
         float padding = 8.0f;
         float spacing = 8.0f;

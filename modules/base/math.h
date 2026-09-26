@@ -635,7 +635,7 @@ namespace eokas
 
         Rect(const Vector2 &pos, const Vector2 &size);
 
-        bool contains(const Vector2 &point);
+        bool contains(const Vector2 &point) const;
 
     public:
         Vector2 origin;

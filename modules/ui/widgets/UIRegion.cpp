@@ -6,7 +6,7 @@ namespace eokas
 {
     UIRegion::UIRegion()
     {
-        fill.a = 0.0f;
+        color.a = 0.0f;
         this->setHead(std::make_shared<UIWidget>());
     }
 
@@ -46,7 +46,7 @@ namespace eokas
         {
             mHead->onClick = [this]()
             {
-                if (this->interactive)
+                if (this->pickable)
                 {
                     this->setExpanded(!this->mExpanded);
                 }
@@ -120,7 +120,7 @@ namespace eokas
         if (mHead)
         {
             mHead->visible = visible;
-            mHead->interactive = interactive;
+            mHead->pickable = pickable;
             mHead->layout(Rect(headPos, Vector2(width, headH)));
             headH = mHead->rect.size.y;
         }
@@ -153,9 +153,9 @@ namespace eokas
             return;
         }
         primitive.pushScaleAround(rect.origin, localScale);
-        if (fill.a > 0.0f)
+        if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), fill);
+            primitive.addQuad(rect, UIFont::solidUV(), color);
         }
         primitive.popOrigin();
         UIWidget::render(primitive);

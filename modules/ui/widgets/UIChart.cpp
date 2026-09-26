@@ -155,7 +155,7 @@ namespace eokas
 
     UIChart::UIChart()
     {
-        interactive = true;
+        pickable = true;
         dragable = true;
         stroke.color = Color(0.95f, 0.97f, 1.0f, 1.0f);
         stroke.thickness = 2.0f;
@@ -294,6 +294,22 @@ namespace eokas
             }
         }
         return inside;
+    }
+
+    UIWidget* UIChart::pick(const Vector2& point)
+    {
+        if (!visible || localScale.x == 0.0f || localScale.y == 0.0f)
+        {
+            return nullptr;
+        }
+        Vector2 local(
+            (point.x - rect.origin.x) / localScale.x,
+            (point.y - rect.origin.y) / localScale.y);
+        if (!this->contains(rect.origin + local))
+        {
+            return nullptr;
+        }
+        return UIWidget::pick(point);
     }
 
     void UIChart::addChart(const std::shared_ptr<UIChart>& chart)

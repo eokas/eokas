@@ -171,8 +171,8 @@ namespace eokas
         : mTable(table)
         , mRow(row)
     {
-        interactive = false;
-        fill = Color(0.0f, 0.0f, 0.0f, 0.0f);
+        pickable = false;
+        color = Color(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
     void UITableCell::setContent(const std::shared_ptr<UIWidget>& widget)
@@ -250,9 +250,9 @@ namespace eokas
             return;
         }
         primitive.pushScaleAround(rect.origin, localScale);
-        if (fill.a > 0.0f)
+        if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), fill);
+            primitive.addQuad(rect, UIFont::solidUV(), color);
         }
         float left = 0.0f;
         float top = 0.0f;
@@ -309,8 +309,8 @@ namespace eokas
         , mParent(parent)
         , mHeight(positive(height))
     {
-        interactive = true;
-        fill = Color(0.0f, 0.0f, 0.0f, 0.0f);
+        pickable = true;
+        color = Color(0.0f, 0.0f, 0.0f, 0.0f);
         int count = table != nullptr ? table->columnCount() : 0;
         mCells.reserve((size_t)count);
         for (int i = 0; i < count; ++i)
@@ -519,7 +519,7 @@ namespace eokas
 
     UITable::UITable()
     {
-        interactive = false;
+        pickable = false;
     }
 
     void UITable::appendRows(const std::shared_ptr<UITableRow>& row, bool visibleOnly, std::vector<std::shared_ptr<UITableRow>>& out) const
@@ -957,9 +957,9 @@ namespace eokas
             return;
         }
         primitive.pushScaleAround(rect.origin, localScale);
-        if (fill.a > 0.0f)
+        if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), fill);
+            primitive.addQuad(rect, UIFont::solidUV(), color);
         }
         primitive.popOrigin();
         UIWidget::render(primitive);

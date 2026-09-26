@@ -1681,7 +1681,7 @@ namespace eokas {
         : origin(pos), size(extent) {
     }
 
-    bool Rect::contains(const Vector2& p) {
+    bool Rect::contains(const Vector2& p) const {
         Vector2 end = origin + size;
         return p.x >= origin.x && p.x <= end.x && p.y >= origin.y && p.y <= end.y;
     }

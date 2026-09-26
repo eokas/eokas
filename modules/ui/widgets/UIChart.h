@@ -25,7 +25,8 @@ namespace eokas
         UIChart();
         void setContour(const std::vector<Vector2>& points);
         const std::vector<Vector2>& contour() const { return mContour; }
-        virtual bool contains(const Vector2& point) const;
+        bool contains(const Vector2& point) const override;
+        UIWidget* pick(const Vector2& point) override;
         void addChart(const std::shared_ptr<UIChart>& chart);
         void removeChart(UIChart* chart);
         void scaleAt(const Vector2& pivot, float value);

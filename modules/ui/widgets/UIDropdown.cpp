@@ -116,7 +116,7 @@ namespace eokas
         auto panel = std::make_shared<UIWidget>();
         panel->floating = true;
         panel->visible = false;
-        panel->interactive = true;
+        panel->pickable = true;
         dropdown = panel.get();
         children.push_back(panel);
         this->syncCaption();
@@ -314,7 +314,7 @@ namespace eokas
         }
         float y = 0.0f;
         dropdown->visible = expanded && visible;
-        dropdown->interactive = interactive;
+        dropdown->pickable = pickable;
         float panelY = snap(rect.size.y);
         for (auto& item : mItems)
         {
@@ -323,7 +323,7 @@ namespace eokas
                 continue;
             }
             item->visible = dropdown->visible;
-            item->interactive = interactive;
+            item->pickable = pickable;
             item->selected = item->index == value;
             item->paddingX = paddingX;
             item->paddingY = paddingY;
@@ -425,11 +425,11 @@ namespace eokas
         }
         primitive.pushScaleAround(rect.origin, localScale);
         Color bg = background;
-        if (interactive && pressed)
+        if (pickable && pressed)
         {
             bg = pressedFill;
         }
-        else if (interactive && (hovered || expanded))
+        else if (pickable && (hovered || expanded))
         {
             bg = hoverFill;
         }
@@ -442,7 +442,7 @@ namespace eokas
 
     void UIDropdown::triggerClick()
     {
-        if (interactive)
+        if (pickable)
         {
             this->setExpanded(!expanded);
         }
@@ -458,7 +458,7 @@ namespace eokas
     void UIDropdown::triggerKey(UIKey key, const UIKeyMods& mods)
     {
         (void)mods;
-        if (!interactive)
+        if (!pickable)
         {
             return;
         }

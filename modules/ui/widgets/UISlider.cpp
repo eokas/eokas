@@ -79,7 +79,7 @@ namespace eokas
 
     void UISlider::triggerPointerDrag(float x, float y, int button)
     {
-        if (button != 0 || !interactive)
+        if (button != 0 || !pickable)
         {
             return;
         }
@@ -187,7 +187,7 @@ namespace eokas
 
     Color UISlider::thumbDrawColor() const
     {
-        if (!interactive)
+        if (!pickable)
         {
             return thumb;
         }

@@ -7,6 +7,48 @@ namespace eokas
         return Rect(rect.origin, rect.size * localScale);
     }
 
+    bool UIWidget::contains(const Vector2& point) const
+    {
+        return rect.contains(point);
+    }
+
+    UIWidget* UIWidget::pick(const Vector2& point)
+    {
+        if (!visible || localScale.x == 0.0f || localScale.y == 0.0f)
+        {
+            return nullptr;
+        }
+        Vector2 local(
+            (point.x - rect.origin.x) / localScale.x,
+            (point.y - rect.origin.y) / localScale.y);
+        bool inside = this->contains(rect.origin + local);
+        for (auto it = children.rbegin(); it != children.rend(); ++it)
+        {
+            if (*it && (*it)->floating)
+            {
+                if (UIWidget* hit = (*it)->pick(local))
+                {
+                    return hit;
+                }
+            }
+        }
+        for (auto it = children.rbegin(); it != children.rend(); ++it)
+        {
+            if (*it && !(*it)->floating)
+            {
+                if (UIWidget* hit = (*it)->pick(local))
+                {
+                    return hit;
+                }
+            }
+        }
+        if (pickable && inside)
+        {
+            return this;
+        }
+        return nullptr;
+    }
+
     void UIWidget::layout(const Rect& rect)
     {
         this->rect = rect;
