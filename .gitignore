@@ -11,6 +11,9 @@ cmake-build-debug
 cmake-build-release
 cmake-install
 
+# build
+build
+
 # Prerequisites
 *.d
 
