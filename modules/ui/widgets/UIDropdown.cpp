@@ -33,22 +33,22 @@ namespace eokas
             return textH;
         }
 
-        void placeLabel(UIText* text, const Rect& area, float paddingX, float paddingY)
+        void placeLabel(UIWidget& parent, UIText* text, const Vector2& areaSize, float paddingX, float paddingY)
         {
             if (text == nullptr)
             {
                 return;
             }
             float height = snap(lineHeight(text));
-            float width = area.size.x;
-            float x = snap(area.origin.x + paddingX);
-            float innerH = area.size.y - paddingY * 2.0f;
+            float width = areaSize.x;
+            float x = snap(paddingX);
+            float innerH = areaSize.y - paddingY * 2.0f;
             if (innerH < 0.0f)
             {
                 innerH = 0.0f;
             }
-            float y = snap(area.origin.y + paddingY + (innerH - height) * 0.5f);
-            text->layout(Rect(x, y, width, height));
+            float y = snap(paddingY + (innerH - height) * 0.5f);
+            parent.placeChild(*text, Vector2(x, y), Vector2(width, height));
         }
     }
 
@@ -68,23 +68,14 @@ namespace eokas
         return mLabel.get();
     }
 
-    void UIDropdownItem::layout(const Rect& rect)
-    {
-        {
-            Rect _box = rect;
-            shape.size = _box.size;
-            shape.origin = _box.origin + shape.pivot * shape.size;
-        }
-        placeLabel(mLabel.get(), Rect(Vector2::ZERO, rect.size), paddingX, paddingY);
-    }
-
     void UIDropdownItem::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        placeLabel(*this, mLabel.get(), shape.size, paddingX, paddingY);
+        Matrix3 world = shape.worldTrans();
         Color bg = background;
         if (pressed)
         {
@@ -98,8 +89,7 @@ namespace eokas
         {
             bg = selectedFill;
         }
-        primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), bg);
-        primitive.popOrigin();
+        primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         UIWidget::render(primitive);
     }
 
@@ -316,10 +306,12 @@ namespace eokas
         {
             rowH = 1.0f;
         }
-        float y = 0.0f;
         dropdown->visible = expanded && visible;
         dropdown->pickable = pickable;
         float panelY = snap(shape.size.y);
+        float panelH = rowH * (float)mItems.size();
+        this->placeChild(*dropdown, Vector2(0.0f, panelY), Vector2(shape.size.x, panelH));
+        float y = 0.0f;
         for (auto& item : mItems)
         {
             if (!item)
@@ -336,10 +328,9 @@ namespace eokas
             item->pressedFill = itemPressed;
             item->selectedFill = itemSelected;
             this->copyFont(item->label());
-            item->layout(Rect(Vector2(0.0f, snap(y)), Vector2(shape.size.x, rowH)));
+            dropdown->placeChild(*item, Vector2(0.0f, snap(y)), Vector2(shape.size.x, rowH));
             y += rowH;
         }
-        dropdown->layout(Rect(Vector2(0.0f, panelY), Vector2(shape.size.x, rowH * (float)mItems.size())));
     }
 
     int UIDropdown::neighbor(int direction) const
@@ -375,54 +366,42 @@ namespace eokas
 
     void UIDropdown::layoutCaption()
     {
-        placeLabel(mCaption.get(), Rect(Vector2::ZERO, shape.size), paddingX, paddingY);
+        placeLabel(*this, mCaption.get(), shape.size, paddingX, paddingY);
     }
 
-    void UIDropdown::drawBorder(UIPrimitive& primitive, const Rect& area) const
+    void UIDropdown::drawBorder(UIPrimitive& primitive, const Matrix3& world, const Rect& area) const
     {
-        UIStroke::border(primitive, area, border);
+        UIStroke::border(primitive, world, area, border);
     }
 
-    void UIDropdown::drawChevron(UIPrimitive& primitive) const
+    void UIDropdown::drawChevron(UIPrimitive& primitive, const Matrix3& world) const
     {
         float s = snap(Math::min_s(shape.size.y * 0.28f, 8.0f));
         if (s < 4.0f)
         {
             s = 4.0f;
         }
-        float cx = snap(shape.left() + shape.size.x - paddingX - s * 0.5f);
-        float cy = snap(shape.top() + shape.size.y * 0.5f);
+        float cx = snap(shape.size.x - paddingX - s * 0.5f);
+        float cy = snap(shape.size.y * 0.5f);
         Rect uv = UIFont::solidUV();
         if (expanded)
         {
             primitive.addQuad(
-                Vector2(cx - s * 0.5f, cy + s * 0.25f),
-                Vector2(cx + s * 0.5f, cy + s * 0.25f),
-                Vector2(cx, cy - s * 0.35f),
-                Vector2(cx, cy - s * 0.35f),
+                UIShape::transformPoint(world, Vector2(cx - s * 0.5f, cy + s * 0.25f)),
+                UIShape::transformPoint(world, Vector2(cx + s * 0.5f, cy + s * 0.25f)),
+                UIShape::transformPoint(world, Vector2(cx, cy - s * 0.35f)),
+                UIShape::transformPoint(world, Vector2(cx, cy - s * 0.35f)),
                 uv,
                 chevron);
             return;
         }
         primitive.addQuad(
-            Vector2(cx - s * 0.5f, cy - s * 0.25f),
-            Vector2(cx + s * 0.5f, cy - s * 0.25f),
-            Vector2(cx, cy + s * 0.35f),
-            Vector2(cx, cy + s * 0.35f),
+            UIShape::transformPoint(world, Vector2(cx - s * 0.5f, cy - s * 0.25f)),
+            UIShape::transformPoint(world, Vector2(cx + s * 0.5f, cy - s * 0.25f)),
+            UIShape::transformPoint(world, Vector2(cx, cy + s * 0.35f)),
+            UIShape::transformPoint(world, Vector2(cx, cy + s * 0.35f)),
             uv,
             chevron);
-    }
-
-    void UIDropdown::layout(const Rect& rect)
-    {
-        {
-            Rect _box = rect;
-            shape.size = _box.size;
-            shape.origin = _box.origin + shape.pivot * shape.size;
-        }
-        this->syncCaption();
-        this->layoutCaption();
-        this->syncPopup();
     }
 
     void UIDropdown::render(UIPrimitive& primitive)
@@ -431,7 +410,10 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        this->syncCaption();
+        this->layoutCaption();
+        this->syncPopup();
+        Matrix3 world = shape.worldTrans();
         Color bg = background;
         if (pickable && pressed)
         {
@@ -441,10 +423,9 @@ namespace eokas
         {
             bg = hoverFill;
         }
-        primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), bg);
-        this->drawBorder(primitive, Rect(shape.left(), shape.top(), shape.size.x, shape.size.y));
-        this->drawChevron(primitive);
-        primitive.popOrigin();
+        primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        this->drawBorder(primitive, world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y));
+        this->drawChevron(primitive, world);
         UIWidget::render(primitive);
     }
 

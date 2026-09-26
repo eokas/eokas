@@ -19,7 +19,6 @@ namespace eokas
         void setContent(const std::shared_ptr<UIWidget>& widget);
         void setText(const String& text);
         UIText* label() const;
-        void layout(const Rect& rect) override;
         void render(UIPrimitive& primitive) override;
     };
 }

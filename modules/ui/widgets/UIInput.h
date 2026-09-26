@@ -72,11 +72,11 @@ namespace eokas
         void resetCaretBlink();
         float offsetOf(size_t index) const;
         size_t indexAt(float x, float y) const;
-        void drawBorder(UIPrimitive& primitive) const;
-        void drawSelection(UIPrimitive& primitive, const Rect& content) const;
-        void drawGlyphRun(UIPrimitive& primitive, const String& value, const Color& color, const Rect& content, float scroll) const;
-        void paintRange(UIPrimitive& primitive, const String& value, size_t begin, size_t end, const Color& color, const Rect& content, float baseline, float scrollX) const;
-        void drawCaret(UIPrimitive& primitive, const Rect& content) const;
+        void drawBorder(UIPrimitive& primitive, const Matrix3& world) const;
+        void drawSelection(UIPrimitive& primitive, const Matrix3& world, const Rect& content) const;
+        void drawGlyphRun(UIPrimitive& primitive, const Matrix3& world, const String& value, const Color& color, const Rect& content, float scroll) const;
+        void paintRange(UIPrimitive& primitive, const Matrix3& world, const String& value, size_t begin, size_t end, const Color& color, const Rect& content, float baseline, float scrollX) const;
+        void drawCaret(UIPrimitive& primitive, const Matrix3& world, const Rect& content) const;
     };
 }
 

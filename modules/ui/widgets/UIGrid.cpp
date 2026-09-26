@@ -10,12 +10,11 @@ namespace eokas
         children.push_back(child);
     }
 
-    void UIGrid::layout(const Rect& rect)
+    void UIGrid::render(UIPrimitive& primitive)
     {
+        if (!visible)
         {
-            Rect _box = rect;
-            shape.size = _box.size;
-            shape.origin = _box.origin + shape.pivot * shape.size;
+            return;
         }
         int cols = columns < 1 ? 1 : columns;
         float gapX = spacing;
@@ -37,7 +36,7 @@ namespace eokas
             }
         }
 
-        float innerW = rect.size.x - pad * 2.0f;
+        float innerW = shape.size.x - pad * 2.0f;
         float cellW = cellWidth;
         if (cellW <= 0.0f)
         {
@@ -75,7 +74,7 @@ namespace eokas
                 }
                 UIWidget* item = items[index];
                 Vector2 cell(pad + (cellW + gapX) * (float)col, y);
-                item->layout(Rect(Vector2(floorf(cell.x + 0.5f), floorf(cell.y + 0.5f)), item->shape.size));
+                this->placeChild(*item, Vector2(floorf(cell.x + 0.5f), floorf(cell.y + 0.5f)));
                 if (cellHeight <= 0.0f && item->shape.size.y > rowH)
                 {
                     rowH = item->shape.size.y;
@@ -84,17 +83,20 @@ namespace eokas
             y += rowH;
         }
 
-        if (rect.size.x <= 0.0f)
+        if (shape.size.x <= 0.0f)
         {
             float gaps = cols > 1 ? gapX * (float)(cols - 1) : 0.0f;
-            shape.origin.x += shape.pivot.x * ((pad * 2.0f + cellW * (float)cols + gaps) - shape.size.x);
-            shape.size.x = pad * 2.0f + cellW * (float)cols + gaps;
+            this->resize(Vector2(pad * 2.0f + cellW * (float)cols + gaps, shape.size.y));
         }
-        if (rect.size.y <= 0.0f)
+        if (shape.size.y <= 0.0f)
         {
-            shape.origin.y += shape.pivot.y * ((y + pad) - shape.size.y);
-            shape.size.y = y + pad;
+            this->resize(Vector2(shape.size.x, y + pad));
         }
+        if (color.a > 0.0f)
+        {
+            primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+        }
+        UIWidget::render(primitive);
     }
 
     void UIGrid::refit()
@@ -167,29 +169,12 @@ namespace eokas
             contentH += rowH;
         }
         contentH += pad;
-        shape.origin.y += shape.pivot.y * ((contentH) - shape.size.y);
-        shape.size.y = contentH;
-
+        Vector2 fitted(shape.size.x, contentH);
         if (writeWidth)
         {
             float gaps = cols > 1 ? gapX * (float)(cols - 1) : 0.0f;
-            shape.origin.x += shape.pivot.x * ((pad * 2.0f + cellW * (float)cols + gaps) - shape.size.x);
-            shape.size.x = pad * 2.0f + cellW * (float)cols + gaps;
+            fitted.x = pad * 2.0f + cellW * (float)cols + gaps;
         }
-    }
-
-    void UIGrid::render(UIPrimitive& primitive)
-    {
-        if (!visible)
-        {
-            return;
-        }
-        primitive.pushScaleAround(shape.origin, shape.scale);
-        if (color.a > 0.0f)
-        {
-            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
-        }
-        primitive.popOrigin();
-        UIWidget::render(primitive);
+        this->resize(fitted);
     }
 }

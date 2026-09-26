@@ -12,13 +12,13 @@ namespace eokas
             return;
         }
 
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
         float scale = 1.0f;
         float ascender = 0.0f;
         float descender = 0.0f;
         font->drawMetrics(style.fontSize, scale, ascender, descender);
-        float baseline = floorf(shape.top() + ascender + 0.5f);
-        float cursorX = floorf(shape.left() + 0.5f);
+        float baseline = floorf(ascender + 0.5f);
+        float cursorX = floorf(0.5f);
         size_t index = 0;
         while (index < text.length())
         {
@@ -35,12 +35,11 @@ namespace eokas
                 float destW = (float)(int)(g.width * scale + 0.5f);
                 float destH = (float)(int)(g.height * scale + 0.5f);
                 Rect dest(destX, destY, destW, destH);
-                primitive.addQuad(dest, g.uv, style.color);
+                primitive.addQuad(world, dest, g.uv, style.color);
             }
             cursorX += g.advance * scale;
         }
 
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 }

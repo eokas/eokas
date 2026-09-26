@@ -223,9 +223,8 @@ namespace eokas
         float x = labelPadding + (innerW - textW) * 0.5f;
         float y = labelPadding + (innerH - textH) * 0.5f;
         {
-            Rect _box = Rect(Vector2(floorf(x + 0.5f), floorf(y + 0.5f)), Vector2(textW, textH));
-            t->shape.size = _box.size;
-            t->shape.origin = _box.origin + t->shape.pivot * t->shape.size;
+            t->shape.size = Vector2(textW, textH);
+            this->placeChild(*t, Vector2(floorf(x + 0.5f), floorf(y + 0.5f)));
         }
     }
 
@@ -234,8 +233,8 @@ namespace eokas
         mContour.clear();
         if (points.empty())
         {
-            shape.origin += shape.pivot * ((Vector2::ZERO) - shape.size);
-            shape.size = Vector2::ZERO;
+            Vector2 topLeft = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+            shape.setBox(topLeft, Vector2::ZERO);
             return;
         }
         float minX = points[0].x;
@@ -249,9 +248,7 @@ namespace eokas
             maxX = greater(maxX, point.x);
             maxY = greater(maxY, point.y);
         }
-        shape.origin = (Vector2(minX, minY)) + shape.pivot * shape.size;
-        shape.origin += shape.pivot * ((Vector2(maxX - minX, maxY - minY)) - shape.size);
-        shape.size = Vector2(maxX - minX, maxY - minY);
+        shape.setBox(Vector2(minX, minY), Vector2(maxX - minX, maxY - minY));
         mContour.reserve(points.size());
         for (const Vector2& point : points)
         {
@@ -265,7 +262,7 @@ namespace eokas
         {
             return false;
         }
-        Vector2 local(point.x - shape.left(), point.y - shape.top());
+        Vector2 local = point;
         bool inside = false;
         for (size_t i = 0, j = mContour.size() - 1; i < mContour.size(); j = i++)
         {
@@ -305,7 +302,7 @@ namespace eokas
             return nullptr;
         }
         Vector2 local = shape.toLocal(point);
-        if (!this->contains(Vector2(shape.left(), shape.top()) + local))
+        if (!this->contains(local))
         {
             return nullptr;
         }
@@ -336,26 +333,20 @@ namespace eokas
     {
         float previous = shape.scale.x;
         float next = clampScale(value, minScale, maxScale);
-        shape.scaleAround(focal, Vector2(next, next));
+        shape.setScaleAround(focal, Vector2(next, next));
         if (next != previous && onZoom)
         {
             onZoom(value - previous, focal.x, focal.y);
         }
     }
 
-    void UIChart::strokeLoop(UIPrimitive& primitive, const std::vector<Vector2>& localPoints) const
+    void UIChart::strokeLoop(UIPrimitive& primitive, const Matrix3& world, const std::vector<Vector2>& localPoints) const
     {
         if (!selected || stroke.thickness <= 0.0f || localPoints.size() < 3)
         {
             return;
         }
-        std::vector<Vector2> parent;
-        parent.reserve(localPoints.size());
-        for (const Vector2& point : localPoints)
-        {
-            parent.push_back(Vector2(shape.left(), shape.top()) + point);
-        }
-        UIStroke::path(primitive, parent, true, stroke);
+        UIStroke::path(primitive, world, localPoints, true, stroke);
     }
 
     void UIChart::render(UIPrimitive& primitive)
@@ -364,7 +355,7 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
         Color fill = this->activeFill();
         std::vector<Vector2> triangles;
         if (triangulate(mContour, triangles))
@@ -373,12 +364,11 @@ namespace eokas
             vertices.reserve(triangles.size());
             for (const Vector2& point : triangles)
             {
-                vertices.push_back(Vector2(shape.left(), shape.top()) + point);
+                vertices.push_back(UIShape::transformPoint(world, point));
             }
             primitive.addTriangles(vertices.data(), (uint32_t)(vertices.size() / 3), UIFont::solidUV(), fill);
         }
-        this->strokeLoop(primitive, mContour);
-        primitive.popOrigin();
+        this->strokeLoop(primitive, world, mContour);
         UIWidget::render(primitive);
     }
 }

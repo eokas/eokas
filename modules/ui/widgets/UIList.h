@@ -19,7 +19,6 @@ namespace eokas
         float padding = 8.0f;
         float spacing = 8.0f;
         void addChild(const std::shared_ptr<UIWidget>& child);
-        void layout(const Rect& rect) override;
         void refit();
         void render(UIPrimitive& primitive) override;
     };

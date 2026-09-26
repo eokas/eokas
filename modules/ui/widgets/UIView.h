@@ -14,6 +14,7 @@ namespace eokas
         Color scrollbarPressed { Color(0.32f, 0.44f, 0.68f, 1.0f) };
 
         UIView();
+        ~UIView() override;
         const std::shared_ptr<UIWidget>& root() const { return mRoot; }
         void addChild(const std::shared_ptr<UIWidget>& child);
         void setScroll(float x, float y);
@@ -24,7 +25,7 @@ namespace eokas
         bool scrollbarContains(float localX, float localY) const;
 
         UIWidget* pick(const Vector2& point) override;
-        void layout(const Rect& rect) override;
+        void bindChildren() override;
         void render(UIPrimitive& primitive) override;
         void triggerPointerDrag(float x, float y, int button) override;
         void triggerPointerRelease() override;
@@ -54,13 +55,13 @@ namespace eokas
 
         void updateMetrics();
         void placeRoot();
-        void expandContent(const UIWidget* widget, const Vector2& origin, const Vector2& scale, float& minX, float& minY, float& maxX, float& maxY, bool& any) const;
+        void expandContent(const UIWidget* widget, float& minX, float& minY, float& maxX, float& maxY, bool& any) const;
         float barSize() const;
         Rect verticalTrack() const;
         Rect horizontalTrack() const;
         Rect verticalThumb() const;
         Rect horizontalThumb() const;
-        void drawScrollbars(UIPrimitive& primitive) const;
+        void drawScrollbars(UIPrimitive& primitive, const Matrix3& world) const;
     };
 }
 

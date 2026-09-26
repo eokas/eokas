@@ -18,9 +18,14 @@ namespace eokas
             return a > b ? a : b;
         }
 
+        Vector2 layoutCorner(const UIShape& shape)
+        {
+            return shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+        }
+
         Vector2 chartCenter(const UIChart* chart)
         {
-            return Vector2(chart->shape.left(), chart->shape.top()) + chart->shape.size * 0.5f;
+            return layoutCorner(chart->shape) + chart->shape.size * 0.5f;
         }
 
         UIAnchor resolvedAnchor(const UIChart* chart, UIAnchor anchor, const Vector2& other)
@@ -62,7 +67,7 @@ namespace eokas
 
         Vector2 anchorPoint(const UIChart* chart, UIAnchor anchor, const Vector2& other)
         {
-            Rect area = Rect(chart->shape.left(), chart->shape.top(), chart->shape.size.x, chart->shape.size.y);
+            Rect area = Rect(layoutCorner(chart->shape), chart->shape.size);
             Vector2 center = chartCenter(chart);
             UIAnchor side = resolvedAnchor(chart, anchor, other);
             if (side == UIAnchor::Top)
@@ -241,8 +246,7 @@ namespace eokas
         mLocal.clear();
         if (parentPoints.empty())
         {
-            shape.origin += shape.pivot * ((Vector2::ZERO) - shape.size);
-            shape.size = Vector2::ZERO;
+            shape.setBox(layoutCorner(shape), Vector2::ZERO);
             return;
         }
         float minX = parentPoints[0].x;
@@ -256,9 +260,7 @@ namespace eokas
             maxX = greater(maxX, point.x);
             maxY = greater(maxY, point.y);
         }
-        shape.origin = (Vector2(minX, minY)) + shape.pivot * shape.size;
-        shape.origin += shape.pivot * ((Vector2(maxX - minX, maxY - minY)) - shape.size);
-        shape.size = Vector2(maxX - minX, maxY - minY);
+        shape.setBox(Vector2(minX, minY), Vector2(maxX - minX, maxY - minY));
         mLocal.reserve(parentPoints.size());
         for (const Vector2& point : parentPoints)
         {
@@ -273,7 +275,7 @@ namespace eokas
         raw.reserve(mLocal.size());
         for (const Vector2& point : mLocal)
         {
-            raw.push_back(Vector2(shape.left(), shape.top()) + point);
+            raw.push_back(layoutCorner(shape) + point);
         }
         if (kind == UIPathKind::Straight)
         {
@@ -291,7 +293,7 @@ namespace eokas
             parent = raw;
         }
 
-        Vector2 startOther = parent.empty() ? Vector2(shape.left(), shape.top()) : parent.back();
+        Vector2 startOther = parent.empty() ? layoutCorner(shape) : parent.back();
         if (end.target != nullptr)
         {
             startOther = chartCenter(end.target);
@@ -308,7 +310,7 @@ namespace eokas
                 parent.front() = point;
             }
         }
-        Vector2 endOther = parent.empty() ? Vector2(shape.left(), shape.top()) : parent.front();
+        Vector2 endOther = parent.empty() ? layoutCorner(shape) : parent.front();
         if (end.target != nullptr)
         {
             Vector2 point = anchorPoint(end.target, end.anchor, endOther);
@@ -368,14 +370,12 @@ namespace eokas
             maxY = greater(maxY, point.y);
         }
         Vector2 newOrigin(minX, minY);
-        Vector2 delta = Vector2(shape.left(), shape.top()) - newOrigin;
+        Vector2 delta = layoutCorner(shape) - newOrigin;
         for (Vector2& point : mLocal)
         {
             point += delta;
         }
-        shape.origin = (newOrigin) + shape.pivot * shape.size;
-        shape.origin += shape.pivot * ((Vector2(maxX - minX, maxY - minY)) - shape.size);
-        shape.size = Vector2(maxX - minX, maxY - minY);
+        shape.setBox(newOrigin, Vector2(maxX - minX, maxY - minY));
     }
 
     bool UILink::contains(const Vector2& point) const
@@ -388,9 +388,10 @@ namespace eokas
         }
         const UIStrokeStyle& drawn = (selected && stroke.thickness > 0.0f) ? stroke : line;
         float limit = hitSlop > drawn.thickness ? hitSlop : drawn.thickness;
+        Vector2 parentPoint = UIShape::transformPoint(shape.localTrans(), point);
         for (size_t i = 1; i < parent.size(); ++i)
         {
-            if (distanceToSegment(point, parent[i - 1], parent[i]) <= limit)
+            if (distanceToSegment(parentPoint, parent[i - 1], parent[i]) <= limit)
             {
                 return true;
             }
@@ -407,18 +408,22 @@ namespace eokas
         std::vector<Vector2> parent;
         this->resolve(parent);
         this->syncBounds(parent);
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
+        Matrix3 inverse = shape.localTrans().inverse();
         if (parent.size() >= 2)
         {
             std::vector<Vector2> stroked = parent;
             trimEnd(stroked, markerInset(start.cap), true);
             trimEnd(stroked, markerInset(end.cap), false);
+            for (Vector2& point : stroked)
+            {
+                point = shape.toLocal(point);
+            }
             const UIStrokeStyle& drawn = (selected && stroke.thickness > 0.0f) ? stroke : line;
-            UIStroke::path(primitive, stroked, false, drawn);
-            UIStroke::marker(primitive, parent.front(), outwardAt(parent, true), start.cap);
-            UIStroke::marker(primitive, parent.back(), outwardAt(parent, false), end.cap);
+            UIStroke::path(primitive, world, stroked, false, drawn);
+            UIStroke::marker(primitive, world, shape.toLocal(parent.front()), UIShape::transformVector(inverse, outwardAt(parent, true)), start.cap);
+            UIStroke::marker(primitive, world, shape.toLocal(parent.back()), UIShape::transformVector(inverse, outwardAt(parent, false)), end.cap);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 }

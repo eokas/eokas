@@ -16,9 +16,9 @@ namespace eokas
     class UIWidget
     {
     public:
-        // origin is the pivot in the parent widget's local space.
-        // Default pivot is the center. layout writes size and origin, and keeps pivot and scale.
-        // Children stay in unscaled layout space. (0, 0) is left() / top().
+        // shape.origin is this widget's pivot relative to the parent pivot.
+        // shape.parent points at the parent shape. Null means the parent space is the screen.
+        // Geometry is rasterized in local space with the origin at the top-left, then multiplied by worldTrans().
         UIShape shape;
         Color color { Color(1.0f, 1.0f, 1.0f, 1.0f) };
         bool visible = true;
@@ -28,6 +28,8 @@ namespace eokas
         bool hovered = false;
         bool pressed = false;
         bool focused = false;
+        // Last pointer position delivered to the owning frame, in that frame's coordinates.
+        Vector2 framePointer { 0.0f, 0.0f };
         std::vector<std::shared_ptr<UIWidget>> children;
 
         std::function<void()> onPointerEnter;
@@ -39,9 +41,11 @@ namespace eokas
         std::function<void()> onDoubleClick;
         
 
-        virtual ~UIWidget() = default;
-        Rect visualRect() const;
-        virtual void layout(const Rect& rect);
+        virtual ~UIWidget();
+        void placeChild(UIWidget& child, const Vector2& topLeftLocal);
+        void placeChild(UIWidget& child, const Vector2& topLeftLocal, const Vector2& childSize);
+        void resize(const Vector2& newSize);
+        virtual void bindChildren();
         virtual void render(UIPrimitive& primitive);
         virtual bool contains(const Vector2& point) const;
         virtual UIWidget* pick(const Vector2& point);

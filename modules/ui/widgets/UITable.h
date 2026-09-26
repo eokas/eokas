@@ -42,7 +42,6 @@ namespace eokas
         void setBorder(const UITableBorder& value);
         void clearBorder();
         UITableBorder border() const;
-        void layout(const Rect& rect) override;
         void render(UIPrimitive& primitive) override;
 
     private:
@@ -128,8 +127,8 @@ namespace eokas
         void setContent(int row, int column, const std::shared_ptr<UIWidget>& widget);
         const std::shared_ptr<UIWidget>& getContent(int row, int column) const;
 
-        void layout(const Rect& rect) override;
         void refit();
+        void relayout();
         void render(UIPrimitive& primitive) override;
 
     private:
@@ -147,6 +146,7 @@ namespace eokas
         float rowPreferred(const UITableRow* row) const;
         void resolveTracks(const std::vector<float>& given, const std::vector<float>& preferred, float span, std::vector<float>& sizes, float& used) const;
         void resolveColumns(float span, std::vector<float>& sizes, float& used) const;
+        void arrange();
     };
 }
 

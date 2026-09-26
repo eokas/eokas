@@ -58,14 +58,14 @@ namespace eokas
             clampPair(destL, destR, image.shape.size.x);
             clampPair(destT, destB, image.shape.size.y);
 
-            grid.x[0] = image.shape.left();
-            grid.x[1] = image.shape.left() + destL;
-            grid.x[2] = image.shape.left() + image.shape.size.x - destR;
-            grid.x[3] = image.shape.left() + image.shape.size.x;
-            grid.y[0] = image.shape.top();
-            grid.y[1] = image.shape.top() + destT;
-            grid.y[2] = image.shape.top() + image.shape.size.y - destB;
-            grid.y[3] = image.shape.top() + image.shape.size.y;
+            grid.x[0] = 0.0f;
+            grid.x[1] = destL;
+            grid.x[2] = image.shape.size.x - destR;
+            grid.x[3] = image.shape.size.x;
+            grid.y[0] = 0.0f;
+            grid.y[1] = destT;
+            grid.y[2] = image.shape.size.y - destB;
+            grid.y[3] = image.shape.size.y;
 
             float uL = srcL / atlasW;
             float uR = srcR / atlasW;
@@ -84,7 +84,7 @@ namespace eokas
             return true;
         }
 
-        void addCell(UIPrimitive& primitive, const Color& color,
+        void addCell(UIPrimitive& primitive, const Matrix3& world, const Color& color,
             float x0, float y0, float x1, float y1,
             float u0, float v0, float u1, float v1,
             float halfU, float halfV)
@@ -109,10 +109,10 @@ namespace eokas
                 v1 -= halfV;
                 vh = v1 - v0;
             }
-            primitive.addQuad(Rect(x0, y0, w, h), Rect(u0, v0, uw, vh), color);
+            primitive.addQuad(world, Rect(x0, y0, w, h), Rect(u0, v0, uw, vh), color);
         }
 
-        void renderSliced(UIImage& image, UIPrimitive& primitive, const SliceGrid& grid)
+        void renderSliced(UIImage& image, UIPrimitive& primitive, const Matrix3& world, const SliceGrid& grid)
         {
             for (int row = 0; row < 3; row++)
             {
@@ -122,7 +122,7 @@ namespace eokas
                     {
                         continue;
                     }
-                    addCell(primitive, image.color,
+                    addCell(primitive, world, image.color,
                         grid.x[col], grid.y[row], grid.x[col + 1], grid.y[row + 1],
                         grid.u[col], grid.v[row], grid.u[col + 1], grid.v[row + 1],
                         grid.halfU, grid.halfV);
@@ -137,17 +137,16 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
         SliceGrid grid;
         if (type == UIImageType::Simple || !buildSliceGrid(*this, primitive, grid))
         {
-            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), uv, color);
+            primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), uv, color);
         }
         else
         {
-            renderSliced(*this, primitive, grid);
+            renderSliced(*this, primitive, world, grid);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 }

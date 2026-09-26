@@ -264,7 +264,7 @@ namespace eokas
         {
             h = 0.0f;
         }
-        return Rect(shape.left() + insetX, shape.top() + insetY, w, h);
+        return Rect(insetX, insetY, w, h);
     }
 
     String UIInput::sanitize(const String& value) const
@@ -695,14 +695,14 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
         this->clampCaret();
         this->ensureCaretVisible();
         Color bg = hovered ? hoverFill : background;
-        primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         if (focused)
         {
-            this->drawBorder(primitive);
+            this->drawBorder(primitive, world);
         }
         Rect content = this->contentRect();
         UIFont* font = this->activeFont();
@@ -710,27 +710,26 @@ namespace eokas
         {
             if (!text.isEmpty())
             {
-                this->drawSelection(primitive, content);
+                this->drawSelection(primitive, world, content);
                 UIText* t = this->label();
                 Color color = t != nullptr ? t->style.color : caret.color;
-                this->drawGlyphRun(primitive, text, color, content, mScroll);
+                this->drawGlyphRun(primitive, world, text, color, content, mScroll);
             }
             else if (!placeholder.isEmpty())
             {
-                this->drawGlyphRun(primitive, placeholder, placeholderStyle.color, content, 0.0f);
+                this->drawGlyphRun(primitive, world, placeholder, placeholderStyle.color, content, 0.0f);
             }
-            this->drawCaret(primitive, content);
+            this->drawCaret(primitive, world, content);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 
-    void UIInput::drawBorder(UIPrimitive& primitive) const
+    void UIInput::drawBorder(UIPrimitive& primitive, const Matrix3& world) const
     {
-        UIStroke::border(primitive, Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), border);
+        UIStroke::border(primitive, world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), border);
     }
 
-    void UIInput::drawSelection(UIPrimitive& primitive, const Rect& content) const
+    void UIInput::drawSelection(UIPrimitive& primitive, const Matrix3& world, const Rect& content) const
     {
         if (!this->hasSelection())
         {
@@ -786,7 +785,7 @@ namespace eokas
                 {
                     continue;
                 }
-                primitive.addQuad(Rect(snap(x0), snap(y0), snap(x1) - snap(x0), h), UIFont::solidUV(), selection);
+                primitive.addQuad(world, Rect(snap(x0), snap(y0), snap(x1) - snap(x0), h), UIFont::solidUV(), selection);
             }
             return;
         }
@@ -804,10 +803,10 @@ namespace eokas
         {
             return;
         }
-        primitive.addQuad(Rect(snap(x0), snap(content.origin.y), snap(x1) - snap(x0), content.size.y), UIFont::solidUV(), selection);
+        primitive.addQuad(world, Rect(snap(x0), snap(content.origin.y), snap(x1) - snap(x0), content.size.y), UIFont::solidUV(), selection);
     }
 
-    void UIInput::drawGlyphRun(UIPrimitive& primitive, const String& value, const Color& color, const Rect& content, float scroll) const
+    void UIInput::drawGlyphRun(UIPrimitive& primitive, const Matrix3& world, const String& value, const Color& color, const Rect& content, float scroll) const
     {
         UIFont* font = this->activeFont();
         if (font == nullptr)
@@ -820,7 +819,7 @@ namespace eokas
             float tight = (font->ascender() - font->descender()) * scale;
             float textTop = snap(content.origin.y + (content.size.y - tight) * 0.5f);
             float baseline = textTop + font->ascender() * scale;
-            this->paintRange(primitive, value, 0, value.length(), color, content, baseline, scroll);
+            this->paintRange(primitive, world, value, 0, value.length(), color, content, baseline, scroll);
             return;
         }
         std::vector<TextLine> lines = splitLines(value);
@@ -834,11 +833,11 @@ namespace eokas
                 continue;
             }
             float baseline = top + font->ascender() * scale;
-            this->paintRange(primitive, value, lines[i].begin, lines[i].end, color, content, baseline, scroll);
+            this->paintRange(primitive, world, value, lines[i].begin, lines[i].end, color, content, baseline, scroll);
         }
     }
 
-    void UIInput::paintRange(UIPrimitive& primitive, const String& value, size_t begin, size_t end, const Color& color, const Rect& content, float baseline, float scrollX) const
+    void UIInput::paintRange(UIPrimitive& primitive, const Matrix3& world, const String& value, size_t begin, size_t end, const Color& color, const Rect& content, float baseline, float scrollX) const
     {
         UIFont* font = this->activeFont();
         if (font == nullptr || begin >= end)
@@ -876,14 +875,14 @@ namespace eokas
                 bool visibleY = clipSpan(destY, destH, v, uh, content.origin.y, content.origin.y + content.size.y);
                 if (visibleX && visibleY)
                 {
-                    primitive.addQuad(Rect(snap(destX), snap(destY), destW, destH), Rect(u, v, uw, uh), color);
+                    primitive.addQuad(world, Rect(snap(destX), snap(destY), destW, destH), Rect(u, v, uw, uh), color);
                 }
             }
             cursorX += advance;
         }
     }
 
-    void UIInput::drawCaret(UIPrimitive& primitive, const Rect& content) const
+    void UIInput::drawCaret(UIPrimitive& primitive, const Matrix3& world, const Rect& content) const
     {
         if (!focused)
         {
@@ -919,7 +918,7 @@ namespace eokas
             {
                 return;
             }
-            primitive.addQuad(Rect(x, snap(y), 1.0f, h), UIFont::solidUV(), caret.color);
+            primitive.addQuad(world, Rect(x, snap(y), 1.0f, h), UIFont::solidUV(), caret.color);
             return;
         }
         float x = snap(content.origin.x + this->offsetOf(mCaret) - mScroll);
@@ -927,7 +926,7 @@ namespace eokas
         {
             return;
         }
-        primitive.addQuad(Rect(x, content.origin.y, 1.0f, content.size.y), UIFont::solidUV(), caret.color);
+        primitive.addQuad(world, Rect(x, content.origin.y, 1.0f, content.size.y), UIFont::solidUV(), caret.color);
     }
 
     void UIInput::triggerPointerPress()
@@ -943,7 +942,8 @@ namespace eokas
         {
             return;
         }
-        size_t index = this->indexAt(x, y);
+        Vector2 local = shape.toLocal(Vector2(x, y));
+        size_t index = this->indexAt(local.x, local.y);
         mPreferredX = -1.0f;
         if (!mCaretPlaced)
         {

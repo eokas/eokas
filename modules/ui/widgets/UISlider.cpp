@@ -101,14 +101,16 @@ namespace eokas
         {
             float half = thumbSize * 0.5f;
             float span = shape.size.y - thumbSize;
-            float origin = shape.top() + shape.size.y - half;
+            Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+            float origin = corner.y + shape.size.y - half;
             t = (span > 0.0f) ? Math::clamp((origin - y) / span, 0.0f, 1.0f) : 0.0f;
         }
         else
         {
             float half = thumbSize * 0.5f;
             float span = shape.size.x - thumbSize;
-            float origin = shape.left() + half;
+            Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+            float origin = corner.x + half;
             t = (span > 0.0f) ? Math::clamp((x - origin) / span, 0.0f, 1.0f) : 0.0f;
         }
         this->commitValue(minValue + (maxValue - minValue) * t);
@@ -121,8 +123,9 @@ namespace eokas
 
     float UISlider::pointerAngle(float x, float y) const
     {
-        float cx = shape.left() + shape.size.x * 0.5f;
-        float cy = shape.top() + shape.size.y * 0.5f;
+        Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+        float cx = corner.x + shape.size.x * 0.5f;
+        float cy = corner.y + shape.size.y * 0.5f;
         float dx = x - cx;
         float dy = y - cy;
         float angle = (type == SliderType::Angular) ? atan2f(-dy, dx) : atan2f(dx, -dy);
@@ -208,20 +211,19 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
         if (this->ring())
         {
-            this->renderRing(primitive);
+            this->renderRing(primitive, world);
         }
         else
         {
-            this->renderLinear(primitive, type == SliderType::Vertical);
+            this->renderLinear(primitive, world, type == SliderType::Vertical);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 
-    void UISlider::renderLinear(UIPrimitive& primitive, bool vertical)
+    void UISlider::renderLinear(UIPrimitive& primitive, const Matrix3& world, bool vertical)
     {
         float t = this->valueT();
         float half = thumbSize * 0.5f;
@@ -233,22 +235,22 @@ namespace eokas
             {
                 thick = shape.size.x;
             }
-            float axisX = snap(shape.left() + shape.size.x * 0.5f);
+            float axisX = snap(shape.size.x * 0.5f);
             float trackX = axisX - thick * 0.5f;
-            primitive.addQuad(Rect(trackX, shape.top(), thick, shape.size.y), solid, track);
+            primitive.addQuad(world, Rect(trackX, 0.0f, thick, shape.size.y), solid, track);
 
             float span = shape.size.y - thumbSize;
             if (span < 0.0f)
             {
                 span = 0.0f;
             }
-            float thumbCenter = snap(shape.top() + shape.size.y - half - span * t);
-            float fillH = shape.top() + shape.size.y - thumbCenter;
+            float thumbCenter = snap(shape.size.y - half - span * t);
+            float fillH = shape.size.y - thumbCenter;
             if (fillH > 0.0f)
             {
-                primitive.addQuad(Rect(trackX, thumbCenter, thick, fillH), solid, fill);
+                primitive.addQuad(world, Rect(trackX, thumbCenter, thick, fillH), solid, fill);
             }
-            this->addDisc(primitive, axisX, thumbCenter, half, this->thumbDrawColor());
+            this->addDisc(primitive, world, axisX, thumbCenter, half, this->thumbDrawColor());
             return;
         }
 
@@ -257,50 +259,50 @@ namespace eokas
         {
             thick = shape.size.y;
         }
-        float axisY = snap(shape.top() + shape.size.y * 0.5f);
+        float axisY = snap(shape.size.y * 0.5f);
         float trackY = axisY - thick * 0.5f;
-        primitive.addQuad(Rect(shape.left(), trackY, shape.size.x, thick), solid, track);
+        primitive.addQuad(world, Rect(0.0f, trackY, shape.size.x, thick), solid, track);
 
         float span = shape.size.x - thumbSize;
         if (span < 0.0f)
         {
             span = 0.0f;
         }
-        float thumbCenter = snap(shape.left() + half + span * t);
-        if (thumbCenter > shape.left())
+        float thumbCenter = snap(half + span * t);
+        if (thumbCenter > 0.0f)
         {
-            primitive.addQuad(Rect(shape.left(), trackY, thumbCenter - shape.left(), thick), solid, fill);
+            primitive.addQuad(world, Rect(0.0f, trackY, thumbCenter, thick), solid, fill);
         }
-        this->addDisc(primitive, thumbCenter, axisY, half, this->thumbDrawColor());
+        this->addDisc(primitive, world, thumbCenter, axisY, half, this->thumbDrawColor());
     }
 
-    void UISlider::renderRing(UIPrimitive& primitive)
+    void UISlider::renderRing(UIPrimitive& primitive, const Matrix3& world)
     {
         float t = this->valueT();
-        float cx = snap(shape.left() + shape.size.x * 0.5f);
-        float cy = snap(shape.top() + shape.size.y * 0.5f);
+        float cx = snap(shape.size.x * 0.5f);
+        float cy = snap(shape.size.y * 0.5f);
         float extent = Math::min_s(shape.size.x, shape.size.y);
         float inset = Math::max_s(thumbSize, trackThickness) * 0.5f;
         float radius = extent * 0.5f - inset;
         if (radius > 0.0f)
         {
-            this->addArc(primitive, cx, cy, radius, 0.0f, Math::PI_MUL_2, track);
+            this->addArc(primitive, world, cx, cy, radius, 0.0f, Math::PI_MUL_2, track);
             if (t >= 1.0f)
             {
-                this->addArc(primitive, cx, cy, radius, 0.0f, Math::PI_MUL_2, fill);
+                this->addArc(primitive, world, cx, cy, radius, 0.0f, Math::PI_MUL_2, fill);
             }
             else if (t > 0.0f)
             {
-                this->addArc(primitive, cx, cy, radius, 0.0f, t * Math::PI_MUL_2, fill);
+                this->addArc(primitive, world, cx, cy, radius, 0.0f, t * Math::PI_MUL_2, fill);
             }
         }
 
         float drawRadius = radius > 0.0f ? radius : 0.0f;
         Vector2 p = this->ringPoint(cx, cy, drawRadius, t * Math::PI_MUL_2);
-        this->addDisc(primitive, p.x, p.y, thumbSize * 0.5f, this->thumbDrawColor());
+        this->addDisc(primitive, world, p.x, p.y, thumbSize * 0.5f, this->thumbDrawColor());
     }
 
-    void UISlider::addDisc(UIPrimitive& primitive, float cx, float cy, float radius, const Color& color)
+    void UISlider::addDisc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, const Color& color)
     {
         if (radius <= 0.0f)
         {
@@ -314,11 +316,17 @@ namespace eokas
             float a1 = Math::PI_MUL_2 * ((float)(i + 1) / (float)kThumbSegments);
             Vector2 e0(cx + cosf(a0) * radius, cy + sinf(a0) * radius);
             Vector2 e1(cx + cosf(a1) * radius, cy + sinf(a1) * radius);
-            primitive.addQuad(center, e0, e1, center, uv, color);
+            primitive.addQuad(
+                UIShape::transformPoint(world, center),
+                UIShape::transformPoint(world, e0),
+                UIShape::transformPoint(world, e1),
+                UIShape::transformPoint(world, center),
+                uv,
+                color);
         }
     }
 
-    void UISlider::addArc(UIPrimitive& primitive, float cx, float cy, float radius, float a0, float a1, const Color& color)
+    void UISlider::addArc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, float a0, float a1, const Color& color)
     {
         float sweep = a1 - a0;
         if (sweep <= 0.0f)
@@ -342,10 +350,10 @@ namespace eokas
             float s0 = a0 + sweep * ((float)i / (float)steps);
             float s1 = a0 + sweep * ((float)(i + 1) / (float)steps);
             primitive.addQuad(
-                this->ringPoint(cx, cy, inner, s0),
-                this->ringPoint(cx, cy, outer, s0),
-                this->ringPoint(cx, cy, outer, s1),
-                this->ringPoint(cx, cy, inner, s1),
+                UIShape::transformPoint(world, this->ringPoint(cx, cy, inner, s0)),
+                UIShape::transformPoint(world, this->ringPoint(cx, cy, outer, s0)),
+                UIShape::transformPoint(world, this->ringPoint(cx, cy, outer, s1)),
+                UIShape::transformPoint(world, this->ringPoint(cx, cy, inner, s1)),
                 uv,
                 color);
         }

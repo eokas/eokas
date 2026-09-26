@@ -48,10 +48,10 @@ namespace eokas
         Vector2 ringPoint(float cx, float cy, float radius, float angle) const;
         float ringT(float x, float y, bool begin);
         Color thumbDrawColor() const;
-        void renderLinear(UIPrimitive& primitive, bool vertical);
-        void renderRing(UIPrimitive& primitive);
-        void addArc(UIPrimitive& primitive, float cx, float cy, float radius, float a0, float a1, const Color& color);
-        void addDisc(UIPrimitive& primitive, float cx, float cy, float radius, const Color& color);
+        void renderLinear(UIPrimitive& primitive, const Matrix3& world, bool vertical);
+        void renderRing(UIPrimitive& primitive, const Matrix3& world);
+        void addArc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, float a0, float a1, const Color& color);
+        void addDisc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, const Color& color);
     };
 }
 

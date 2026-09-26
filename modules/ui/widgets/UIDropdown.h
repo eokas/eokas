@@ -22,7 +22,6 @@ namespace eokas
 
         void setLabel(const String& text);
         UIText* label() const;
-        void layout(const Rect& rect) override;
         void render(UIPrimitive& primitive) override;
         void triggerClick() override;
 
@@ -65,7 +64,6 @@ namespace eokas
         String labelOf(int index) const;
         UIText* caption() const;
         bool acceptsKeyFocus() const override { return true; }
-        void layout(const Rect& rect) override;
         void render(UIPrimitive& primitive) override;
         void triggerClick() override;
         void triggerBlur() override;
@@ -81,8 +79,8 @@ namespace eokas
         void syncCaption();
         void syncPopup();
         void layoutCaption();
-        void drawBorder(UIPrimitive& primitive, const Rect& area) const;
-        void drawChevron(UIPrimitive& primitive) const;
+        void drawBorder(UIPrimitive& primitive, const Matrix3& world, const Rect& area) const;
+        void drawChevron(UIPrimitive& primitive, const Matrix3& world) const;
     };
 }
 

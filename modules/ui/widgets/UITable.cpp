@@ -43,20 +43,20 @@ namespace eokas
             fitPair(top, bottom, area.size.y);
         }
 
-        void drawEdge(UIPrimitive& primitive, const Rect& area, const Color& color)
+        void drawEdge(UIPrimitive& primitive, const Matrix3& world, const Rect& area, const Color& color)
         {
             if (area.size.x <= 0.0f || area.size.y <= 0.0f || color.a <= 0.0f)
             {
                 return;
             }
-            primitive.addQuad(area, UIFont::solidUV(), color);
+            primitive.addQuad(world, area, UIFont::solidUV(), color);
         }
 
-        void drawStyledEdge(UIPrimitive& primitive, const Rect& area, bool alongX, const UIStrokeStyle& style)
+        void drawStyledEdge(UIPrimitive& primitive, const Matrix3& world, const Rect& area, bool alongX, const UIStrokeStyle& style)
         {
             if (style.pattern != UILinePattern::Dashed || style.dashLength <= 0.0f)
             {
-                drawEdge(primitive, area, style.color);
+                drawEdge(primitive, world, area, style.color);
                 return;
             }
             float dash = style.dashLength;
@@ -81,12 +81,12 @@ namespace eokas
                     piece.origin.y += cursor;
                     piece.size.y = on;
                 }
-                drawEdge(primitive, piece, style.color);
+                drawEdge(primitive, world, piece, style.color);
                 cursor += on + gap;
             }
         }
 
-        void drawBorder(UIPrimitive& primitive, const Rect& area, const UITableBorder& border)
+        void drawBorder(UIPrimitive& primitive, const Matrix3& world, const Rect& area, const UITableBorder& border)
         {
             float left = 0.0f;
             float top = 0.0f;
@@ -98,13 +98,13 @@ namespace eokas
             {
                 midH = 0.0f;
             }
-            drawStyledEdge(primitive, Rect(area.origin.x, area.origin.y, area.size.x, top), true, border.top);
-            drawStyledEdge(primitive, Rect(area.origin.x, area.origin.y + area.size.y - bottom, area.size.x, bottom), true, border.bottom);
-            drawStyledEdge(primitive, Rect(area.origin.x, area.origin.y + top, left, midH), false, border.left);
-            drawStyledEdge(primitive, Rect(area.origin.x + area.size.x - right, area.origin.y + top, right, midH), false, border.right);
+            drawStyledEdge(primitive, world, Rect(area.origin.x, area.origin.y, area.size.x, top), true, border.top);
+            drawStyledEdge(primitive, world, Rect(area.origin.x, area.origin.y + area.size.y - bottom, area.size.x, bottom), true, border.bottom);
+            drawStyledEdge(primitive, world, Rect(area.origin.x, area.origin.y + top, left, midH), false, border.left);
+            drawStyledEdge(primitive, world, Rect(area.origin.x + area.size.x - right, area.origin.y + top, right, midH), false, border.right);
         }
 
-        void drawDisclosure(UIPrimitive& primitive, const Rect& slot, bool expanded, const Color& color)
+        void drawDisclosure(UIPrimitive& primitive, const Matrix3& world, const Rect& slot, bool expanded, const Color& color)
         {
             float limit = slot.size.x < slot.size.y ? slot.size.x : slot.size.y;
             float arm = limit * 0.38f;
@@ -118,19 +118,19 @@ namespace eokas
             if (expanded)
             {
                 primitive.addQuad(
-                    Vector2(cx - arm, cy - arm * 0.45f),
-                    Vector2(cx + arm, cy - arm * 0.45f),
-                    Vector2(cx, cy + arm * 0.70f),
-                    Vector2(cx, cy + arm * 0.70f),
+                    UIShape::transformPoint(world, Vector2(cx - arm, cy - arm * 0.45f)),
+                    UIShape::transformPoint(world, Vector2(cx + arm, cy - arm * 0.45f)),
+                    UIShape::transformPoint(world, Vector2(cx, cy + arm * 0.70f)),
+                    UIShape::transformPoint(world, Vector2(cx, cy + arm * 0.70f)),
                     uv, color);
             }
             else
             {
                 primitive.addQuad(
-                    Vector2(cx - arm * 0.45f, cy - arm),
-                    Vector2(cx - arm * 0.45f, cy + arm),
-                    Vector2(cx + arm * 0.70f, cy),
-                    Vector2(cx + arm * 0.70f, cy),
+                    UIShape::transformPoint(world, Vector2(cx - arm * 0.45f, cy - arm)),
+                    UIShape::transformPoint(world, Vector2(cx - arm * 0.45f, cy + arm)),
+                    UIShape::transformPoint(world, Vector2(cx + arm * 0.70f, cy)),
+                    UIShape::transformPoint(world, Vector2(cx + arm * 0.70f, cy)),
                     uv, color);
             }
         }
@@ -161,9 +161,7 @@ namespace eokas
             {
                 return;
             }
-            Rect next = Rect(table->shape.left(), table->shape.top(), table->shape.size.x, table->shape.size.y);
-            next.size.y = 0.0f;
-            table->layout(next);
+            table->relayout();
         }
     }
 
@@ -222,47 +220,22 @@ namespace eokas
         return contentShift(mTable, mRow, this->column());
     }
 
-    void UITableCell::layout(const Rect& rect)
-    {
-        {
-            Rect _box = rect;
-            shape.size = _box.size;
-            shape.origin = _box.origin + shape.pivot * shape.size;
-        }
-        if (!mContent)
-        {
-            return;
-        }
-        float left = 0.0f;
-        float top = 0.0f;
-        float right = 0.0f;
-        float bottom = 0.0f;
-        fittedInsets(rect, this->border(), left, top, right, bottom);
-        float pad = mTable != nullptr ? mTable->cellPadding : 0.0f;
-        if (pad < 0.0f)
-        {
-            pad = 0.0f;
-        }
-        Vector2 pos(left + pad + this->shift(), top + pad);
-        mContent->layout(Rect(Vector2(snap(pos.x), snap(pos.y)), mContent->shape.size));
-    }
-
     void UITableCell::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
         if (color.a > 0.0f)
         {
-            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         float left = 0.0f;
         float top = 0.0f;
         float right = 0.0f;
         float bottom = 0.0f;
-        fittedInsets(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), this->border(), left, top, right, bottom);
+        fittedInsets(Rect(0.0f, 0.0f, shape.size.x, shape.size.y), this->border(), left, top, right, bottom);
         float pad = mTable != nullptr ? mTable->cellPadding : 0.0f;
         if (pad < 0.0f)
         {
@@ -273,16 +246,15 @@ namespace eokas
         {
             int depth = mRow->depth();
             float indent = shift / (float)(depth + 1);
-            float slotY = shape.top() + top;
             float slotH = shape.size.y - top - bottom;
             if (slotH < 0.0f)
             {
                 slotH = 0.0f;
             }
-            drawDisclosure(primitive, Rect(shape.left() + left + pad + (float)depth * indent, slotY, indent, slotH), mRow->expanded(), mTable->disclosure);
+            drawDisclosure(primitive, world, Rect(left + pad + (float)depth * indent, top, indent, slotH), mRow->expanded(), mTable->disclosure);
         }
-        float x = shape.left() + left + pad + shift;
-        float y = shape.top() + top + pad;
+        float x = left + pad + shift;
+        float y = top + pad;
         float w = shape.size.x - left - right - pad * 2.0f - shift;
         float h = shape.size.y - top - bottom - pad * 2.0f;
         if (w < 0.0f)
@@ -293,19 +265,32 @@ namespace eokas
         {
             h = 0.0f;
         }
-        Vector2 origin = primitive.toScreen(Vector2(x, y));
-        Vector2 extent = primitive.toScreen(Vector2(x + w, y + h));
-        float clipX = origin.x < extent.x ? origin.x : extent.x;
-        float clipY = origin.y < extent.y ? origin.y : extent.y;
-        float clipW = origin.x > extent.x ? origin.x - extent.x : extent.x - origin.x;
-        float clipH = origin.y > extent.y ? origin.y - extent.y : extent.y - origin.y;
-        primitive.popOrigin();
-        primitive.pushClip(Rect(clipX, clipY, clipW, clipH));
+        Vector2 corner[4] = {
+            UIShape::transformPoint(world, Vector2(x, y)),
+            UIShape::transformPoint(world, Vector2(x + w, y)),
+            UIShape::transformPoint(world, Vector2(x + w, y + h)),
+            UIShape::transformPoint(world, Vector2(x, y + h))
+        };
+        float clipX = corner[0].x;
+        float clipY = corner[0].y;
+        float clipR = corner[0].x;
+        float clipB = corner[0].y;
+        for (int i = 1; i < 4; ++i)
+        {
+            clipX = corner[i].x < clipX ? corner[i].x : clipX;
+            clipY = corner[i].y < clipY ? corner[i].y : clipY;
+            clipR = corner[i].x > clipR ? corner[i].x : clipR;
+            clipB = corner[i].y > clipB ? corner[i].y : clipB;
+        }
+        if (mContent)
+        {
+            Vector2 pos(left + pad + shift, top + pad);
+            this->placeChild(*mContent, Vector2(snap(pos.x), snap(pos.y)));
+        }
+        primitive.pushClip(Rect(clipX, clipY, clipR - clipX, clipB - clipY));
         UIWidget::render(primitive);
         primitive.popClip();
-        primitive.pushScaleAround(shape.origin, shape.scale);
-        drawBorder(primitive, Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), this->border());
-        primitive.popOrigin();
+        drawBorder(primitive, world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), this->border());
     }
 
     UITableRow::UITableRow(UITable* table, UITableRow* parent, float height)
@@ -580,7 +565,7 @@ namespace eokas
                 row->insertCell(index);
             }
         }
-        relayout(this);
+        this->relayout();
     }
 
     void UITable::removeColumn(int index)
@@ -598,7 +583,7 @@ namespace eokas
                 row->removeCell(index);
             }
         }
-        relayout(this);
+        this->relayout();
     }
 
     float UITable::columnWidth(int index) const
@@ -659,7 +644,7 @@ namespace eokas
         }
         auto child = std::make_shared<UITableRow>(this, nullptr, height);
         mRows.insert(mRows.begin() + index, child);
-        relayout(this);
+        this->relayout();
         return child.get();
     }
 
@@ -670,7 +655,7 @@ namespace eokas
             return;
         }
         mRows.erase(mRows.begin() + index);
-        relayout(this);
+        this->relayout();
     }
 
     float UITable::rowHeight(int index) const
@@ -878,17 +863,12 @@ namespace eokas
         this->resolveTracks(mColumnWidths, preferred, span, sizes, used);
     }
 
-    void UITable::layout(const Rect& rect)
+    void UITable::arrange()
     {
-        {
-            Rect _box = rect;
-            shape.size = _box.size;
-            shape.origin = _box.origin + shape.pivot * shape.size;
-        }
         this->syncChildren();
         std::vector<float> widths;
         float usedW = 0.0f;
-        this->resolveColumns(rect.size.x, widths, usedW);
+        this->resolveColumns(shape.size.x, widths, usedW);
         std::vector<std::shared_ptr<UITableRow>> lines;
         for (const auto& row : mRows)
         {
@@ -903,16 +883,14 @@ namespace eokas
         }
         std::vector<float> heights;
         float usedH = 0.0f;
-        this->resolveTracks(given, preferred, rect.size.y, heights, usedH);
-        if (rect.size.x <= 0.0f)
+        this->resolveTracks(given, preferred, shape.size.y, heights, usedH);
+        if (shape.size.x <= 0.0f)
         {
-            shape.origin.x += shape.pivot.x * ((usedW) - shape.size.x);
-            shape.size.x = usedW;
+            this->resize(Vector2(usedW, shape.size.y));
         }
-        if (rect.size.y <= 0.0f)
+        if (shape.size.y <= 0.0f)
         {
-            shape.origin.y += shape.pivot.y * ((usedH) - shape.size.y);
-            shape.size.y = usedH;
+            this->resize(Vector2(shape.size.x, usedH));
         }
         float gap = this->spacing();
         int columns = this->columnCount();
@@ -933,11 +911,7 @@ namespace eokas
                 y += gap;
             }
             float rowH = heights[(size_t)i];
-            {
-                Rect _box = Rect(Vector2(0.0f, snap(y)), Vector2(rowW, rowH));
-                lines[(size_t)i]->shape.size = _box.size;
-                lines[(size_t)i]->shape.origin = _box.origin + lines[(size_t)i]->shape.pivot * lines[(size_t)i]->shape.size;
-            }
+            this->placeChild(*lines[(size_t)i], Vector2(0.0f, snap(y)), Vector2(rowW, rowH));
             float x = 0.0f;
             for (int column = 0; column < columns; ++column)
             {
@@ -948,7 +922,7 @@ namespace eokas
                 float colW = widths[(size_t)column];
                 if (UITableCell* item = lines[(size_t)i]->cell(column))
                 {
-                    item->layout(Rect(Vector2(snap(x), 0.0f), Vector2(colW, rowH)));
+                    lines[(size_t)i]->placeChild(*item, Vector2(snap(x), 0.0f), Vector2(colW, rowH));
                 }
                 x += colW;
             }
@@ -958,10 +932,16 @@ namespace eokas
 
     void UITable::refit()
     {
-        Rect next = Rect(shape.left(), shape.top(), shape.size.x, shape.size.y);
-        next.size.x = 0.0f;
-        next.size.y = 0.0f;
-        this->layout(next);
+        Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+        shape.setBox(corner, Vector2(0.0f, 0.0f));
+        this->arrange();
+    }
+
+    void UITable::relayout()
+    {
+        Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+        shape.setBox(corner, Vector2(shape.size.x, 0.0f));
+        this->arrange();
     }
 
     void UITable::render(UIPrimitive& primitive)
@@ -970,12 +950,11 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        this->arrange();
         if (color.a > 0.0f)
         {
-            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 }

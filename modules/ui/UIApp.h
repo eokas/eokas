@@ -61,6 +61,7 @@ namespace eokas
         float mGrabScreenY = 0.0f;
         float mDragSlop = 4.0f;
         UIDockSpace* mPreviewSpace = nullptr;
+        bool mHostDrag = false;
 
         std::vector<UIFrame*> liveFrames();
         Slot* slotOf(UIDockPage* page);

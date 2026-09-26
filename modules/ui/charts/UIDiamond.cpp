@@ -32,7 +32,7 @@ namespace eokas
         {
             return false;
         }
-        Vector2 local(point.x - shape.left(), point.y - shape.top());
+        Vector2 local = point;
         Vector2 vertex[4] = {
             Vector2(shape.size.x * 0.5f, 0.0f),
             Vector2(shape.size.x, shape.size.y * 0.5f),
@@ -67,29 +67,28 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
         if (shape.size.x > 0.0f && shape.size.y > 0.0f)
         {
             std::vector<Vector2> loop;
-            diamondPoints(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), 0.0f, loop);
+            diamondPoints(Rect(0.0f, 0.0f, shape.size.x, shape.size.y), 0.0f, loop);
             Vector2 vertices[6] = {
-                loop[0], loop[1], loop[2],
-                loop[0], loop[2], loop[3]
+                UIShape::transformPoint(world, loop[0]), UIShape::transformPoint(world, loop[1]), UIShape::transformPoint(world, loop[2]),
+                UIShape::transformPoint(world, loop[0]), UIShape::transformPoint(world, loop[2]), UIShape::transformPoint(world, loop[3])
             };
             primitive.addTriangles(vertices, 2, UIFont::solidUV(), this->activeFill());
             if (border.thickness > 0.0f)
             {
-                UIStroke::path(primitive, loop, true, border);
+                UIStroke::path(primitive, world, loop, true, border);
             }
             if (selected && stroke.thickness > 0.0f)
             {
                 float pad = (border.thickness + stroke.thickness) * 0.5f;
                 std::vector<Vector2> outer;
-                diamondPoints(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), pad, outer);
-                UIStroke::path(primitive, outer, true, stroke);
+                diamondPoints(Rect(0.0f, 0.0f, shape.size.x, shape.size.y), pad, outer);
+                UIStroke::path(primitive, world, outer, true, stroke);
             }
         }
-        primitive.popOrigin();
         this->placeLabel();
         UIWidget::render(primitive);
     }

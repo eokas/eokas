@@ -4,6 +4,24 @@
 
 using namespace eokas;
 
+namespace
+{
+    float boxLeft(const UIShape& shape)
+    {
+        return shape.origin.x - shape.pivot.x * shape.size.x;
+    }
+
+    float boxTop(const UIShape& shape)
+    {
+        return shape.origin.y - shape.pivot.y * shape.size.y;
+    }
+
+    Vector2 pivotSpace(const UIShape& shape, const Vector2& local)
+    {
+        return local - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+    }
+}
+
 EOKAS_TEST_CASE(ui) {
     int clicks = 0;
     UIWidget widget;
@@ -26,14 +44,21 @@ EOKAS_TEST_CASE(ui) {
     second->shape.origin = (Rect(0, 0, 10, 30)).origin + second->shape.pivot * second->shape.size;
     list.addChild(first);
     list.addChild(second);
-    list.layout(Rect(0, 0, 100, 200));
-    EOKAS_EXPECT(_FloatEqual(first->shape.left(), 8.0f));
-    EOKAS_EXPECT(_FloatEqual(first->shape.top(), 8.0f));
-    EOKAS_EXPECT(_FloatEqual(second->shape.top(), 36.0f));
-    list.layout(Rect(40.0f, 70.0f, 100.0f, 200.0f));
-    EOKAS_EXPECT(_FloatEqual(first->shape.left(), 8.0f));
-    EOKAS_EXPECT(_FloatEqual(first->shape.top(), 8.0f));
-    EOKAS_EXPECT(_FloatEqual(second->shape.top(), 36.0f));
+    list.shape.setBox(Vector2(0, 0), Vector2(100, 200));
+    UIPrimitive listPrim;
+    listPrim.begin();
+    list.render(listPrim);
+    listPrim.end();
+    EOKAS_EXPECT(_FloatEqual(boxLeft(first->shape), -42.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(first->shape), -92.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(second->shape), -64.0f));
+    list.shape.setBox(Vector2(40.0f, 70.0f), Vector2(100.0f, 200.0f));
+    listPrim.begin();
+    list.render(listPrim);
+    listPrim.end();
+    EOKAS_EXPECT(_FloatEqual(boxLeft(first->shape), -42.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(first->shape), -92.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(second->shape), -64.0f));
 
     UIGrid grid;
     grid.columns = 2;
@@ -43,7 +68,11 @@ EOKAS_TEST_CASE(ui) {
     cell->shape.size = (Rect(0, 0, 16, 10)).size;
     cell->shape.origin = (Rect(0, 0, 16, 10)).origin + cell->shape.pivot * cell->shape.size;
     grid.addChild(cell);
-    grid.layout(Rect(0, 0, 80, 40));
+    grid.shape.setBox(Vector2(0, 0), Vector2(80, 40));
+    UIPrimitive gridPrim;
+    gridPrim.begin();
+    grid.render(gridPrim);
+    gridPrim.end();
     EOKAS_EXPECT(_FloatEqual(cell->shape.size.x, 16.0f));
 
     UITable table;
@@ -65,13 +94,20 @@ EOKAS_TEST_CASE(ui) {
     table.refit();
     EOKAS_EXPECT(_FloatEqual(table.shape.size.x, 68.0f));
     EOKAS_EXPECT(_FloatEqual(table.shape.size.y, 46.0f));
-    table.layout(Rect(0, 0, 0, 0));
-    EOKAS_EXPECT(_FloatEqual(body->shape.left(), 5.0f));
-    EOKAS_EXPECT(_FloatEqual(body->shape.top(), 5.0f));
-    table.layout(Rect(0, 0, 100, 0));
-    EOKAS_EXPECT(_FloatEqual(table.cell(0, 1)->shape.left(), 48.0f));
+    table.shape.setBox(Vector2(0, 0), Vector2(0, 0));
+    UIPrimitive tablePrim;
+    tablePrim.begin();
+    table.render(tablePrim);
+    tablePrim.end();
+    EOKAS_EXPECT(_FloatEqual(boxLeft(body->shape), -15.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(body->shape), -4.0f));
+    table.shape.setBox(Vector2(0, 0), Vector2(100, 0));
+    tablePrim.begin();
+    table.render(tablePrim);
+    tablePrim.end();
+    EOKAS_EXPECT(_FloatEqual(boxLeft(table.cell(0, 1)->shape), -2.0f));
     EOKAS_EXPECT(_FloatEqual(table.cell(0, 1)->shape.size.x, 52.0f));
-    EOKAS_EXPECT(_FloatEqual(side->shape.left(), 5.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(side->shape), -21.0f));
     table.insertColumn(0, 10.0f);
     EOKAS_EXPECT(table.getContent(1, 1).get() == body.get());
     EOKAS_EXPECT(table.getContent(1, 0) == nullptr);
@@ -105,12 +141,16 @@ EOKAS_TEST_CASE(ui) {
     other->shape.origin = (Rect(0, 0, 6, 6)).origin + other->shape.pivot * other->shape.size;
     child->setContent(0, mark);
     child->setContent(1, other);
-    tree.layout(Rect(0, 0, 0, 0));
+    tree.shape.setBox(Vector2(0, 0), Vector2(0, 0));
+    UIPrimitive treePrim;
+    treePrim.begin();
+    tree.render(treePrim);
+    treePrim.end();
     EOKAS_EXPECT(_FloatEqual(tree.shape.size.x, 120.0f));
     EOKAS_EXPECT(_FloatEqual(tree.shape.size.y, 60.0f));
-    EOKAS_EXPECT(_FloatEqual(mark->shape.left(), 20.0f));
-    EOKAS_EXPECT(_FloatEqual(mark->shape.top(), 0.0f));
-    EOKAS_EXPECT(_FloatEqual(other->shape.left(), 0.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(mark->shape), -20.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(mark->shape), -10.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(other->shape), -20.0f));
     int leafHits = 0;
     grand->onExpandedChanged = [&](bool) { leafHits += 1; };
     grand->triggerClick();
@@ -214,10 +254,10 @@ EOKAS_TEST_CASE(ui) {
     frame.onMouseUp(10, 10, 0);
     auto panel = std::make_shared<UIWidget>();
     panel->shape.size = (Rect(50.0f, 60.0f, 80.0f, 40.0f)).size;
-    panel->shape.origin = (Rect(50.0f, 60.0f, 80.0f, 40.0f)).origin + panel->shape.pivot * panel->shape.size;
+    root->placeChild(*panel, Vector2(50.0f, 60.0f));
     auto nested = std::make_shared<UIWidget>();
     nested->shape.size = (Rect(10.0f, 8.0f, 20.0f, 12.0f)).size;
-    nested->shape.origin = (Rect(10.0f, 8.0f, 20.0f, 12.0f)).origin + nested->shape.pivot * nested->shape.size;
+    panel->placeChild(*nested, Vector2(10.0f, 8.0f));
     panel->children.push_back(nested);
     root->children.push_back(panel);
     EOKAS_EXPECT(frame.hitTest(62.0f, 70.0f) == nested.get());
@@ -235,17 +275,64 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(_FloatEqual(view.scrollX(), 4.0f));
     EOKAS_EXPECT(_FloatEqual(view.scrollY(), 6.0f));
 
+    UIView scrolledPane;
+    scrolledPane.shape.setBox(Vector2(0.0f, 0.0f), Vector2(200.0f, 100.0f));
+    auto scrolledBody = std::make_shared<UIWidget>();
+    scrolledBody->shape.setBox(Vector2(0.0f, 0.0f), Vector2(260.0f, 140.0f));
+    scrolledPane.addChild(scrolledBody);
+    UIPrimitive scrolledPrim;
+    scrolledPrim.begin();
+    scrolledPane.render(scrolledPrim);
+    scrolledPane.render(scrolledPrim);
+    scrolledPrim.end();
+    Rect scrolledBox = scrolledBody->shape.bounds(scrolledBody->shape.worldTrans());
+    EOKAS_EXPECT(_FloatEqual(scrolledBox.origin.x, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(scrolledBox.origin.y, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(scrolledPane.scrollX(), 0.0f));
+    EOKAS_EXPECT(_FloatEqual(scrolledPane.scrollY(), 0.0f));
+
+    UIView paneView;
+    paneView.shape.setBox(Vector2(0.0f, 0.0f), Vector2(80.0f, 50.0f));
+    auto paneTable = std::make_shared<UITable>();
+    paneTable->addColumn(30.0f);
+    paneTable->addColumn(40.0f);
+    paneTable->addRow(20.0f);
+    paneTable->addRow(20.0f);
+    paneTable->shape.setBox(Vector2(0.0f, 0.0f), Vector2(70.0f, 40.0f));
+    paneView.addChild(paneTable);
+    UIPrimitive panePrim;
+    panePrim.begin();
+    paneView.render(panePrim);
+    paneView.render(panePrim);
+    panePrim.end();
+    Rect paneBox = paneTable->shape.bounds(paneTable->shape.worldTrans());
+    EOKAS_EXPECT(_FloatEqual(paneBox.origin.x, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(paneBox.origin.y, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(paneView.scrollX(), 0.0f));
+    EOKAS_EXPECT(_FloatEqual(paneView.scrollY(), 0.0f));
+
     UIDockSpace dock;
-    dock.layout(Rect(0, 0, 400, 300));
+    dock.shape.setBox(Vector2(0, 0), Vector2(400, 300));
     auto page = std::make_shared<UIDockPage>();
     dock.dockPage(page, UIDockMode::Fill);
-    dock.layout(Rect(0, 0, 400, 300));
+    UIPrimitive dockPrim;
+    dockPrim.begin();
+    dock.render(dockPrim);
+    dockPrim.end();
     EOKAS_EXPECT(page->mode() == UIDockMode::Fill);
     EOKAS_EXPECT(page->space() == &dock);
     Rect bounds;
     EOKAS_EXPECT(dock.pageBounds(page.get(), bounds));
-    EOKAS_EXPECT(bounds.size.x > 0.0f);
-    EOKAS_EXPECT(bounds.size.y > 0.0f);
+    EOKAS_EXPECT(_FloatEqual(bounds.origin.x, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(bounds.origin.y, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(bounds.size.x, 400.0f));
+    EOKAS_EXPECT(_FloatEqual(bounds.size.y, 300.0f));
+    EOKAS_EXPECT(dock.showPreview(200.0f, 150.0f));
+    EOKAS_EXPECT(dock.previewMode() == UIDockMode::Fill);
+    EOKAS_EXPECT(dock.showPreview(8.0f, 150.0f));
+    EOKAS_EXPECT(dock.previewMode() == UIDockMode::Left);
+    EOKAS_EXPECT(dock.showPreview(392.0f, 150.0f));
+    EOKAS_EXPECT(dock.previewMode() == UIDockMode::Right);
 
     int windows = 0;
     UIApp app;
@@ -264,15 +351,15 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(_FloatEqual(scaled.shape.scale.x, 1.0f));
     EOKAS_EXPECT(_FloatEqual(scaled.shape.scale.y, 1.0f));
     scaled.shape.scale = Vector2(2.0f, 3.0f);
-    scaled.layout(Rect(1.0f, 2.0f, 3.0f, 4.0f));
+    scaled.shape.setBox(Vector2(1.0f, 2.0f), Vector2(3.0f, 4.0f));
     EOKAS_EXPECT(_FloatEqual(scaled.shape.scale.x, 2.0f));
     EOKAS_EXPECT(_FloatEqual(scaled.shape.scale.y, 3.0f));
     EOKAS_EXPECT(_FloatEqual(scaled.shape.origin.x, 2.5f));
     EOKAS_EXPECT(_FloatEqual(scaled.shape.origin.y, 4.0f));
-    EOKAS_EXPECT(_FloatEqual(scaled.visualRect().origin.x, -0.5f));
-    EOKAS_EXPECT(_FloatEqual(scaled.visualRect().origin.y, -2.0f));
-    EOKAS_EXPECT(_FloatEqual(scaled.visualRect().size.x, 6.0f));
-    EOKAS_EXPECT(_FloatEqual(scaled.visualRect().size.y, 12.0f));
+    EOKAS_EXPECT(_FloatEqual(scaled.shape.bounds(scaled.shape.localTrans()).origin.x, -0.5f));
+    EOKAS_EXPECT(_FloatEqual(scaled.shape.bounds(scaled.shape.localTrans()).origin.y, -2.0f));
+    EOKAS_EXPECT(_FloatEqual(scaled.shape.bounds(scaled.shape.localTrans()).size.x, 6.0f));
+    EOKAS_EXPECT(_FloatEqual(scaled.shape.bounds(scaled.shape.localTrans()).size.y, 12.0f));
 
     UIFrame scaleFrame;
     scaleFrame.init(200, 100);
@@ -281,7 +368,7 @@ EOKAS_TEST_CASE(ui) {
     scaleRoot->shape.origin = (Rect(0, 0, 200, 100)).origin + scaleRoot->shape.pivot * scaleRoot->shape.size;
     auto scaledBox = std::make_shared<UIWidget>();
     scaledBox->shape.size = (Rect(10.0f, 10.0f, 20.0f, 20.0f)).size;
-    scaledBox->shape.origin = (Rect(10.0f, 10.0f, 20.0f, 20.0f)).origin + scaledBox->shape.pivot * scaledBox->shape.size;
+    scaleRoot->placeChild(*scaledBox, Vector2(10.0f, 10.0f));
     scaledBox->shape.scale = Vector2(2.0f, 2.0f);
     scaleRoot->children.push_back(scaledBox);
     scaleFrame.setRoot(scaleRoot);
@@ -291,11 +378,11 @@ EOKAS_TEST_CASE(ui) {
 
     auto scaledParent = std::make_shared<UIWidget>();
     scaledParent->shape.size = (Rect(0.0f, 0.0f, 100.0f, 40.0f)).size;
-    scaledParent->shape.origin = (Rect(0.0f, 0.0f, 100.0f, 40.0f)).origin + scaledParent->shape.pivot * scaledParent->shape.size;
+    scaleRoot->placeChild(*scaledParent, Vector2(0.0f, 0.0f));
     scaledParent->shape.scale = Vector2(2.0f, 1.0f);
     auto nestedScale = std::make_shared<UIWidget>();
     nestedScale->shape.size = (Rect(10.0f, 0.0f, 10.0f, 10.0f)).size;
-    nestedScale->shape.origin = (Rect(10.0f, 0.0f, 10.0f, 10.0f)).origin + nestedScale->shape.pivot * nestedScale->shape.size;
+    scaledParent->placeChild(*nestedScale, Vector2(10.0f, 0.0f));
     scaledParent->children.push_back(nestedScale);
     scaleRoot->children.clear();
     scaleRoot->children.push_back(scaledParent);
@@ -316,19 +403,19 @@ EOKAS_TEST_CASE(ui) {
     low->shape.origin = (Rect(30.0f, -5.0f, 10.0f, 10.0f)).origin + low->shape.pivot * low->shape.size;
     fitted.addChild(top);
     fitted.addChild(low);
-    fitted.layout(Rect(fitted.shape.left(), fitted.shape.top(), fitted.shape.size.x, fitted.shape.size.y));
-    EOKAS_EXPECT(_FloatEqual(fitted.shape.left(), 100.0f));
-    EOKAS_EXPECT(_FloatEqual(fitted.shape.top(), 45.0f));
+    fitted.refit();
+    EOKAS_EXPECT(_FloatEqual(boxLeft(fitted.shape), 100.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(fitted.shape), 45.0f));
     EOKAS_EXPECT(_FloatEqual(fitted.shape.size.x, 40.0f));
     EOKAS_EXPECT(_FloatEqual(fitted.shape.size.y, 25.0f));
-    EOKAS_EXPECT(_FloatEqual(top->shape.top(), 5.0f));
-    EOKAS_EXPECT(_FloatEqual(low->shape.top(), 0.0f));
-    top->shape.origin.x = (-4.0f) + top->shape.pivot.x * top->shape.size.x;
+    EOKAS_EXPECT(_FloatEqual(boxTop(top->shape), -7.5f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(low->shape), -12.5f));
+    top->shape.origin.x = pivotSpace(fitted.shape, Vector2(-4.0f, 0.0f)).x + top->shape.pivot.x * top->shape.size.x;
     fitted.refit();
-    EOKAS_EXPECT(_FloatEqual(fitted.shape.left(), 96.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(fitted.shape), 96.0f));
     EOKAS_EXPECT(_FloatEqual(fitted.shape.size.x, 44.0f));
-    EOKAS_EXPECT(_FloatEqual(top->shape.left(), 0.0f));
-    EOKAS_EXPECT(_FloatEqual(low->shape.left(), 34.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(top->shape), -22.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(low->shape), 12.0f));
 
     UICanvas scaledCanvas;
     scaledCanvas.shape.scale = Vector2(2.0f, 2.0f);
@@ -342,14 +429,14 @@ EOKAS_TEST_CASE(ui) {
     rightItem->shape.origin = (Rect(30.0f, -5.0f, 10.0f, 10.0f)).origin + rightItem->shape.pivot * rightItem->shape.size;
     scaledCanvas.addChild(leftItem);
     scaledCanvas.addChild(rightItem);
-    scaledCanvas.layout(Rect(scaledCanvas.shape.left(), scaledCanvas.shape.top(), scaledCanvas.shape.size.x, scaledCanvas.shape.size.y));
-    leftItem->shape.origin.x = (-4.0f) + leftItem->shape.pivot.x * leftItem->shape.size.x;
     scaledCanvas.refit();
-    EOKAS_EXPECT(_FloatEqual(scaledCanvas.shape.left(), 92.0f));
+    leftItem->shape.origin.x = pivotSpace(scaledCanvas.shape, Vector2(-4.0f, 0.0f)).x + leftItem->shape.pivot.x * leftItem->shape.size.x;
+    scaledCanvas.refit();
+    EOKAS_EXPECT(_FloatEqual(boxLeft(scaledCanvas.shape), 114.0f));
     EOKAS_EXPECT(_FloatEqual(scaledCanvas.shape.size.x, 44.0f));
-    EOKAS_EXPECT(_FloatEqual(scaledCanvas.visualRect().size.x, 88.0f));
-    EOKAS_EXPECT(_FloatEqual(leftItem->shape.left(), 0.0f));
-    EOKAS_EXPECT(_FloatEqual(rightItem->shape.left(), 34.0f));
+    EOKAS_EXPECT(_FloatEqual(scaledCanvas.shape.bounds(scaledCanvas.shape.localTrans()).size.x, 88.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(leftItem->shape), -22.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(rightItem->shape), 12.0f));
 
     UIFrame canvasFrame;
     canvasFrame.init(400, 300);
@@ -366,43 +453,44 @@ EOKAS_TEST_CASE(ui) {
     canvas->addChild(held);
     canvas->addChild(loose);
     canvasFrame.setRoot(canvas);
+    canvasFrame.flush();
     canvasFrame.hitTest(0.0f, 0.0f);
-    Rect heldBefore = Rect(held->shape.left(), held->shape.top(), held->shape.size.x, held->shape.size.y);
-    Rect looseBefore = Rect(loose->shape.left(), loose->shape.top(), loose->shape.size.x, loose->shape.size.y);
+    Rect heldBefore = Rect(boxLeft(held->shape), boxTop(held->shape), held->shape.size.x, held->shape.size.y);
+    Rect looseBefore = Rect(boxLeft(loose->shape), boxTop(loose->shape), loose->shape.size.x, loose->shape.size.y);
     canvasFrame.onMouseDown(120.0f, 65.0f, 0);
     canvasFrame.onMouseMove(130.0f, 70.0f);
     canvasFrame.onMouseUp(130.0f, 70.0f, 0);
-    EOKAS_EXPECT(_FloatEqual(held->shape.left(), heldBefore.origin.x));
-    EOKAS_EXPECT(_FloatEqual(held->shape.top(), heldBefore.origin.y));
-    EOKAS_EXPECT(_FloatEqual(loose->shape.left(), looseBefore.origin.x));
-    EOKAS_EXPECT(_FloatEqual(loose->shape.top(), looseBefore.origin.y));
-    EOKAS_EXPECT(_FloatEqual(canvas->shape.left(), 110.0f));
-    EOKAS_EXPECT(_FloatEqual(canvas->shape.top(), 50.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(held->shape), heldBefore.origin.x));
+    EOKAS_EXPECT(_FloatEqual(boxTop(held->shape), heldBefore.origin.y));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(loose->shape), looseBefore.origin.x));
+    EOKAS_EXPECT(_FloatEqual(boxTop(loose->shape), looseBefore.origin.y));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(canvas->shape), 110.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(canvas->shape), 50.0f));
 
     canvasFrame.onMouseDown(140.0f, 50.0f, 0);
     canvasFrame.onMouseMove(150.0f, 50.0f);
     canvasFrame.onMouseUp(150.0f, 50.0f, 0);
-    EOKAS_EXPECT(_FloatEqual(loose->shape.left(), looseBefore.origin.x));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(loose->shape), looseBefore.origin.x));
     loose->dragable = true;
     canvasFrame.onMouseDown(140.0f, 50.0f, 0);
     canvasFrame.onMouseMove(150.0f, 50.0f);
     canvasFrame.onMouseUp(150.0f, 50.0f, 0);
-    EOKAS_EXPECT(_FloatEqual(loose->shape.left(), looseBefore.origin.x + 10.0f));
-    EOKAS_EXPECT(_FloatEqual(held->shape.left(), heldBefore.origin.x));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(loose->shape), looseBefore.origin.x + 5.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(held->shape), heldBefore.origin.x - 5.0f));
 
-    Vector2 focal = Vector2(canvas->shape.left(), canvas->shape.top()) + Vector2(10.0f, 10.0f);
+    Vector2 focal = Vector2(boxLeft(canvas->shape), boxTop(canvas->shape)) + Vector2(10.0f, 10.0f);
     Vector2 focalLocal = canvas->shape.toLocal(focal);
-    Rect looseAtScale = Rect(loose->shape.left(), loose->shape.top(), loose->shape.size.x, loose->shape.size.y);
+    Rect looseAtScale = Rect(boxLeft(loose->shape), boxTop(loose->shape), loose->shape.size.x, loose->shape.size.y);
     canvasFrame.onMouseWheel(focal.x, focal.y, 0.0f, -48.0f);
-    Vector2 back = canvas->shape.toParent(Vector2(canvas->shape.left(), canvas->shape.top()) + focalLocal);
+    Vector2 back = UIShape::transformPoint(canvas->shape.localTrans(), focalLocal);
     EOKAS_EXPECT(_FloatEqual(back.x, focal.x));
     EOKAS_EXPECT(_FloatEqual(back.y, focal.y));
-    EOKAS_EXPECT(_FloatEqual(loose->shape.left(), looseAtScale.origin.x));
-    EOKAS_EXPECT(_FloatEqual(loose->shape.top(), looseAtScale.origin.y));
-    Vector2 corner(canvas->shape.left(), canvas->shape.top());
+    EOKAS_EXPECT(_FloatEqual(boxLeft(loose->shape), looseAtScale.origin.x));
+    EOKAS_EXPECT(_FloatEqual(boxTop(loose->shape), looseAtScale.origin.y));
+    Vector2 corner(boxLeft(canvas->shape), boxTop(canvas->shape));
     Vector2 cornerLocal = canvas->shape.toLocal(corner);
     canvas->scaleAt(corner, canvas->shape.scale.x * 2.0f);
-    Vector2 cornerBack = canvas->shape.toParent(Vector2(canvas->shape.left(), canvas->shape.top()) + cornerLocal);
+    Vector2 cornerBack = UIShape::transformPoint(canvas->shape.localTrans(), cornerLocal);
     EOKAS_EXPECT(std::fabs(cornerBack.x - corner.x) <= 0.0001f);
     EOKAS_EXPECT(std::fabs(cornerBack.y - corner.y) <= 0.0001f);
 
@@ -413,16 +501,20 @@ EOKAS_TEST_CASE(ui) {
     dragButton->dragable = true;
     UICanvas dragGroup;
     dragGroup.addChild(dragButton);
-    dragGroup.layout(Rect(0.0f, 0.0f, 0.0f, 0.0f));
-    Rect labelRect = Rect(dragButton->label()->shape.left(), dragButton->label()->shape.top(), dragButton->label()->shape.size.x, dragButton->label()->shape.size.y);
+    dragGroup.shape.setBox(Vector2(0.0f, 0.0f), Vector2(0.0f, 0.0f));
+    UIPrimitive dragPrim;
+    dragPrim.begin();
+    dragGroup.render(dragPrim);
+    dragPrim.end();
+    Rect labelRect = Rect(boxLeft(dragButton->label()->shape), boxTop(dragButton->label()->shape), dragButton->label()->shape.size.x, dragButton->label()->shape.size.y);
     dragGroup.dragChild(dragButton.get(), 5.0f, 6.0f);
     dragGroup.dragChild(dragButton.get(), 15.0f, 9.0f);
-    EOKAS_EXPECT(_FloatEqual(dragGroup.shape.left(), 10.0f));
-    EOKAS_EXPECT(_FloatEqual(dragGroup.shape.top(), 3.0f));
-    EOKAS_EXPECT(_FloatEqual(dragButton->shape.left(), 0.0f));
-    EOKAS_EXPECT(_FloatEqual(dragButton->shape.top(), 0.0f));
-    EOKAS_EXPECT(_FloatEqual(dragButton->label()->shape.left(), labelRect.origin.x));
-    EOKAS_EXPECT(_FloatEqual(dragButton->label()->shape.top(), labelRect.origin.y));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(dragGroup.shape), 10.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(dragGroup.shape), 3.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(dragButton->shape), -20.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(dragButton->shape), -10.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(dragButton->label()->shape), labelRect.origin.x));
+    EOKAS_EXPECT(_FloatEqual(boxTop(dragButton->label()->shape), labelRect.origin.y));
 
     UIChart triangle;
     triangle.setContour({ Vector2(0.0f, 0.0f), Vector2(40.0f, 0.0f), Vector2(0.0f, 40.0f) });
@@ -437,8 +529,9 @@ EOKAS_TEST_CASE(ui) {
     shapeRoot->pickable = false;
     auto lowerChart = std::make_shared<UIChart>();
     auto upperChart = std::make_shared<UIChart>();
-    lowerChart->setContour({ Vector2(0.0f, 0.0f), Vector2(40.0f, 0.0f), Vector2(40.0f, 40.0f), Vector2(0.0f, 40.0f) });
-    upperChart->setContour({ Vector2(0.0f, 0.0f), Vector2(40.0f, 0.0f), Vector2(0.0f, 40.0f) });
+    auto atRoot = [&](float x, float y) { return pivotSpace(shapeRoot->shape, Vector2(x, y)); };
+    lowerChart->setContour({ atRoot(0.0f, 0.0f), atRoot(40.0f, 0.0f), atRoot(40.0f, 40.0f), atRoot(0.0f, 40.0f) });
+    upperChart->setContour({ atRoot(0.0f, 0.0f), atRoot(40.0f, 0.0f), atRoot(0.0f, 40.0f) });
     shapeRoot->children.push_back(lowerChart);
     shapeRoot->children.push_back(upperChart);
     shapeFrame.setRoot(shapeRoot);
@@ -447,11 +540,12 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(shapeFrame.hitTest(30.0f, 30.0f) == lowerChart.get());
 
     auto parentChart = std::make_shared<UIChart>();
-    parentChart->setContour({ Vector2(0.0f, 0.0f), Vector2(80.0f, 0.0f), Vector2(0.0f, 80.0f) });
+    parentChart->setContour({ atRoot(0.0f, 0.0f), atRoot(80.0f, 0.0f), atRoot(0.0f, 80.0f) });
+    auto atParent = [&](float x, float y) { return pivotSpace(parentChart->shape, Vector2(x, y)); };
     auto innerChart = std::make_shared<UIChart>();
-    innerChart->setContour({ Vector2(4.0f, 4.0f), Vector2(16.0f, 4.0f), Vector2(4.0f, 16.0f) });
+    innerChart->setContour({ atParent(4.0f, 4.0f), atParent(16.0f, 4.0f), atParent(4.0f, 16.0f) });
     auto outerChart = std::make_shared<UIChart>();
-    outerChart->setContour({ Vector2(50.0f, 50.0f), Vector2(70.0f, 50.0f), Vector2(50.0f, 70.0f) });
+    outerChart->setContour({ atParent(50.0f, 50.0f), atParent(70.0f, 50.0f), atParent(50.0f, 70.0f) });
     parentChart->addChart(innerChart);
     parentChart->addChart(outerChart);
     shapeRoot->children.clear();
@@ -468,14 +562,15 @@ EOKAS_TEST_CASE(ui) {
     auto chartCanvas = std::make_shared<UICanvas>();
     chartCanvas->shape.size = (Rect(0.0f, 0.0f, 300.0f, 200.0f)).size;
     chartCanvas->shape.origin = (Rect(0.0f, 0.0f, 300.0f, 200.0f)).origin + chartCanvas->shape.pivot * chartCanvas->shape.size;
+    auto atChart = [&](float x, float y) { return pivotSpace(chartCanvas->shape, Vector2(x, y)); };
     auto anchor = std::make_shared<UIWidget>();
     anchor->shape.size = (Rect(0.0f, 0.0f, 8.0f, 8.0f)).size;
-    anchor->shape.origin = (Rect(0.0f, 0.0f, 8.0f, 8.0f)).origin + anchor->shape.pivot * anchor->shape.size;
+    anchor->shape.origin = atChart(0.0f, 0.0f) + anchor->shape.pivot * anchor->shape.size;
     anchor->pickable = false;
     auto picked = std::make_shared<UIChart>();
     auto idle = std::make_shared<UIChart>();
-    picked->setContour({ Vector2(20.0f, 20.0f), Vector2(60.0f, 20.0f), Vector2(20.0f, 60.0f) });
-    idle->setContour({ Vector2(70.0f, 20.0f), Vector2(110.0f, 20.0f), Vector2(70.0f, 60.0f) });
+    picked->setContour({ atChart(20.0f, 20.0f), atChart(60.0f, 20.0f), atChart(20.0f, 60.0f) });
+    idle->setContour({ atChart(70.0f, 20.0f), atChart(110.0f, 20.0f), atChart(70.0f, 60.0f) });
     chartCanvas->addChild(anchor);
     chartCanvas->addChild(picked);
     chartCanvas->addChild(idle);
@@ -501,7 +596,7 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(chartClicks == 2);
     EOKAS_EXPECT(picked->selected);
     EOKAS_EXPECT(!idle->selected);
-    EOKAS_EXPECT(_FloatEqual(picked->shape.left(), contourBefore.empty() ? 0.0f : 32.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(picked->shape), contourBefore.empty() ? 0.0f : -23.0f));
     EOKAS_EXPECT(picked->contour().size() == contourBefore.size());
     EOKAS_EXPECT(_FloatEqual(picked->contour()[0].x, contourBefore[0].x));
     EOKAS_EXPECT(_FloatEqual(picked->contour()[0].y, contourBefore[0].y));
@@ -512,10 +607,11 @@ EOKAS_TEST_CASE(ui) {
     auto dropCanvas = std::make_shared<UICanvas>();
     dropCanvas->shape.size = (Rect(0.0f, 0.0f, 300.0f, 120.0f)).size;
     dropCanvas->shape.origin = (Rect(0.0f, 0.0f, 300.0f, 120.0f)).origin + dropCanvas->shape.pivot * dropCanvas->shape.size;
+    auto atDrop = [&](float x, float y) { return pivotSpace(dropCanvas->shape, Vector2(x, y)); };
     auto carried = std::make_shared<UIChart>();
     auto slot = std::make_shared<UIChart>();
-    carried->setContour({ Vector2(0.0f, 0.0f), Vector2(40.0f, 0.0f), Vector2(0.0f, 40.0f) });
-    slot->setContour({ Vector2(80.0f, 0.0f), Vector2(120.0f, 0.0f), Vector2(80.0f, 40.0f) });
+    carried->setContour({ atDrop(0.0f, 0.0f), atDrop(40.0f, 0.0f), atDrop(0.0f, 40.0f) });
+    slot->setContour({ atDrop(80.0f, 0.0f), atDrop(120.0f, 0.0f), atDrop(80.0f, 40.0f) });
     dropCanvas->addChild(carried);
     dropCanvas->addChild(slot);
     dropFrame.setRoot(dropCanvas);
@@ -534,11 +630,12 @@ EOKAS_TEST_CASE(ui) {
     auto plainCanvas = std::make_shared<UICanvas>();
     plainCanvas->shape.size = (Rect(0.0f, 0.0f, 300.0f, 120.0f)).size;
     plainCanvas->shape.origin = (Rect(0.0f, 0.0f, 300.0f, 120.0f)).origin + plainCanvas->shape.pivot * plainCanvas->shape.size;
+    auto atPlain = [&](float x, float y) { return pivotSpace(plainCanvas->shape, Vector2(x, y)); };
     auto stone = std::make_shared<UIChart>();
-    stone->setContour({ Vector2(60.0f, 0.0f), Vector2(100.0f, 0.0f), Vector2(60.0f, 40.0f) });
+    stone->setContour({ atPlain(60.0f, 0.0f), atPlain(100.0f, 0.0f), atPlain(60.0f, 40.0f) });
     auto plain = std::make_shared<UIWidget>();
     plain->shape.size = (Rect(0.0f, 0.0f, 40.0f, 40.0f)).size;
-    plain->shape.origin = (Rect(0.0f, 0.0f, 40.0f, 40.0f)).origin + plain->shape.pivot * plain->shape.size;
+    plain->shape.origin = atPlain(0.0f, 0.0f) + plain->shape.pivot * plain->shape.size;
     plainCanvas->addChild(stone);
     plainCanvas->addChild(plain);
     dropFrame.setRoot(plainCanvas);
@@ -561,22 +658,26 @@ EOKAS_TEST_CASE(ui) {
     zoomCanvas->shape.size = (Rect(0.0f, 0.0f, 200.0f, 200.0f)).size;
     zoomCanvas->shape.origin = (Rect(0.0f, 0.0f, 200.0f, 200.0f)).origin + zoomCanvas->shape.pivot * zoomCanvas->shape.size;
     auto zoomChart = std::make_shared<UIChart>();
-    zoomChart->setContour({ Vector2(0.0f, 0.0f), Vector2(40.0f, 0.0f), Vector2(0.0f, 40.0f) });
+    zoomChart->setContour({
+        pivotSpace(zoomCanvas->shape, Vector2(0.0f, 0.0f)),
+        pivotSpace(zoomCanvas->shape, Vector2(40.0f, 0.0f)),
+        pivotSpace(zoomCanvas->shape, Vector2(0.0f, 40.0f))
+    });
     zoomCanvas->addChild(zoomChart);
     zoomFrame.setRoot(zoomCanvas);
-    Vector2 zoomFocal(10.0f, 10.0f);
+    Vector2 zoomFocal = Vector2(10.0f, 10.0f) - zoomCanvas->shape.origin;
     Vector2 chartLocal = zoomChart->shape.toLocal(zoomFocal);
     zoomFrame.onMouseWheel(10.0f, 10.0f, 0.0f, -48.0f);
     EOKAS_EXPECT(zoomChart->shape.scale.x > 1.0f);
     EOKAS_EXPECT(_FloatEqual(zoomCanvas->shape.scale.x, 1.0f));
-    Vector2 zoomBack = zoomChart->shape.toParent(Vector2(zoomChart->shape.left(), zoomChart->shape.top()) + chartLocal);
+    Vector2 zoomBack = UIShape::transformPoint(zoomChart->shape.localTrans(), chartLocal);
     EOKAS_EXPECT(_FloatEqual(zoomBack.x, zoomFocal.x));
     EOKAS_EXPECT(_FloatEqual(zoomBack.y, zoomFocal.y));
     Vector2 canvasFocal(180.0f, 180.0f);
     zoomFrame.onMouseWheel(canvasFocal.x, canvasFocal.y, 0.0f, -48.0f);
     EOKAS_EXPECT(zoomCanvas->shape.scale.x > 1.0f);
-    EOKAS_EXPECT(_FloatEqual(zoomChart->visualRect().origin.x, 0.0f));
-    EOKAS_EXPECT(_FloatEqual(zoomChart->visualRect().origin.y, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(zoomChart->shape.bounds(zoomChart->shape.localTrans()).origin.x, -zoomCanvas->shape.pivot.x * zoomCanvas->shape.size.x));
+    EOKAS_EXPECT(_FloatEqual(zoomChart->shape.bounds(zoomChart->shape.localTrans()).origin.y, -zoomCanvas->shape.pivot.y * zoomCanvas->shape.size.y));
     zoomFrame.quit();
 
     UIEllipse ellipse;
@@ -602,10 +703,10 @@ EOKAS_TEST_CASE(ui) {
     UIRectangle chartBox;
     chartBox.shape.size = (Rect(10.0f, 20.0f, 40.0f, 20.0f)).size;
     chartBox.shape.origin = (Rect(10.0f, 20.0f, 40.0f, 20.0f)).origin + chartBox.shape.pivot * chartBox.shape.size;
-    EOKAS_EXPECT(chartBox.contains(Vector2(10.0f, 20.0f)));
-    EOKAS_EXPECT(chartBox.contains(Vector2(30.0f, 30.0f)));
-    EOKAS_EXPECT(chartBox.contains(Vector2(50.0f, 40.0f)));
-    EOKAS_EXPECT(!chartBox.contains(Vector2(9.0f, 30.0f)));
+    EOKAS_EXPECT(chartBox.contains(chartBox.shape.toLocal(Vector2(10.0f, 20.0f))));
+    EOKAS_EXPECT(chartBox.contains(chartBox.shape.toLocal(Vector2(30.0f, 30.0f))));
+    EOKAS_EXPECT(chartBox.contains(chartBox.shape.toLocal(Vector2(50.0f, 40.0f))));
+    EOKAS_EXPECT(!chartBox.contains(chartBox.shape.toLocal(Vector2(9.0f, 30.0f))));
 
     UIDiamond diamond;
     diamond.shape.size = (Rect(0.0f, 0.0f, 40.0f, 20.0f)).size;
@@ -627,8 +728,8 @@ EOKAS_TEST_CASE(ui) {
     link.setPoints({ Vector2(40.0f, 10.0f), Vector2(80.0f, 10.0f) });
     link.line.thickness = 2.0f;
     link.hitSlop = 4.0f;
-    EOKAS_EXPECT(link.contains(Vector2(60.0f, 10.0f)));
-    EOKAS_EXPECT(!link.contains(Vector2(60.0f, 30.0f)));
+    EOKAS_EXPECT(link.contains(link.shape.toLocal(Vector2(60.0f, 10.0f))));
+    EOKAS_EXPECT(!link.contains(link.shape.toLocal(Vector2(60.0f, 30.0f))));
     UIFrame linkFrame;
     linkFrame.init(200, 80);
     auto linkRoot = std::make_shared<UIWidget>();
@@ -636,23 +737,24 @@ EOKAS_TEST_CASE(ui) {
     linkRoot->shape.origin = (Rect(0.0f, 0.0f, 200.0f, 80.0f)).origin + linkRoot->shape.pivot * linkRoot->shape.size;
     linkRoot->pickable = false;
     auto hitLink = std::make_shared<UILink>();
-    hitLink->setPoints({ Vector2(40.0f, 10.0f), Vector2(80.0f, 10.0f) });
+    hitLink->setPoints({ pivotSpace(linkRoot->shape, Vector2(40.0f, 10.0f)), pivotSpace(linkRoot->shape, Vector2(80.0f, 10.0f)) });
     hitLink->line.thickness = 2.0f;
     hitLink->hitSlop = 4.0f;
     linkRoot->children.push_back(hitLink);
     linkFrame.setRoot(linkRoot);
-    EOKAS_EXPECT(hitLink->contains(Vector2(60.0f, 12.0f)));
-    EOKAS_EXPECT(!Rect(hitLink->shape.left(), hitLink->shape.top(), hitLink->shape.size.x, hitLink->shape.size.y).contains(Vector2(60.0f, 12.0f)));
+    Vector2 linkPoint = pivotSpace(linkRoot->shape, Vector2(60.0f, 12.0f));
+    EOKAS_EXPECT(hitLink->contains(hitLink->shape.toLocal(linkPoint)));
+    EOKAS_EXPECT(!Rect(boxLeft(hitLink->shape), boxTop(hitLink->shape), hitLink->shape.size.x, hitLink->shape.size.y).contains(linkPoint));
     EOKAS_EXPECT(linkFrame.hitTest(60.0f, 12.0f) == hitLink.get());
     linkFrame.quit();
     link.start.target = from.get();
     link.start.anchor = UIAnchor::Right;
     link.end.target = to.get();
     link.end.anchor = UIAnchor::Left;
-    EOKAS_EXPECT(link.contains(Vector2(60.0f, 10.0f)));
+    EOKAS_EXPECT(link.contains(link.shape.toLocal(Vector2(60.0f, 10.0f))));
     to->shape.origin = (Vector2(80.0f, 40.0f)) + to->shape.pivot * to->shape.size;
-    EOKAS_EXPECT(link.contains(Vector2(60.0f, 30.0f)));
-    EOKAS_EXPECT(!link.contains(Vector2(60.0f, 10.0f)));
+    EOKAS_EXPECT(link.contains(link.shape.toLocal(Vector2(60.0f, 30.0f))));
+    EOKAS_EXPECT(!link.contains(link.shape.toLocal(Vector2(60.0f, 10.0f))));
 
     from->shape.size = (Rect(0.0f, 0.0f, 40.0f, 20.0f)).size;
     from->shape.origin = (Rect(0.0f, 0.0f, 40.0f, 20.0f)).origin + from->shape.pivot * from->shape.size;
@@ -672,9 +774,9 @@ EOKAS_TEST_CASE(ui) {
     curve.start.anchor = UIAnchor::Right;
     curve.end.target = to.get();
     curve.end.anchor = UIAnchor::Left;
-    EOKAS_EXPECT(curve.contains(Vector2(44.0f, 10.0f)));
-    EOKAS_EXPECT(curve.contains(Vector2(76.0f, 50.0f)));
-    EOKAS_EXPECT(!curve.contains(Vector2(48.0f, -20.0f)));
+    EOKAS_EXPECT(curve.contains(curve.shape.toLocal(Vector2(44.0f, 10.0f))));
+    EOKAS_EXPECT(curve.contains(curve.shape.toLocal(Vector2(76.0f, 50.0f))));
+    EOKAS_EXPECT(!curve.contains(curve.shape.toLocal(Vector2(48.0f, -20.0f))));
 
     UIRectangle cornerBox;
     cornerBox.shape.size = (Rect(0.0f, 0.0f, 40.0f, 20.0f)).size;
@@ -695,69 +797,57 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(_FloatEqual(defaults.scale.y, 1.0f));
     EOKAS_EXPECT(_FloatEqual(defaults.origin.x, 0.0f));
     EOKAS_EXPECT(_FloatEqual(defaults.origin.y, 0.0f));
-    EOKAS_EXPECT(_FloatEqual(defaults.left(), 0.0f));
-    EOKAS_EXPECT(_FloatEqual(defaults.top(), 0.0f));
 
-    UIShape edges;
-    edges.size = Vector2(10.0f, 8.0f);
-    edges.origin = Vector2(1.0f, 2.0f) + edges.pivot * edges.size;
-    EOKAS_EXPECT(_FloatEqual(edges.origin.x, 6.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.origin.y, 6.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.left(), 1.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.top(), 2.0f));
-    edges.setLeft(4.0f);
-    EOKAS_EXPECT(_FloatEqual(edges.left(), 4.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.right(), 11.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.size.x, 7.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.origin.x, 7.5f));
-    edges.setRight(20.0f);
-    EOKAS_EXPECT(_FloatEqual(edges.left(), 4.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.size.x, 16.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.origin.x, 12.0f));
-    edges.setTop(5.0f);
-    EOKAS_EXPECT(_FloatEqual(edges.top(), 5.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.bottom(), 10.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.size.y, 5.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.origin.y, 7.5f));
-    edges.setBottom(12.0f);
-    EOKAS_EXPECT(_FloatEqual(edges.top(), 5.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.size.y, 7.0f));
-    EOKAS_EXPECT(_FloatEqual(edges.origin.y, 8.5f));
-    EOKAS_EXPECT(_FloatEqual(edges.pivot.x, 0.5f));
-    EOKAS_EXPECT(_FloatEqual(edges.pivot.y, 0.5f));
+    UIShape placed;
+    placed.setBox(Vector2(1.0f, 2.0f), Vector2(10.0f, 8.0f));
+    EOKAS_EXPECT(_FloatEqual(boxLeft(placed), 1.0f));
+    EOKAS_EXPECT(_FloatEqual(boxTop(placed), 2.0f));
+    EOKAS_EXPECT(_FloatEqual(placed.origin.x, 6.0f));
+    EOKAS_EXPECT(_FloatEqual(placed.origin.y, 6.0f));
+
+    UIShape scaledShape;
+    scaledShape.scale = Vector2(2.0f, 3.0f);
+    scaledShape.setBox(Vector2(1.0f, 2.0f), Vector2(3.0f, 4.0f));
+    Rect scaledVisual = scaledShape.bounds(scaledShape.localTrans());
+    EOKAS_EXPECT(_FloatEqual(scaledVisual.origin.x, -0.5f));
+    EOKAS_EXPECT(_FloatEqual(scaledVisual.origin.y, -2.0f));
+    EOKAS_EXPECT(_FloatEqual(scaledVisual.size.x, 6.0f));
+    EOKAS_EXPECT(_FloatEqual(scaledVisual.size.y, 12.0f));
 
     UIShape zoomed;
-    zoomed.size = Vector2(10.0f, 10.0f);
-    zoomed.origin = Vector2(0.0f, 0.0f) + zoomed.pivot * zoomed.size;
-    EOKAS_EXPECT(_FloatEqual(zoomed.origin.x, 5.0f));
-    EOKAS_EXPECT(_FloatEqual(zoomed.origin.y, 5.0f));
+    zoomed.setBox(Vector2(0.0f, 0.0f), Vector2(10.0f, 10.0f));
     zoomed.scale = Vector2(2.0f, 2.0f);
-    Vector2 visualCorner = zoomed.toParent(Vector2(zoomed.left(), zoomed.top()));
-    EOKAS_EXPECT(_FloatEqual(visualCorner.x, -5.0f));
-    EOKAS_EXPECT(_FloatEqual(visualCorner.y, -5.0f));
-    Rect visual = zoomed.visualRect();
-    EOKAS_EXPECT(_FloatEqual(visual.origin.x, -5.0f));
-    EOKAS_EXPECT(_FloatEqual(visual.origin.y, -5.0f));
-    EOKAS_EXPECT(_FloatEqual(visual.size.x, 20.0f));
-    EOKAS_EXPECT(_FloatEqual(visual.size.y, 20.0f));
-    Vector2 pivotParent = zoomed.toParent(zoomed.origin);
-    EOKAS_EXPECT(_FloatEqual(pivotParent.x, 5.0f));
-    EOKAS_EXPECT(_FloatEqual(pivotParent.y, 5.0f));
-    Vector2 aroundBefore = zoomed.toUnscaled(Vector2(5.0f, 5.0f));
-    zoomed.scaleAround(Vector2(5.0f, 5.0f), Vector2(4.0f, 4.0f));
-    Vector2 aroundAfter = zoomed.toUnscaled(Vector2(5.0f, 5.0f));
-    EOKAS_EXPECT(_FloatEqual(aroundBefore.x, aroundAfter.x));
-    EOKAS_EXPECT(_FloatEqual(aroundBefore.y, aroundAfter.y));
+    Vector2 before = zoomed.toLocal(Vector2(5.0f, 5.0f));
+    zoomed.setScaleAround(Vector2(5.0f, 5.0f), Vector2(4.0f, 4.0f));
+    Vector2 after = zoomed.toLocal(Vector2(5.0f, 5.0f));
+    EOKAS_EXPECT(_FloatEqual(before.x, after.x));
+    EOKAS_EXPECT(_FloatEqual(before.y, after.y));
     EOKAS_EXPECT(_FloatEqual(zoomed.origin.x, 5.0f));
     EOKAS_EXPECT(_FloatEqual(zoomed.origin.y, 5.0f));
 
     UIShape cornerPivot;
     cornerPivot.pivot = Vector2(0.0f, 0.0f);
     cornerPivot.origin = Vector2(0.0f, 0.0f);
-    cornerPivot.scale = Vector2(1.0f, 1.0f);
-    cornerPivot.scaleAround(Vector2(10.0f, 10.0f), Vector2(2.0f, 2.0f));
+    cornerPivot.setScaleAround(Vector2(10.0f, 10.0f), Vector2(2.0f, 2.0f));
     EOKAS_EXPECT(_FloatEqual(cornerPivot.origin.x, -10.0f));
     EOKAS_EXPECT(_FloatEqual(cornerPivot.origin.y, -10.0f));
+
+    UIShape turned;
+    turned.angle = 1.5707963f;
+    turned.setBox(Vector2(0.0f, 0.0f), Vector2(10.0f, 0.0f));
+    Vector2 tip = UIShape::transformPoint(turned.localTrans(), Vector2(10.0f, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(tip.x, 5.0f));
+    EOKAS_EXPECT(_FloatEqual(tip.y, 5.0f));
+
+    UIWidget parentWidget;
+    parentWidget.shape.setBox(Vector2(0.0f, 0.0f), Vector2(20.0f, 20.0f));
+    UIWidget childWidget;
+    childWidget.shape.size = Vector2(4.0f, 4.0f);
+    parentWidget.placeChild(childWidget, Vector2(6.0f, 6.0f));
+    EOKAS_EXPECT(childWidget.shape.parent == &parentWidget.shape);
+    Vector2 world = UIShape::transformPoint(childWidget.shape.worldTrans(), Vector2(0.0f, 0.0f));
+    EOKAS_EXPECT(_FloatEqual(world.x, 6.0f));
+    EOKAS_EXPECT(_FloatEqual(world.y, 6.0f));
 
     return 0;
 }

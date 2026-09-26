@@ -38,7 +38,6 @@ namespace eokas
         void setHead(const std::shared_ptr<UIWidget>& widget);
         const std::shared_ptr<UIWidget>& body() const { return mBody; }
         void setBody(const std::shared_ptr<UIWidget>& widget);
-        void layout(const Rect& rect) override;
         void render(UIPrimitive& primitive) override;
         void layoutInWindow(float width, float height);
         void place(const Rect& headRect, const Rect& bodyRect, bool showBody, bool tabActive);
@@ -75,16 +74,17 @@ namespace eokas
         ~UIDockSpace() override;
 
         void setScreenMapper(const std::function<Rect(const Rect&)>& mapper);
-        Rect toScreen(const Rect& local) const;
-        void layout(const Rect& rect) override;
-        bool pageBounds(UIDockPage* page, Rect& bounds);
+        Rect toScreen(const Rect& layout) const;
+        Rect screenBounds() const;
+        Rect clientToScreen(float x, float y) const;
+        bool pageBounds(UIDockPage* page, Rect& screen);
 
         void addPage(const std::shared_ptr<UIDockPage>& page);
         void removePage(const std::shared_ptr<UIDockPage>& page);
         void dockPage(const std::shared_ptr<UIDockPage>& page, UIDockMode mode);
         std::shared_ptr<UIDockPage> takePage(UIDockPage* page);
 
-        bool showPreview(float localX, float localY);
+        bool showPreview(float screenX, float screenY);
         void clearPreview();
         UIDockMode previewMode() const { return mPreviewMode; }
         void acceptDrop(const std::shared_ptr<UIDockPage>& page);
@@ -120,6 +120,7 @@ namespace eokas
         Node* findPageNode(Node* node, UIDockPage* page);
         Vector2 toLocal(const Vector2& point) const;
         Vector2 pointerLocal(float x, float y) const;
+        Vector2 layoutFromScreen(float screenX, float screenY) const;
         Node* findLeaf(Node* node, const Vector2& point);
         Node* nearestLeaf(Node* node, const Vector2& point);
         Node* firstLeaf(Node* node);

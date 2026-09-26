@@ -24,8 +24,8 @@ namespace eokas
         {
             return false;
         }
-        float localX = point.x - shape.left();
-        float localY = point.y - shape.top();
+        float localX = point.x;
+        float localY = point.y;
         float nx = (localX - shape.size.x * 0.5f) / rx;
         float ny = (localY - shape.size.y * 0.5f) / ry;
         return nx * nx + ny * ny <= 1.0f;
@@ -37,14 +37,14 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
         float rx = shape.size.x * 0.5f;
         float ry = shape.size.y * 0.5f;
         if (rx != 0.0f && ry != 0.0f)
         {
             Color fill = this->activeFill();
             int count = segmentCount(segments);
-            Vector2 center = Vector2(shape.left(), shape.top()) + shape.size * 0.5f;
+            Vector2 center = shape.size * 0.5f;
             std::vector<Vector2> boundary;
             boundary.reserve((size_t)count);
             std::vector<Vector2> vertices;
@@ -60,14 +60,13 @@ namespace eokas
             {
                 const Vector2& a = boundary[(size_t)i];
                 const Vector2& b = boundary[(size_t)((i + 1) % count)];
-                vertices.push_back(center);
-                vertices.push_back(Vector2(shape.left(), shape.top()) + a);
-                vertices.push_back(Vector2(shape.left(), shape.top()) + b);
+                vertices.push_back(UIShape::transformPoint(world, center));
+                vertices.push_back(UIShape::transformPoint(world, a));
+                vertices.push_back(UIShape::transformPoint(world, b));
             }
             primitive.addTriangles(vertices.data(), (uint32_t)count, UIFont::solidUV(), fill);
-            this->strokeLoop(primitive, boundary);
+            this->strokeLoop(primitive, world, boundary);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 }

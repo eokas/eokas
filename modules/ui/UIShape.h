@@ -5,34 +5,31 @@
 
 namespace eokas
 {
-    // origin is the pivot position in parent space.
-    // pivot is normalized on size: (0, 0) top-left, (1, 1) bottom-right.
-    // Default pivot is the center, (0.5, 0.5).
-    // Unscaled top-left is origin - pivot * size.
-    // Child coordinates stay relative to that top-left.
-    // left/right/top/bottom are unscaled layout edges and do not include scale.
     class UIShape
     {
     public:
+        UIShape() = default;
+        UIShape(const UIShape& other);
+        UIShape& operator=(const UIShape& other);
+
+        UIShape* parent = nullptr;
         Vector2 origin { 0.0f, 0.0f };
-        Vector2 size { 0.0f, 0.0f };
-        Vector2 pivot { 0.5f, 0.5f };
+        f32_t angle = 0.0f;
         Vector2 scale { 1.0f, 1.0f };
+        Vector2 pivot { 0.5f, 0.5f };
+        Vector2 size { 0.0f, 0.0f };
 
-        f32_t left() const;
-        void setLeft(f32_t value);
-        f32_t right() const;
-        void setRight(f32_t value);
-        f32_t top() const;
-        void setTop(f32_t value);
-        f32_t bottom() const;
-        void setBottom(f32_t value);
+        Matrix3 localTrans() const;
+        Matrix3 worldTrans() const;
+        Matrix3 pivotToScreen() const;
 
-        Rect visualRect() const;
-        Vector2 toLocal(const Vector2& parentPoint) const;
-        Vector2 toUnscaled(const Vector2& parentPoint) const;
-        Vector2 toParent(const Vector2& unscaled) const;
-        void scaleAround(const Vector2& focal, const Vector2& nextScale);
+        static Vector2 transformPoint(const Matrix3& matrix, const Vector2& point);
+        static Vector2 transformVector(const Matrix3& matrix, const Vector2& vector);
+        Vector2 toLocal(const Vector2& parentPivotPoint) const;
+        Rect bounds(const Matrix3& toSpace) const;
+
+        void setBox(const Vector2& topLeftInParentPivot, const Vector2& newSize);
+        void setScaleAround(const Vector2& focalInParentPivot, const Vector2& nextScale);
     };
 }
 

@@ -41,7 +41,7 @@ namespace eokas
     protected:
         Color activeFill() const;
         void placeLabel();
-        void strokeLoop(UIPrimitive& primitive, const std::vector<Vector2>& localPoints) const;
+        void strokeLoop(UIPrimitive& primitive, const Matrix3& world, const std::vector<Vector2>& localPoints) const;
     };
 }
 

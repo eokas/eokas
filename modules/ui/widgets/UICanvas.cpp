@@ -85,26 +85,14 @@ namespace eokas
     void UICanvas::scaleAt(const Vector2& focal, float value)
     {
         float next = clampScale(value, minScale, maxScale);
-        shape.scaleAround(focal, Vector2(next, next));
+        shape.setScaleAround(focal, Vector2(next, next));
         this->refit();
     }
 
     void UICanvas::addChild(const std::shared_ptr<UIWidget>& child)
     {
+        child->shape.parent = &shape;
         children.push_back(child);
-    }
-
-    void UICanvas::layout(const Rect& given)
-    {
-        shape.origin = (given.origin) + shape.pivot * shape.size;
-        for (auto& child : children)
-        {
-            if (child)
-            {
-                child->layout(Rect(child->shape.left(), child->shape.top(), child->shape.size.x, child->shape.size.y));
-            }
-        }
-        this->refit();
     }
 
     void UICanvas::render(UIPrimitive& primitive)
@@ -113,12 +101,11 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        this->refit();
         if (color.a > 0.0f)
         {
-            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 
@@ -135,30 +122,27 @@ namespace eokas
             {
                 continue;
             }
-            expand(minX, minY, maxX, maxY, any, child->visualRect());
+            expand(minX, minY, maxX, maxY, any, child->shape.bounds(child->shape.localTrans()));
         }
+        Vector2 topLeft(-shape.pivot.x * shape.size.x, -shape.pivot.y * shape.size.y);
         if (!any)
         {
-            shape.origin += shape.pivot * ((Vector2::ZERO) - shape.size);
-            shape.size = Vector2::ZERO;
+            shape.setBox(topLeft, Vector2::ZERO);
             return;
         }
-        if (minX != 0.0f || minY != 0.0f)
+        Vector2 delta = topLeft - Vector2(minX, minY);
+        if (delta.x != 0.0f || delta.y != 0.0f)
         {
-            shape.origin += Vector2(minX, minY) * shape.scale;
-            Vector2 shift(minX, minY);
+            shape.origin -= UIShape::transformVector(shape.localTrans(), delta);
             for (auto& child : children)
             {
                 if (child)
                 {
-                    child->shape.origin -= shift;
+                    child->shape.origin += delta;
                 }
             }
-            maxX -= minX;
-            maxY -= minY;
         }
-        shape.origin += shape.pivot * ((Vector2(maxX, maxY)) - shape.size);
-        shape.size = Vector2(maxX, maxY);
+        this->resize(Vector2(maxX - minX, maxY - minY));
     }
 
     void UICanvas::dragChild(UIWidget* widget, float localX, float localY)
@@ -171,10 +155,13 @@ namespace eokas
         if (mDragWidget != widget)
         {
             mDragWidget = widget;
-            mGrab = local - Vector2(widget->shape.left(), widget->shape.top());
+            Vector2 corner = widget->shape.origin - Vector2(
+                widget->shape.pivot.x * widget->shape.size.x,
+                widget->shape.pivot.y * widget->shape.size.y);
+            mGrab = local - corner;
             return;
         }
-        widget->shape.origin = (local - mGrab) + widget->shape.pivot * widget->shape.size;
+        widget->shape.setBox(local - mGrab, widget->shape.size);
         this->refit();
     }
 

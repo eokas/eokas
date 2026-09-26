@@ -33,12 +33,11 @@ namespace eokas
         UIWidget* focus() const;
 
     private:
-        bool findWidget(UIWidget* node, UIWidget* target, const Vector2& origin, const Vector2& scale, Vector2& outOrigin, Vector2& outScale) const;
         bool collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const;
         UIWidget* dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const;
         void dispatchDrag(float x, float y);
-        bool routeWheel(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale, const Vector2& delta);
-        bool routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale, const Vector2& delta);
+        bool routeWheel(UIWidget* widget, const Vector2& point, const Vector2& delta);
+        bool routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& delta);
         void endCanvasDrag(UIWidget* widget);
         void resetPointerState(UIWidget* widget);
         bool containsWidget(UIWidget* node, UIWidget* target) const;

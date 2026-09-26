@@ -1,4 +1,5 @@
 #include "UIPrimitive.h"
+#include "UIShape.h"
 #include <cstring>
 #include <stdexcept>
 #include <vector>
@@ -163,56 +164,7 @@ namespace eokas
         mVertices.clear();
         mIndices.clear();
         indexCount = 0;
-        mOrigin = Vector2(0.0f, 0.0f);
-        mScale = Vector2(1.0f, 1.0f);
-        mTransformStack.clear();
         mClipStack.clear();
-    }
-
-    Vector2 UIPrimitive::toScreen(const Vector2& local) const
-    {
-        return mOrigin + mScale * local;
-    }
-
-    Rect UIPrimitive::toScreen(const Rect& local) const
-    {
-        Vector2 a = this->toScreen(local.origin);
-        Vector2 b = this->toScreen(local.origin + local.size);
-        float x0 = a.x < b.x ? a.x : b.x;
-        float y0 = a.y < b.y ? a.y : b.y;
-        float x1 = a.x > b.x ? a.x : b.x;
-        float y1 = a.y > b.y ? a.y : b.y;
-        return Rect(x0, y0, x1 - x0, y1 - y0);
-    }
-
-    void UIPrimitive::pushTransform(const Vector2& origin, const Vector2& scale)
-    {
-        mTransformStack.push_back({ mOrigin, mScale });
-        mOrigin = origin;
-        mScale = scale;
-    }
-
-    void UIPrimitive::pushScaleAround(const Vector2& pivot, const Vector2& localScale)
-    {
-        Vector2 nextScale = mScale * localScale;
-        Vector2 nextOrigin = mOrigin + mScale * (pivot * (Vector2::ONE - localScale));
-        this->pushTransform(nextOrigin, nextScale);
-    }
-
-    void UIPrimitive::pushOrigin(const Vector2& next)
-    {
-        this->pushTransform(next, mScale);
-    }
-
-    void UIPrimitive::popOrigin()
-    {
-        if (mTransformStack.empty())
-        {
-            return;
-        }
-        mOrigin = mTransformStack.back().origin;
-        mScale = mTransformStack.back().scale;
-        mTransformStack.pop_back();
     }
 
     void UIPrimitive::pushClip(const Rect& screenClip)
@@ -248,7 +200,7 @@ namespace eokas
         }
     }
 
-    bool UIPrimitive::outsideClip(const Rect& local) const
+    bool UIPrimitive::outsideClip(const Rect& screen) const
     {
         if (mClipStack.empty())
         {
@@ -259,7 +211,6 @@ namespace eokas
         {
             return true;
         }
-        Rect screen = this->toScreen(local);
         float x0 = screen.origin.x;
         float y0 = screen.origin.y;
         float x1 = x0 + screen.size.x;
@@ -281,6 +232,19 @@ namespace eokas
         mTextureDirty = true;
     }
 
+    void UIPrimitive::addQuad(const Matrix3& world, const Rect& local, const Rect& uv, const Color& color)
+    {
+        Vector2 origin = local.origin;
+        Vector2 size = local.size;
+        this->addQuad(
+            UIShape::transformPoint(world, origin),
+            UIShape::transformPoint(world, Vector2(origin.x + size.x, origin.y)),
+            UIShape::transformPoint(world, origin + size),
+            UIShape::transformPoint(world, Vector2(origin.x, origin.y + size.y)),
+            uv,
+            color);
+    }
+
     void UIPrimitive::addQuad(const Rect& screen, const Rect& uv, const Color& color)
     {
         this->addQuad(
@@ -295,14 +259,10 @@ namespace eokas
     void UIPrimitive::addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color)
     {
         Vector4 vertexColor(color.r, color.g, color.b, color.a);
-        Vector2 s0 = this->toScreen(p0);
-        Vector2 s1 = this->toScreen(p1);
-        Vector2 s2 = this->toScreen(p2);
-        Vector2 s3 = this->toScreen(p3);
-        ClipVert q0 { s0.x, s0.y, uv.origin.x, uv.origin.y };
-        ClipVert q1 { s1.x, s1.y, uv.origin.x + uv.size.x, uv.origin.y };
-        ClipVert q2 { s2.x, s2.y, uv.origin.x + uv.size.x, uv.origin.y + uv.size.y };
-        ClipVert q3 { s3.x, s3.y, uv.origin.x, uv.origin.y + uv.size.y };
+        ClipVert q0 { p0.x, p0.y, uv.origin.x, uv.origin.y };
+        ClipVert q1 { p1.x, p1.y, uv.origin.x + uv.size.x, uv.origin.y };
+        ClipVert q2 { p2.x, p2.y, uv.origin.x + uv.size.x, uv.origin.y + uv.size.y };
+        ClipVert q3 { p3.x, p3.y, uv.origin.x, uv.origin.y + uv.size.y };
 
         if (mClipStack.empty())
         {
@@ -332,12 +292,9 @@ namespace eokas
             const Vector2& p0 = vertices[i * 3];
             const Vector2& p1 = vertices[i * 3 + 1];
             const Vector2& p2 = vertices[i * 3 + 2];
-            Vector2 s0 = this->toScreen(p0);
-            Vector2 s1 = this->toScreen(p1);
-            Vector2 s2 = this->toScreen(p2);
-            ClipVert c0 { s0.x, s0.y, u0, v0 };
-            ClipVert c1 { s1.x, s1.y, u1, v0 };
-            ClipVert c2 { s2.x, s2.y, u1, v1 };
+            ClipVert c0 { p0.x, p0.y, u0, v0 };
+            ClipVert c1 { p1.x, p1.y, u1, v0 };
+            ClipVert c2 { p2.x, p2.y, u1, v1 };
             if (mClipStack.empty())
             {
                 emitTriangle(mVertices, mIndices, c0, c1, c2, vertexColor);

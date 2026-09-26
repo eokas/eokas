@@ -10,23 +10,35 @@ namespace eokas
 {
     namespace
     {
-        constexpr const char* kUIShaderPath = "../shaders/UI.hlsl";
+        constexpr const char* kUIShaderPath = "shaders/UI.hlsl";
 
         bool liveScale(const Vector2& scale)
         {
             return scale.x != 0.0f && scale.y != 0.0f;
         }
 
-        Vector2 parentPoint(const Vector2& point, const Vector2& origin, const Vector2& scale)
+        Matrix3 parentSpaceOf(const UIShape& shape)
         {
-            return Vector2(
-                (point.x - origin.x) / scale.x,
-                (point.y - origin.y) / scale.y);
+            if (shape.parent == nullptr)
+            {
+                return Matrix3::IDENTITY;
+            }
+            return shape.parent->pivotToScreen();
         }
 
-        Vector2 layoutPoint(const UIWidget* widget, const Vector2& parentLocal)
+        Vector2 screenToPivot(const UIShape& shape, const Vector2& screen)
         {
-            return widget->shape.toUnscaled(parentLocal);
+            return UIShape::transformPoint(parentSpaceOf(shape).inverse(), screen);
+        }
+
+        void prepareTree(const std::shared_ptr<UIWidget>& root)
+        {
+            if (!root)
+            {
+                return;
+            }
+            root->shape.parent = nullptr;
+            root->bindChildren();
         }
     }
 
@@ -107,6 +119,7 @@ namespace eokas
         mPressY = 0.0f;
         mDragged = false;
         mRoot = widget;
+        prepareTree(mRoot);
     }
 
     void UIFrame::flush()
@@ -119,7 +132,7 @@ namespace eokas
         mPrimitive->begin();
         if (mRoot)
         {
-            mRoot->layout(Rect(mRoot->shape.left(), mRoot->shape.top(), mRoot->shape.size.x, mRoot->shape.size.y));
+            prepareTree(mRoot);
             mRoot->render(*mPrimitive);
         }
         mPrimitive->end();
@@ -136,7 +149,7 @@ namespace eokas
         {
             return nullptr;
         }
-        mRoot->layout(Rect(mRoot->shape.left(), mRoot->shape.top(), mRoot->shape.size.x, mRoot->shape.size.y));
+        prepareTree(mRoot);
         return mRoot->pick(Vector2(x, y));
     }
 
@@ -226,17 +239,8 @@ namespace eokas
             {
                 if (UIChart* chart = dynamic_cast<UIChart*>(pressed))
                 {
-                    float dropX = x;
-                    float dropY = y;
-                    Vector2 origin = Vector2::ZERO;
-                    Vector2 scale(1.0f, 1.0f);
-                    if (this->findWidget(mRoot.get(), canvas, Vector2::ZERO, Vector2(1.0f, 1.0f), origin, scale) && liveScale(scale))
-                    {
-                        Vector2 local = parentPoint(Vector2(x, y), origin, scale);
-                        dropX = local.x;
-                        dropY = local.y;
-                    }
-                    canvas->dispatchDrop(chart, hit, dropX, dropY);
+                    Vector2 drop = screenToPivot(canvas->shape, Vector2(x, y));
+                    canvas->dispatchDrop(chart, hit, drop.x, drop.y);
                 }
             }
         }
@@ -248,7 +252,8 @@ namespace eokas
 
     void UIFrame::onMouseWheel(float x, float y, float deltaX, float deltaY)
     {
-        this->routeWheel(mRoot.get(), Vector2(x, y), Vector2::ZERO, Vector2(1.0f, 1.0f), Vector2(deltaX, deltaY));
+        prepareTree(mRoot);
+        this->routeWheel(mRoot.get(), Vector2(x, y), Vector2(deltaX, deltaY));
     }
 
     void UIFrame::dispatchDrag(float x, float y)
@@ -257,27 +262,17 @@ namespace eokas
         {
             return;
         }
+        mPressed->framePointer = Vector2(x, y);
         UICanvas* canvas = nullptr;
         UIWidget* target = this->dragTargetOf(mPressed, canvas);
+        prepareTree(mRoot);
         if (canvas != nullptr && target != nullptr && target != canvas)
         {
-            Vector2 origin = Vector2::ZERO;
-            Vector2 scale(1.0f, 1.0f);
-            if (this->findWidget(mRoot.get(), target, Vector2::ZERO, Vector2(1.0f, 1.0f), origin, scale) && liveScale(scale))
-            {
-                Vector2 local = parentPoint(Vector2(x, y), origin, scale);
-                canvas->dragChild(target, local.x, local.y);
-                return;
-            }
+            Vector2 local = screenToPivot(target->shape, Vector2(x, y));
+            canvas->dragChild(target, local.x, local.y);
+            return;
         }
-        Vector2 origin = Vector2::ZERO;
-        Vector2 scale(1.0f, 1.0f);
-        this->findWidget(mRoot.get(), mPressed, Vector2::ZERO, Vector2(1.0f, 1.0f), origin, scale);
-        Vector2 local = Vector2::ZERO;
-        if (liveScale(scale))
-        {
-            local = parentPoint(Vector2(x, y), origin, scale);
-        }
+        Vector2 local = screenToPivot(mPressed->shape, Vector2(x, y));
         mPressed->triggerPointerDrag(local.x, local.y, mPressedButton);
     }
 
@@ -359,80 +354,35 @@ namespace eokas
         return nullptr;
     }
 
-    bool UIFrame::findWidget(UIWidget* node, UIWidget* target, const Vector2& origin, const Vector2& scale, Vector2& outOrigin, Vector2& outScale) const
+    bool UIFrame::routeWheel(UIWidget* widget, const Vector2& point, const Vector2& delta)
     {
-        if (node == nullptr)
-        {
-            return false;
-        }
-        if (node == target)
-        {
-            outOrigin = origin;
-            outScale = scale;
-            return true;
-        }
-        Vector2 nextOrigin = origin + scale * node->shape.toParent(Vector2(node->shape.left(), node->shape.top()));
-        Vector2 nextScale = scale * node->shape.scale;
-        if (UIView* view = dynamic_cast<UIView*>(node))
-        {
-            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->shape.toParent(Vector2(view->root()->shape.left(), view->root()->shape.top()));
-            Vector2 contentScale = nextScale * view->root()->shape.scale;
-            for (auto& child : view->root()->children)
-            {
-                if (this->findWidget(child.get(), target, contentOrigin, contentScale, outOrigin, outScale))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-        for (auto& child : node->children)
-        {
-            if (this->findWidget(child.get(), target, nextOrigin, nextScale, outOrigin, outScale))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    bool UIFrame::routeWheel(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale, const Vector2& delta)
-    {
-        if (widget == nullptr || !widget->visible || !liveScale(scale))
+        if (widget == nullptr || !widget->visible || !liveScale(widget->shape.scale))
         {
             return false;
         }
         if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
         {
-            Vector2 nextOrigin = origin + scale * canvas->shape.toParent(Vector2(canvas->shape.left(), canvas->shape.top()));
-            Vector2 nextScale = scale * canvas->shape.scale;
             for (auto it = canvas->children.rbegin(); it != canvas->children.rend(); ++it)
             {
-                if (*it && this->routeNestedCanvas(it->get(), point, nextOrigin, nextScale, delta))
+                if (*it && this->routeNestedCanvas(it->get(), point, delta))
                 {
                     return true;
                 }
             }
-            if (!liveScale(canvas->shape.scale))
-            {
-                return false;
-            }
-            Vector2 parentLocal = parentPoint(point, origin, scale);
-            Vector2 layout = layoutPoint(canvas, parentLocal);
-            if (!Rect(canvas->shape.left(), canvas->shape.top(), canvas->shape.size.x, canvas->shape.size.y).contains(layout))
+            Vector2 parentLocal = screenToPivot(canvas->shape, point);
+            Vector2 local = canvas->shape.toLocal(parentLocal);
+            if (!Rect(0.0f, 0.0f, canvas->shape.size.x, canvas->shape.size.y).contains(local))
             {
                 return false;
             }
             UIWidget* hit = canvas->pick(parentLocal);
             if (UIChart* chart = dynamic_cast<UIChart*>(hit))
             {
-                Vector2 chartOrigin = Vector2::ZERO;
-                Vector2 chartScale(1.0f, 1.0f);
-                if (this->findWidget(mRoot.get(), chart, Vector2::ZERO, Vector2(1.0f, 1.0f), chartOrigin, chartScale) && liveScale(chartScale))
+                if (liveScale(chart->shape.scale))
                 {
                     float current = chart->shape.scale.x == 0.0f ? 1.0f : chart->shape.scale.x;
                     float factor = expf(-delta.y * chart->scaleSensitivity);
-                    chart->scaleAt(parentPoint(point, chartOrigin, chartScale), current * factor);
+                    chart->scaleAt(screenToPivot(chart->shape, point), current * factor);
                     return true;
                 }
             }
@@ -445,33 +395,25 @@ namespace eokas
             canvas->scaleAt(parentLocal, current * factor);
             return true;
         }
-        Vector2 nextOrigin = origin + scale * widget->shape.toParent(Vector2(widget->shape.left(), widget->shape.top()));
-        Vector2 nextScale = scale * widget->shape.scale;
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
-            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->shape.toParent(Vector2(view->root()->shape.left(), view->root()->shape.top()));
-            Vector2 contentScale = nextScale * view->root()->shape.scale;
             const std::shared_ptr<UIWidget>& content = view->root();
             for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
             {
-                if (*it && (*it)->floating && this->routeWheel(it->get(), point, contentOrigin, contentScale, delta))
+                if (*it && (*it)->floating && this->routeWheel(it->get(), point, delta))
                 {
                     return true;
                 }
             }
             for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
             {
-                if (*it && !(*it)->floating && this->routeWheel(it->get(), point, contentOrigin, contentScale, delta))
+                if (*it && !(*it)->floating && this->routeWheel(it->get(), point, delta))
                 {
                     return true;
                 }
             }
-            if (!liveScale(widget->shape.scale))
-            {
-                return false;
-            }
-            Vector2 layout = layoutPoint(widget, parentPoint(point, origin, scale));
-            if (!Rect(view->shape.left(), view->shape.top(), view->shape.size.x, view->shape.size.y).contains(layout))
+            Vector2 local = view->shape.toLocal(screenToPivot(view->shape, point));
+            if (!Rect(0.0f, 0.0f, view->shape.size.x, view->shape.size.y).contains(local))
             {
                 return false;
             }
@@ -479,14 +421,14 @@ namespace eokas
         }
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
-            if (*it && (*it)->floating && this->routeWheel(it->get(), point, nextOrigin, nextScale, delta))
+            if (*it && (*it)->floating && this->routeWheel(it->get(), point, delta))
             {
                 return true;
             }
         }
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
-            if (*it && !(*it)->floating && this->routeWheel(it->get(), point, nextOrigin, nextScale, delta))
+            if (*it && !(*it)->floating && this->routeWheel(it->get(), point, delta))
             {
                 return true;
             }
@@ -494,40 +436,30 @@ namespace eokas
         return false;
     }
 
-    bool UIFrame::routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale, const Vector2& delta)
+    bool UIFrame::routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& delta)
     {
-        if (widget == nullptr || !widget->visible || !liveScale(scale))
+        if (widget == nullptr || !widget->visible || !liveScale(widget->shape.scale))
         {
             return false;
         }
         if (dynamic_cast<UICanvas*>(widget) != nullptr)
         {
-            return this->routeWheel(widget, point, origin, scale, delta);
+            return this->routeWheel(widget, point, delta);
         }
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
-            if (!liveScale(view->shape.scale))
-            {
-                return false;
-            }
-            Vector2 nextOrigin = origin + scale * view->shape.toParent(Vector2(view->shape.left(), view->shape.top()));
-            Vector2 nextScale = scale * view->shape.scale;
-            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->shape.toParent(Vector2(view->root()->shape.left(), view->root()->shape.top()));
-            Vector2 contentScale = nextScale * view->root()->shape.scale;
             for (auto it = view->root()->children.rbegin(); it != view->root()->children.rend(); ++it)
             {
-                if (*it && this->routeNestedCanvas(it->get(), point, contentOrigin, contentScale, delta))
+                if (*it && this->routeNestedCanvas(it->get(), point, delta))
                 {
                     return true;
                 }
             }
             return false;
         }
-        Vector2 nextOrigin = origin + scale * widget->shape.toParent(Vector2(widget->shape.left(), widget->shape.top()));
-        Vector2 nextScale = scale * widget->shape.scale;
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
-            if (*it && this->routeNestedCanvas(it->get(), point, nextOrigin, nextScale, delta))
+            if (*it && this->routeNestedCanvas(it->get(), point, delta))
             {
                 return true;
             }

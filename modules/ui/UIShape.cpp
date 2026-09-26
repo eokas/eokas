@@ -1,88 +1,114 @@
 #include "UIShape.h"
 
+#include <cmath>
+
 namespace eokas
 {
-    f32_t UIShape::left() const
+    UIShape::UIShape(const UIShape& other)
+        : parent(nullptr)
+        , origin(other.origin)
+        , angle(other.angle)
+        , scale(other.scale)
+        , pivot(other.pivot)
+        , size(other.size)
     {
-        return origin.x - pivot.x * size.x;
     }
 
-    void UIShape::setLeft(f32_t value)
+    UIShape& UIShape::operator=(const UIShape& other)
     {
-        f32_t pinned = this->right();
-        size.x = pinned - value;
-        origin.x = value + pivot.x * size.x;
+        if (this != &other)
+        {
+            parent = nullptr;
+            origin = other.origin;
+            angle = other.angle;
+            scale = other.scale;
+            pivot = other.pivot;
+            size = other.size;
+        }
+        return *this;
     }
 
-    f32_t UIShape::right() const
+    Matrix3 UIShape::localTrans() const
     {
-        return this->left() + size.x;
+        Matrix3 m = Matrix3::translation(Vector2(-pivot.x * size.x, -pivot.y * size.y));
+        m = Matrix3::transform(m, Matrix3::scaling(scale));
+        m = Matrix3::transform(m, Matrix3::rotation(Vector2::ZERO, angle));
+        m = Matrix3::transform(m, Matrix3::translation(origin));
+        return m;
     }
 
-    void UIShape::setRight(f32_t value)
+    Matrix3 UIShape::pivotToScreen() const
     {
-        f32_t edge = this->left();
-        size.x = value - edge;
-        origin.x = edge + pivot.x * size.x;
+        return Matrix3::transform(Matrix3::translation(Vector2(pivot.x * size.x, pivot.y * size.y)), this->worldTrans());
     }
 
-    f32_t UIShape::top() const
+    Matrix3 UIShape::worldTrans() const
     {
-        return origin.y - pivot.y * size.y;
+        Matrix3 local = this->localTrans();
+        if (parent == nullptr)
+        {
+            return local;
+        }
+        return Matrix3::transform(local, parent->pivotToScreen());
     }
 
-    void UIShape::setTop(f32_t value)
+    Vector2 UIShape::transformPoint(const Matrix3& matrix, const Vector2& point)
     {
-        f32_t pinned = this->bottom();
-        size.y = pinned - value;
-        origin.y = value + pivot.y * size.y;
+        Vector3 p = Matrix3::transform(Vector3(point.x, point.y, 1.0f), matrix);
+        return Vector2(p.x, p.y);
     }
 
-    f32_t UIShape::bottom() const
+    Vector2 UIShape::transformVector(const Matrix3& matrix, const Vector2& vector)
     {
-        return this->top() + size.y;
+        Vector3 p = Matrix3::transform(Vector3(vector.x, vector.y, 0.0f), matrix);
+        return Vector2(p.x, p.y);
     }
 
-    void UIShape::setBottom(f32_t value)
+    Vector2 UIShape::toLocal(const Vector2& parentPivotPoint) const
     {
-        f32_t edge = this->top();
-        size.y = value - edge;
-        origin.y = edge + pivot.y * size.y;
+        return transformPoint(this->localTrans().inverse(), parentPivotPoint);
     }
 
-    Rect UIShape::visualRect() const
+    Rect UIShape::bounds(const Matrix3& toSpace) const
     {
-        Vector2 corner = origin - pivot * size;
-        return Rect(this->toParent(corner), size * scale);
+        Vector2 corner[4] = {
+            transformPoint(toSpace, Vector2(0.0f, 0.0f)),
+            transformPoint(toSpace, Vector2(size.x, 0.0f)),
+            transformPoint(toSpace, Vector2(size.x, size.y)),
+            transformPoint(toSpace, Vector2(0.0f, size.y))
+        };
+        float minX = corner[0].x;
+        float minY = corner[0].y;
+        float maxX = corner[0].x;
+        float maxY = corner[0].y;
+        for (int i = 1; i < 4; ++i)
+        {
+            minX = corner[i].x < minX ? corner[i].x : minX;
+            minY = corner[i].y < minY ? corner[i].y : minY;
+            maxX = corner[i].x > maxX ? corner[i].x : maxX;
+            maxY = corner[i].y > maxY ? corner[i].y : maxY;
+        }
+        return Rect(minX, minY, maxX - minX, maxY - minY);
     }
 
-    Vector2 UIShape::toParent(const Vector2& unscaled) const
+    void UIShape::setBox(const Vector2& topLeftInParentPivot, const Vector2& newSize)
     {
-        return origin + (unscaled - origin) * scale;
+        size = newSize;
+        origin = topLeftInParentPivot + Vector2(pivot.x * newSize.x, pivot.y * newSize.y);
     }
 
-    Vector2 UIShape::toUnscaled(const Vector2& parentPoint) const
-    {
-        return Vector2(
-            origin.x + (parentPoint.x - origin.x) / scale.x,
-            origin.y + (parentPoint.y - origin.y) / scale.y);
-    }
-
-    Vector2 UIShape::toLocal(const Vector2& parentPoint) const
-    {
-        return this->toUnscaled(parentPoint) - (origin - pivot * size);
-    }
-
-    void UIShape::scaleAround(const Vector2& focal, const Vector2& nextScale)
+    void UIShape::setScaleAround(const Vector2& focal, const Vector2& nextScale)
     {
         auto axis = [](f32_t value) { return value == 0.0f ? 1.0f : value; };
         Vector2 oldScale(axis(scale.x), axis(scale.y));
-        Vector2 fromPivot(
-            (focal.x - origin.x) / oldScale.x,
-            (focal.y - origin.y) / oldScale.y);
-        origin = Vector2(
-            focal.x - fromPivot.x * nextScale.x,
-            focal.y - fromPivot.y * nextScale.y);
+        float c = cosf(angle);
+        float s = sinf(angle);
+        Vector2 delta = focal - origin;
+        Vector2 unrotated(delta.x * c + delta.y * s, -delta.x * s + delta.y * c);
+        Vector2 v(unrotated.x / oldScale.x, unrotated.y / oldScale.y);
+        Vector2 scaled(v.x * nextScale.x, v.y * nextScale.y);
+        Vector2 rotated(scaled.x * c - scaled.y * s, scaled.x * s + scaled.y * c);
+        origin = focal - rotated;
         scale = nextScale;
     }
 }

@@ -18,7 +18,7 @@ namespace eokas
             return solid;
         }
 
-        void addDisc(UIPrimitive& primitive, const Vector2& center, float radius, const Color& color)
+        void addDisc(UIPrimitive& primitive, const Matrix3& world, const Vector2& center, float radius, const Color& color)
         {
             if (radius <= 0.0f || color.a <= 0.0f)
             {
@@ -31,14 +31,14 @@ namespace eokas
             {
                 float a0 = 6.28318530718f * (float)i / (float)kMarkerSegments;
                 float a1 = 6.28318530718f * (float)(i + 1) / (float)kMarkerSegments;
-                vertices.push_back(center);
-                vertices.push_back(Vector2(center.x + cosf(a0) * radius, center.y + sinf(a0) * radius));
-                vertices.push_back(Vector2(center.x + cosf(a1) * radius, center.y + sinf(a1) * radius));
+                vertices.push_back(UIShape::transformPoint(world, center));
+                vertices.push_back(UIShape::transformPoint(world, Vector2(center.x + cosf(a0) * radius, center.y + sinf(a0) * radius)));
+                vertices.push_back(UIShape::transformPoint(world, Vector2(center.x + cosf(a1) * radius, center.y + sinf(a1) * radius)));
             }
             primitive.addTriangles(vertices.data(), (uint32_t)kMarkerSegments, uv, color);
         }
 
-        void addRing(UIPrimitive& primitive, const Vector2& center, float radius, float thickness, const Color& color)
+        void addRing(UIPrimitive& primitive, const Matrix3& world, const Vector2& center, float radius, float thickness, const Color& color)
         {
             if (radius <= 0.0f || thickness <= 0.0f || color.a <= 0.0f)
             {
@@ -47,7 +47,7 @@ namespace eokas
             float inner = radius - thickness;
             if (inner <= 0.0f)
             {
-                addDisc(primitive, center, radius, color);
+                addDisc(primitive, world, center, radius, color);
                 return;
             }
             Rect uv = UIFont::solidUV();
@@ -57,7 +57,13 @@ namespace eokas
                 float a1 = 6.28318530718f * (float)(i + 1) / (float)kMarkerSegments;
                 Vector2 d0(cosf(a0), sinf(a0));
                 Vector2 d1(cosf(a1), sinf(a1));
-                primitive.addQuad(center + d0 * radius, center + d1 * radius, center + d1 * inner, center + d0 * inner, uv, color);
+                primitive.addQuad(
+                    UIShape::transformPoint(world, center + d0 * radius),
+                    UIShape::transformPoint(world, center + d1 * radius),
+                    UIShape::transformPoint(world, center + d1 * inner),
+                    UIShape::transformPoint(world, center + d0 * inner),
+                    uv,
+                    color);
             }
         }
 
@@ -68,7 +74,7 @@ namespace eokas
             return dx * dx + dy * dy <= 1.0e-8f;
         }
 
-        void addJoinTriangle(UIPrimitive& primitive, const Vector2& a, const Vector2& b, const Vector2& c, const Rect& uv, const Color& color)
+        void addJoinTriangle(UIPrimitive& primitive, const Matrix3& world, const Vector2& a, const Vector2& b, const Vector2& c, const Rect& uv, const Color& color)
         {
             float cross = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
             if (cross == 0.0f)
@@ -76,21 +82,21 @@ namespace eokas
                 return;
             }
             Vector2 tri[3];
-            tri[0] = a;
+            tri[0] = UIShape::transformPoint(world, a);
             if (cross > 0.0f)
             {
-                tri[1] = b;
-                tri[2] = c;
+                tri[1] = UIShape::transformPoint(world, b);
+                tri[2] = UIShape::transformPoint(world, c);
             }
             else
             {
-                tri[1] = c;
-                tri[2] = b;
+                tri[1] = UIShape::transformPoint(world, c);
+                tri[2] = UIShape::transformPoint(world, b);
             }
             primitive.addTriangles(tri, 1, uv, color);
         }
 
-        void addCorner(UIPrimitive& primitive, const Vector2& vertex, const Vector2& dirIn, const Vector2& dirOut, float half, const Color& color)
+        void addCorner(UIPrimitive& primitive, const Matrix3& world, const Vector2& vertex, const Vector2& dirIn, const Vector2& dirOut, float half, const Color& color)
         {
             float cross = dirIn.x * dirOut.y - dirIn.y * dirOut.x;
             float dot = dirIn.x * dirOut.x + dirIn.y * dirOut.y;
@@ -103,8 +109,8 @@ namespace eokas
             Rect uv = UIFont::solidUV();
             if (dot < -0.999f)
             {
-                addJoinTriangle(primitive, vertex, vertex + n0 * half, vertex + n1 * half, uv, color);
-                addJoinTriangle(primitive, vertex, vertex - n0 * half, vertex - n1 * half, uv, color);
+                addJoinTriangle(primitive, world, vertex, vertex + n0 * half, vertex + n1 * half, uv, color);
+                addJoinTriangle(primitive, world, vertex, vertex - n0 * half, vertex - n1 * half, uv, color);
                 return;
             }
             float side = cross > 0.0f ? -1.0f : 1.0f;
@@ -120,15 +126,15 @@ namespace eokas
                 {
                     dm *= scale;
                     Vector2 tip = vertex + dm * (half * side);
-                    addJoinTriangle(primitive, vertex, outer0, tip, uv, color);
-                    addJoinTriangle(primitive, vertex, tip, outer1, uv, color);
+                    addJoinTriangle(primitive, world, vertex, outer0, tip, uv, color);
+                    addJoinTriangle(primitive, world, vertex, tip, outer1, uv, color);
                     return;
                 }
             }
-            addJoinTriangle(primitive, vertex, outer0, outer1, uv, color);
+            addJoinTriangle(primitive, world, vertex, outer0, outer1, uv, color);
         }
 
-        void dashRect(UIPrimitive& primitive, const Rect& area, bool alongX, const UIStrokeStyle& style)
+        void dashRect(UIPrimitive& primitive, const Matrix3& world, const Rect& area, bool alongX, const UIStrokeStyle& style)
         {
             if (area.size.x <= 0.0f || area.size.y <= 0.0f || style.color.a <= 0.0f)
             {
@@ -137,7 +143,7 @@ namespace eokas
             Rect uv = UIFont::solidUV();
             if (style.pattern != UILinePattern::Dashed || style.dashLength <= 0.0f)
             {
-                primitive.addQuad(area, uv, style.color);
+                primitive.addQuad(world, area, uv, style.color);
                 return;
             }
             float dash = style.dashLength;
@@ -162,13 +168,13 @@ namespace eokas
                     piece.origin.y += cursor;
                     piece.size.y = on;
                 }
-                primitive.addQuad(piece, uv, style.color);
+                primitive.addQuad(world, piece, uv, style.color);
                 cursor += on + gap;
             }
         }
     }
 
-    void UIStroke::segment(UIPrimitive& primitive, const Vector2& a, const Vector2& b, const UIStrokeStyle& style)
+    void UIStroke::segment(UIPrimitive& primitive, const Matrix3& world, const Vector2& a, const Vector2& b, const UIStrokeStyle& style)
     {
         if (style.thickness <= 0.0f || style.color.a <= 0.0f)
         {
@@ -182,10 +188,10 @@ namespace eokas
         }
         float half = style.thickness * 0.5f;
         Vector2 normal((-edge.y / len) * half, (edge.x / len) * half);
-        primitive.addQuad(a + normal, b + normal, b - normal, a - normal, UIFont::solidUV(), style.color);
+        primitive.addQuad(UIShape::transformPoint(world, a + normal), UIShape::transformPoint(world, b + normal), UIShape::transformPoint(world, b - normal), UIShape::transformPoint(world, a - normal), UIFont::solidUV(), style.color);
     }
 
-    void UIStroke::path(UIPrimitive& primitive, const std::vector<Vector2>& points, bool closed, const UIStrokeStyle& style)
+    void UIStroke::path(UIPrimitive& primitive, const Matrix3& world, const std::vector<Vector2>& points, bool closed, const UIStrokeStyle& style)
     {
         if (points.size() < 2 || style.thickness <= 0.0f || style.color.a <= 0.0f)
         {
@@ -223,7 +229,7 @@ namespace eokas
                 Vector2 delta = pts[(i + 1) % n] - pts[i];
                 float len = delta.magnitude();
                 dirs[i] = delta * (1.0f / len);
-                segment(primitive, pts[i], pts[(i + 1) % n], style);
+                segment(primitive, world, pts[i], pts[(i + 1) % n], style);
             }
             float half = style.thickness * 0.5f;
             if (loop)
@@ -231,14 +237,14 @@ namespace eokas
                 for (size_t i = 0; i < n; ++i)
                 {
                     size_t incoming = (i + n - 1) % n;
-                    addCorner(primitive, pts[i], dirs[incoming], dirs[i], half, style.color);
+                    addCorner(primitive, world, pts[i], dirs[incoming], dirs[i], half, style.color);
                 }
             }
             else if (n >= 3)
             {
                 for (size_t i = 1; i + 1 < n; ++i)
                 {
-                    addCorner(primitive, pts[i], dirs[i - 1], dirs[i], half, style.color);
+                    addCorner(primitive, world, pts[i], dirs[i - 1], dirs[i], half, style.color);
                 }
             }
             return;
@@ -271,7 +277,7 @@ namespace eokas
                     {
                         draw = remain;
                     }
-                    segment(primitive, a + dir * walked, a + dir * (walked + draw), solid);
+                    segment(primitive, world, a + dir * walked, a + dir * (walked + draw), solid);
                     walked += draw;
                     cursor += draw;
                 }
@@ -289,7 +295,7 @@ namespace eokas
         }
     }
 
-    void UIStroke::border(UIPrimitive& primitive, const Rect& area, const UIStrokeStyle& style)
+    void UIStroke::border(UIPrimitive& primitive, const Matrix3& world, const Rect& area, const UIStrokeStyle& style)
     {
         float t = style.thickness;
         if (t <= 0.0f || area.size.x <= 0.0f || area.size.y <= 0.0f || style.color.a <= 0.0f)
@@ -309,13 +315,13 @@ namespace eokas
         {
             midH = 0.0f;
         }
-        dashRect(primitive, Rect(area.origin.x, area.origin.y, area.size.x, t), true, style);
-        dashRect(primitive, Rect(area.origin.x, area.origin.y + area.size.y - t, area.size.x, t), true, style);
-        dashRect(primitive, Rect(area.origin.x, area.origin.y + t, t, midH), false, style);
-        dashRect(primitive, Rect(area.origin.x + area.size.x - t, area.origin.y + t, t, midH), false, style);
+        dashRect(primitive, world, Rect(area.origin.x, area.origin.y, area.size.x, t), true, style);
+        dashRect(primitive, world, Rect(area.origin.x, area.origin.y + area.size.y - t, area.size.x, t), true, style);
+        dashRect(primitive, world, Rect(area.origin.x, area.origin.y + t, t, midH), false, style);
+        dashRect(primitive, world, Rect(area.origin.x + area.size.x - t, area.origin.y + t, t, midH), false, style);
     }
 
-    void UIStroke::marker(UIPrimitive& primitive, const Vector2& tip, const Vector2& outward, const UIEndpointStyle& style)
+    void UIStroke::marker(UIPrimitive& primitive, const Matrix3& world, const Vector2& tip, const Vector2& outward, const UIEndpointStyle& style)
     {
         if (style.kind == UIEndpointKind::None || style.size <= 0.0f)
         {
@@ -338,7 +344,7 @@ namespace eokas
         {
         case UIEndpointKind::TriangleFilled:
         {
-            Vector2 vertices[3] = { tip, left, right };
+            Vector2 vertices[3] = { UIShape::transformPoint(world, tip), UIShape::transformPoint(world, left), UIShape::transformPoint(world, right) };
             primitive.addTriangles(vertices, 1, uv, style.fill);
             break;
         }
@@ -348,25 +354,25 @@ namespace eokas
             loop.push_back(tip);
             loop.push_back(left);
             loop.push_back(right);
-            path(primitive, loop, true, style.stroke);
+            path(primitive, world, loop, true, style.stroke);
             break;
         }
         case UIEndpointKind::ArrowFilled:
         {
             Vector2 notch = tip - dir * (size * 0.62f);
-            Vector2 vertices[6] = { tip, left, notch, tip, notch, right };
+            Vector2 vertices[6] = { UIShape::transformPoint(world, tip), UIShape::transformPoint(world, left), UIShape::transformPoint(world, notch), UIShape::transformPoint(world, tip), UIShape::transformPoint(world, notch), UIShape::transformPoint(world, right) };
             primitive.addTriangles(vertices, 2, uv, style.fill);
             break;
         }
         case UIEndpointKind::ArrowHollow:
-            segment(primitive, tip, left, style.stroke);
-            segment(primitive, tip, right, style.stroke);
+            segment(primitive, world, tip, left, style.stroke);
+            segment(primitive, world, tip, right, style.stroke);
             break;
         case UIEndpointKind::CircleFilled:
-            addDisc(primitive, tip, size * 0.5f, style.fill);
+            addDisc(primitive, world, tip, size * 0.5f, style.fill);
             break;
         case UIEndpointKind::CircleHollow:
-            addRing(primitive, tip, size * 0.5f, style.stroke.thickness, style.stroke.color);
+            addRing(primitive, world, tip, size * 0.5f, style.stroke.thickness, style.stroke.color);
             break;
         case UIEndpointKind::DiamondFilled:
         {
@@ -374,7 +380,7 @@ namespace eokas
             Vector2 south = tip - dir * (size * 0.5f);
             Vector2 east = tip + perp * (size * 0.5f);
             Vector2 west = tip - perp * (size * 0.5f);
-            Vector2 vertices[6] = { north, east, south, north, south, west };
+            Vector2 vertices[6] = { UIShape::transformPoint(world, north), UIShape::transformPoint(world, east), UIShape::transformPoint(world, south), UIShape::transformPoint(world, north), UIShape::transformPoint(world, south), UIShape::transformPoint(world, west) };
             primitive.addTriangles(vertices, 2, uv, style.fill);
             break;
         }
@@ -385,7 +391,7 @@ namespace eokas
             loop.push_back(tip + perp * (size * 0.5f));
             loop.push_back(tip - dir * (size * 0.5f));
             loop.push_back(tip - perp * (size * 0.5f));
-            path(primitive, loop, true, style.stroke);
+            path(primitive, world, loop, true, style.stroke);
             break;
         }
         case UIEndpointKind::None:

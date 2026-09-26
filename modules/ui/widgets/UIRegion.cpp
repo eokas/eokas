@@ -17,7 +17,6 @@ namespace eokas
             return;
         }
         mExpanded = next;
-        this->layout(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y));
         if (onExpandedChanged)
         {
             onExpandedChanged(mExpanded);
@@ -31,14 +30,12 @@ namespace eokas
             return;
         }
         mSpacing = value;
-        this->layout(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y));
     }
 
     void UIRegion::setHead(const std::shared_ptr<UIWidget>& widget)
     {
         if (mHead == widget)
         {
-            this->layout(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y));
             return;
         }
         mHead = widget;
@@ -53,19 +50,16 @@ namespace eokas
             };
         }
         this->syncChildren();
-        this->layout(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y));
     }
 
     void UIRegion::setBody(const std::shared_ptr<UIWidget>& widget)
     {
         if (mBody == widget)
         {
-            this->layout(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y));
             return;
         }
         mBody = widget;
         this->syncChildren();
-        this->layout(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y));
     }
 
     void UIRegion::syncChildren()
@@ -81,14 +75,13 @@ namespace eokas
         }
     }
 
-    void UIRegion::layout(const Rect& rect)
+    void UIRegion::render(UIPrimitive& primitive)
     {
+        if (!visible)
         {
-            Rect _box = rect;
-            shape.size = _box.size;
-            shape.origin = _box.origin + shape.pivot * shape.size;
+            return;
         }
-        float width = rect.size.x;
+        float width = shape.size.x;
         if (width <= 0.0f)
         {
             width = 0.0f;
@@ -125,7 +118,7 @@ namespace eokas
         {
             mHead->visible = visible;
             mHead->pickable = pickable;
-            mHead->layout(Rect(headPos, Vector2(width, headH)));
+            this->placeChild(*mHead, headPos, Vector2(width, headH));
             headH = mHead->shape.size.y;
         }
 
@@ -136,7 +129,7 @@ namespace eokas
             if (showBody)
             {
                 Vector2 bodyPos(0.0f, floorf(headH + gap + 0.5f));
-                mBody->layout(Rect(bodyPos, Vector2(width, bodyH)));
+                this->placeChild(*mBody, bodyPos, Vector2(width, bodyH));
                 bodyH = mBody->shape.size.y;
             }
         }
@@ -146,24 +139,11 @@ namespace eokas
         {
             height += gap + bodyH;
         }
-        shape.origin.x += shape.pivot.x * ((width) - shape.size.x);
-        shape.size.x = width;
-        shape.origin.y += shape.pivot.y * ((height) - shape.size.y);
-        shape.size.y = height;
-    }
-
-    void UIRegion::render(UIPrimitive& primitive)
-    {
-        if (!visible)
-        {
-            return;
-        }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        this->resize(Vector2(width, height));
         if (color.a > 0.0f)
         {
-            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 }

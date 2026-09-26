@@ -2,15 +2,21 @@
 
 namespace eokas
 {
-    Rect UIWidget::visualRect() const
+    UIWidget::~UIWidget()
     {
-        return shape.visualRect();
+        for (auto& child : children)
+        {
+            if (child && child->shape.parent == &shape)
+            {
+                child->shape.parent = nullptr;
+            }
+        }
     }
 
     bool UIWidget::contains(const Vector2& point) const
     {
-        Rect box(shape.left(), shape.top(), shape.size.x, shape.size.y);
-        return box.contains(point);
+        return point.x >= 0.0f && point.y >= 0.0f
+            && point.x <= shape.size.x && point.y <= shape.size.y;
     }
 
     UIWidget* UIWidget::pick(const Vector2& point)
@@ -20,12 +26,13 @@ namespace eokas
             return nullptr;
         }
         Vector2 local = shape.toLocal(point);
-        bool inside = this->contains(Vector2(shape.left(), shape.top()) + local);
+        bool inside = this->contains(local);
+        Vector2 childPoint = local - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
         for (auto it = children.rbegin(); it != children.rend(); ++it)
         {
             if (*it && (*it)->floating)
             {
-                if (UIWidget* hit = (*it)->pick(local))
+                if (UIWidget* hit = (*it)->pick(childPoint))
                 {
                     return hit;
                 }
@@ -35,7 +42,7 @@ namespace eokas
         {
             if (*it && !(*it)->floating)
             {
-                if (UIWidget* hit = (*it)->pick(local))
+                if (UIWidget* hit = (*it)->pick(childPoint))
                 {
                     return hit;
                 }
@@ -48,17 +55,45 @@ namespace eokas
         return nullptr;
     }
 
-    void UIWidget::layout(const Rect& rect)
+    void UIWidget::placeChild(UIWidget& child, const Vector2& topLeftLocal)
     {
-        shape.size = rect.size;
-        shape.origin = rect.origin + shape.pivot * shape.size;
+        child.shape.parent = &shape;
+        Vector2 topLeftPivot = topLeftLocal - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+        child.shape.setBox(topLeftPivot, child.shape.size);
+    }
+
+    void UIWidget::placeChild(UIWidget& child, const Vector2& topLeftLocal, const Vector2& childSize)
+    {
+        child.shape.size = childSize;
+        this->placeChild(child, topLeftLocal);
+    }
+
+    void UIWidget::resize(const Vector2& newSize)
+    {
+        Vector2 shift = Vector2(
+            shape.pivot.x * (newSize.x - shape.size.x),
+            shape.pivot.y * (newSize.y - shape.size.y));
+        shape.origin += UIShape::transformVector(shape.localTrans(), shift);
+        shape.size = newSize;
+        for (auto& child : children)
+        {
+            if (child)
+            {
+                child->shape.origin -= shift;
+            }
+        }
+    }
+
+    void UIWidget::bindChildren()
+    {
         for (auto& child : children)
         {
             if (!child)
             {
                 continue;
             }
-            child->layout(Rect(child->shape.left(), child->shape.top(), child->shape.size.x, child->shape.size.y));
+            child->shape.parent = &shape;
+            child->bindChildren();
         }
     }
 
@@ -68,12 +103,14 @@ namespace eokas
         {
             return;
         }
-        Vector2 childOrigin = primitive.origin() + primitive.scale() * shape.toParent(Vector2(shape.left(), shape.top()));
-        Vector2 childScale = primitive.scale() * shape.scale;
-        primitive.pushTransform(childOrigin, childScale);
         for (auto& child : children)
         {
-            if (child && !child->floating && !primitive.outsideClip(child->visualRect()))
+            if (!child || child->floating)
+            {
+                continue;
+            }
+            child->shape.parent = &shape;
+            if (!primitive.outsideClip(child->shape.bounds(child->shape.worldTrans())))
             {
                 child->render(primitive);
             }
@@ -82,10 +119,10 @@ namespace eokas
         {
             if (child && child->floating)
             {
+                child->shape.parent = &shape;
                 child->render(primitive);
             }
         }
-        primitive.popOrigin();
     }
 
     void UIWidget::triggerPointerDrag(float x, float y, int button)

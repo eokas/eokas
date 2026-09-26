@@ -55,38 +55,14 @@ namespace eokas
                 {
                     width += font->glyph(t->text.at(i)).advance * scale;
                 }
-                t->shape.origin.x += t->shape.pivot.x * ((floorf(width + 0.5f)) - t->shape.size.x);
-                t->shape.size.x = floorf(width + 0.5f);
                 float tight = font->ascender() - font->descender();
-                t->shape.origin.y += t->shape.pivot.y * ((floorf(tight * scale + 0.5f)) - t->shape.size.y);
-                t->shape.size.y = floorf(tight * scale + 0.5f);
+                t->shape.size = Vector2(floorf(width + 0.5f), floorf(tight * scale + 0.5f));
             }
-            shape.origin.x += shape.pivot.x * ((t->shape.size.x + paddingX * 2.0f) - shape.size.x);
-            shape.size.x = t->shape.size.x + paddingX * 2.0f;
-            shape.origin.y += shape.pivot.y * ((t->shape.size.y + paddingY * 2.0f) - shape.size.y);
-            shape.size.y = t->shape.size.y + paddingY * 2.0f;
+            this->resize(Vector2(t->shape.size.x + paddingX * 2.0f, t->shape.size.y + paddingY * 2.0f));
             return;
         }
 
-        shape.origin.x += shape.pivot.x * ((content->shape.size.x + paddingX * 2.0f) - shape.size.x);
-        shape.size.x = content->shape.size.x + paddingX * 2.0f;
-        shape.origin.y += shape.pivot.y * ((content->shape.size.y + paddingY * 2.0f) - shape.size.y);
-        shape.size.y = content->shape.size.y + paddingY * 2.0f;
-    }
-
-    void UIMenuItem::layout(const Rect& rect)
-    {
-        {
-            Rect _box = rect;
-            shape.size = _box.size;
-            shape.origin = _box.origin + shape.pivot * shape.size;
-        }
-        if (!content)
-        {
-            return;
-        }
-        Vector2 pos(floorf(paddingX + 0.5f), floorf(paddingY + 0.5f));
-        content->layout(Rect(pos, content->shape.size));
+        this->resize(Vector2(content->shape.size.x + paddingX * 2.0f, content->shape.size.y + paddingY * 2.0f));
     }
 
     void UIMenuItem::render(UIPrimitive& primitive)
@@ -95,11 +71,14 @@ namespace eokas
         {
             return;
         }
+        if (content)
+        {
+            Vector2 pos(floorf(paddingX + 0.5f), floorf(paddingY + 0.5f));
+            this->placeChild(*content, pos);
+        }
 
-        primitive.pushScaleAround(shape.origin, shape.scale);
         Color bg = hovered ? hoverFill : background;
-        primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), bg);
-        primitive.popOrigin();
+        primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         UIWidget::render(primitive);
     }
 
@@ -121,95 +100,75 @@ namespace eokas
         }
     }
 
-    void UIMenu::layout(const Rect& rect)
-    {
-        {
-            Rect _box = rect;
-            shape.size = _box.size;
-            shape.origin = _box.origin + shape.pivot * shape.size;
-        }
-        if (!list)
-        {
-            return;
-        }
-
-        list->direction = direction;
-        list->padding = padding;
-        list->spacing = spacing;
-
-        float maxItemWidth = 0.0f;
-        float maxItemHeight = 0.0f;
-        float sumItemHeight = 0.0f;
-        int itemCount = 0;
-        for (auto& child : list->children)
-        {
-            UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
-            if (item == nullptr || !item->visible)
-            {
-                continue;
-            }
-            item->syncSize();
-            if (item->shape.size.x > maxItemWidth)
-            {
-                maxItemWidth = item->shape.size.x;
-            }
-            if (item->shape.size.y > maxItemHeight)
-            {
-                maxItemHeight = item->shape.size.y;
-            }
-            sumItemHeight += item->shape.size.y;
-            itemCount += 1;
-        }
-
-        float gap = itemCount > 1 ? spacing * (float)(itemCount - 1) : 0.0f;
-        if (direction == UIDirection::Horizontal)
-        {
-            shape.origin.y += shape.pivot.y * ((padding * 2.0f + maxItemHeight) - shape.size.y);
-            shape.size.y = padding * 2.0f + maxItemHeight;
-        }
-        else
-        {
-            shape.origin.x += shape.pivot.x * ((padding * 2.0f + maxItemWidth) - shape.size.x);
-            shape.size.x = padding * 2.0f + maxItemWidth;
-            shape.origin.y += shape.pivot.y * ((padding * 2.0f + sumItemHeight + gap) - shape.size.y);
-            shape.size.y = padding * 2.0f + sumItemHeight + gap;
-        }
-
-        for (auto& child : list->children)
-        {
-            UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
-            if (item == nullptr || !item->visible)
-            {
-                continue;
-            }
-            if (direction == UIDirection::Horizontal)
-            {
-                item->shape.origin.y += item->shape.pivot.y * ((maxItemHeight) - item->shape.size.y);
-                item->shape.size.y = maxItemHeight;
-            }
-            else
-            {
-                item->shape.origin.x += item->shape.pivot.x * ((maxItemWidth) - item->shape.size.x);
-                item->shape.size.x = maxItemWidth;
-            }
-        }
-
-        list->layout(Rect(Vector2::ZERO, shape.size));
-    }
-
     void UIMenu::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
+        if (list)
+        {
+            list->direction = direction;
+            list->padding = padding;
+            list->spacing = spacing;
 
-        primitive.pushScaleAround(shape.origin, shape.scale);
+            float maxItemWidth = 0.0f;
+            float maxItemHeight = 0.0f;
+            float sumItemHeight = 0.0f;
+            int itemCount = 0;
+            for (auto& child : list->children)
+            {
+                UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
+                if (item == nullptr || !item->visible)
+                {
+                    continue;
+                }
+                item->syncSize();
+                if (item->shape.size.x > maxItemWidth)
+                {
+                    maxItemWidth = item->shape.size.x;
+                }
+                if (item->shape.size.y > maxItemHeight)
+                {
+                    maxItemHeight = item->shape.size.y;
+                }
+                sumItemHeight += item->shape.size.y;
+                itemCount += 1;
+            }
+
+            float gap = itemCount > 1 ? spacing * (float)(itemCount - 1) : 0.0f;
+            if (direction == UIDirection::Horizontal)
+            {
+                this->resize(Vector2(shape.size.x, padding * 2.0f + maxItemHeight));
+            }
+            else
+            {
+                this->resize(Vector2(padding * 2.0f + maxItemWidth, padding * 2.0f + sumItemHeight + gap));
+            }
+
+            for (auto& child : list->children)
+            {
+                UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
+                if (item == nullptr || !item->visible)
+                {
+                    continue;
+                }
+                if (direction == UIDirection::Horizontal)
+                {
+                    item->resize(Vector2(item->shape.size.x, maxItemHeight));
+                }
+                else
+                {
+                    item->resize(Vector2(maxItemWidth, item->shape.size.y));
+                }
+            }
+
+            this->placeChild(*list, Vector2::ZERO, shape.size);
+        }
         if (color.a > 0.0f)
         {
-            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
-        primitive.popOrigin();
         UIWidget::render(primitive);
     }
 }

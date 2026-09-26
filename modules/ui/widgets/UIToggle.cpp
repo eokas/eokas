@@ -59,23 +59,23 @@ namespace eokas
             UIWidget::render(primitive);
             return;
         }
-        primitive.pushScaleAround(shape.origin, shape.scale);
+        Matrix3 world = shape.worldTrans();
 
         float radius = thick * 0.5f;
-        float cy = snap(shape.top() + shape.size.y * 0.5f);
-        float left = snap(shape.left() + radius);
-        float right = snap(shape.left() + shape.size.x - radius);
+        float cy = snap(shape.size.y * 0.5f);
+        float left = snap(radius);
+        float right = snap(shape.size.x - radius);
         if (right < left)
         {
             right = left;
         }
 
         Color bg = this->capsuleColor();
-        this->addDisc(primitive, left, cy, radius, bg);
+        this->addDisc(primitive, world, left, cy, radius, bg);
         if (right > left)
         {
-            primitive.addQuad(Rect(left, cy - radius, right - left, thick), UIFont::solidUV(), bg);
-            this->addDisc(primitive, right, cy, radius, bg);
+            primitive.addQuad(world, Rect(left, cy - radius, right - left, thick), UIFont::solidUV(), bg);
+            this->addDisc(primitive, world, right, cy, radius, bg);
         }
 
         float inset = snap(thick * 0.12f);
@@ -85,12 +85,11 @@ namespace eokas
         }
         float thumbRadius = radius - inset;
         float thumbX = value ? right : left;
-        this->addDisc(primitive, thumbX, cy, thumbRadius, thumb);
-        primitive.popOrigin();
+        this->addDisc(primitive, world, thumbX, cy, thumbRadius, thumb);
         UIWidget::render(primitive);
     }
 
-    void UIToggle::addDisc(UIPrimitive& primitive, float cx, float cy, float radius, const Color& color)
+    void UIToggle::addDisc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, const Color& color)
     {
         if (radius <= 0.0f)
         {
@@ -104,7 +103,13 @@ namespace eokas
             float a1 = Math::PI_MUL_2 * ((float)(i + 1) / (float)kDiscSegments);
             Vector2 e0(cx + cosf(a0) * radius, cy + sinf(a0) * radius);
             Vector2 e1(cx + cosf(a1) * radius, cy + sinf(a1) * radius);
-            primitive.addQuad(center, e0, e1, center, uv, color);
+            primitive.addQuad(
+                UIShape::transformPoint(world, center),
+                UIShape::transformPoint(world, e0),
+                UIShape::transformPoint(world, e1),
+                UIShape::transformPoint(world, center),
+                uv,
+                color);
         }
     }
 }

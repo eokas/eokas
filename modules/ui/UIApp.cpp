@@ -225,6 +225,7 @@ namespace eokas
         mDragPage = nullptr;
         mSourceSpace = nullptr;
         mPreviewSpace = nullptr;
+        mHostDrag = false;
         for (auto& slot : mFloating) this->destroySlot(slot, false);
         mFloating.clear();
     }
@@ -283,14 +284,9 @@ namespace eokas
 
     void UIApp::toScreenPoint(UIDockPage* page, float x, float y, float& screenX, float& screenY)
     {
-        if (mSourceSpace)
+        if (mHostDrag && mSourceSpace)
         {
-            Vector2 point(x, y);
-            if (page && page->space() == mSourceSpace)
-            {
-                point += Vector2(mSourceSpace->shape.left(), mSourceSpace->shape.top()) + Vector2(page->shape.left(), page->shape.top());
-            }
-            Rect screen = mSourceSpace->toScreen(Rect(point, Vector2::ZERO));
+            Rect screen = mSourceSpace->clientToScreen(x, y);
             screenX = screen.origin.x;
             screenY = screen.origin.y;
             return;
@@ -319,9 +315,8 @@ namespace eokas
         if (page->space())
         {
             UIDockSpace* space = page->space();
-            space->layout(Rect(space->shape.left(), space->shape.top(), space->shape.size.x, space->shape.size.y));
-            Rect local;
-            if (space->pageBounds(page, local)) window = space->toScreen(local);
+            Rect screen;
+            if (space->pageBounds(page, screen)) window = screen;
             held = space->takePage(page);
         }
         if (!held) return;
@@ -358,11 +353,13 @@ namespace eokas
         for (auto* space : mSpaces)
         {
             if (!space) continue;
-            Rect screen = space->toScreen(Rect(space->shape.left(), space->shape.top(), space->shape.size.x, space->shape.size.y));
-            if (!screen.contains(Vector2(screenX, screenY))) continue;
-            float localX = space->shape.left() + (screenX - screen.origin.x);
-            float localY = space->shape.top() + (screenY - screen.origin.y);
-            if (space->showPreview(localX, localY)) hit = space;
+            Rect screen = space->screenBounds();
+            if (!screen.contains(Vector2(screenX, screenY)))
+            {
+                space->clearPreview();
+                continue;
+            }
+            if (space->showPreview(screenX, screenY)) hit = space;
             else space->clearPreview();
         }
         if (mPreviewSpace && mPreviewSpace != hit) mPreviewSpace->clearPreview();
@@ -378,6 +375,7 @@ namespace eokas
             mDragPage = page;
             mDragMoved = false;
             mSourceSpace = page->space();
+            mHostDrag = mSourceSpace != nullptr;
             mDragSlop = mSourceSpace ? mSourceSpace->dragSlop : 4.0f;
             this->toScreenPoint(page, x, y, mPressScreenX, mPressScreenY);
         }
@@ -399,6 +397,7 @@ namespace eokas
         mDragging = false;
         mDragPage = nullptr;
         mSourceSpace = nullptr;
+        mHostDrag = false;
         Slot* slot = this->slotOf(page);
         if (mDragMoved && mPreviewSpace && slot)
         {
