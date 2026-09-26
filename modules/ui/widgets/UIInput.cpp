@@ -1,5 +1,6 @@
 #include "UIInput.h"
 #include "../UIFont.h"
+#include "../UIStroke.h"
 #include <chrono>
 #include <cmath>
 #include <vector>
@@ -135,17 +136,27 @@ namespace eokas
     UIFont* UIInput::activeFont() const
     {
         UIText* t = this->label();
-        if (t == nullptr || t->font == nullptr || !t->font->isOpen())
+        if (t == nullptr)
         {
             return nullptr;
         }
-        return t->font;
+        String path = t->style.fontPath;
+        if (path.isEmpty())
+        {
+            path = placeholderStyle.fontPath;
+        }
+        UIFont* font = UIFont::find(path);
+        if (font == nullptr || !font->isOpen())
+        {
+            return nullptr;
+        }
+        return font;
     }
 
     float UIInput::textScale(UIFont* font) const
     {
         UIText* t = this->label();
-        float size = t != nullptr ? t->fontSize : UIText::kDefaultFontSize;
+        float size = t != nullptr ? t->style.fontSize : UIText::kDefaultFontSize;
         float bake = (float)font->pixelSize();
         if (bake <= 0.0f)
         {
@@ -241,10 +252,10 @@ namespace eokas
 
     Rect UIInput::contentRect() const
     {
-        float insetX = paddingX + borderThickness;
-        float insetY = paddingY + borderThickness;
-        float w = rect.width - insetX * 2.0f;
-        float h = rect.height - insetY * 2.0f;
+        float insetX = paddingX + border.thickness;
+        float insetY = paddingY + border.thickness;
+        float w = rect.size.x - insetX * 2.0f;
+        float h = rect.size.y - insetY * 2.0f;
         if (w < 0.0f)
         {
             w = 0.0f;
@@ -253,7 +264,7 @@ namespace eokas
         {
             h = 0.0f;
         }
-        return Rect(rect.x + insetX, rect.y + insetY, w, h);
+        return Rect(rect.origin.x + insetX, rect.origin.y + insetY, w, h);
     }
 
     String UIInput::sanitize(const String& value) const
@@ -543,12 +554,12 @@ namespace eokas
             {
                 mScroll = caret;
             }
-            else if (caret > mScroll + content.width)
+            else if (caret > mScroll + content.size.x)
             {
-                mScroll = caret - content.width;
+                mScroll = caret - content.size.x;
             }
             float total = this->offsetOf(text.length());
-            float maxScroll = total > content.width ? total - content.width : 0.0f;
+            float maxScroll = total > content.size.x ? total - content.size.x : 0.0f;
             if (mScroll > maxScroll)
             {
                 mScroll = maxScroll;
@@ -567,9 +578,9 @@ namespace eokas
         {
             mScroll = caretX;
         }
-        else if (caretX + 1.0f > mScroll + content.width)
+        else if (caretX + 1.0f > mScroll + content.size.x)
         {
-            mScroll = caretX + 1.0f - content.width;
+            mScroll = caretX + 1.0f - content.size.x;
         }
         float widest = 0.0f;
         for (const TextLine& item : lines)
@@ -580,7 +591,7 @@ namespace eokas
                 widest = width;
             }
         }
-        float maxScroll = widest > content.width ? widest - content.width : 0.0f;
+        float maxScroll = widest > content.size.x ? widest - content.size.x : 0.0f;
         if (mScroll > maxScroll)
         {
             mScroll = maxScroll;
@@ -602,12 +613,12 @@ namespace eokas
         {
             mScrollY = caretY;
         }
-        else if (caretY + lineH > mScrollY + content.height)
+        else if (caretY + lineH > mScrollY + content.size.y)
         {
-            mScrollY = caretY + lineH - content.height;
+            mScrollY = caretY + lineH - content.size.y;
         }
         float totalH = (float)lines.size() * lineH;
-        float maxScrollY = totalH > content.height ? totalH - content.height : 0.0f;
+        float maxScrollY = totalH > content.size.y ? totalH - content.size.y : 0.0f;
         if (mScrollY > maxScrollY)
         {
             mScrollY = maxScrollY;
@@ -630,7 +641,7 @@ namespace eokas
             }
             std::vector<TextLine> lines = splitLines(text);
             float lineH = this->lineBox(font);
-            float localY = y - content.y + mScrollY;
+            float localY = y - content.origin.y + mScrollY;
             int line = 0;
             if (lineH > 0.0f && localY >= lineH)
             {
@@ -644,7 +655,7 @@ namespace eokas
             {
                 line = (int)lines.size() - 1;
             }
-            float localX = x - content.x + mScroll;
+            float localX = x - content.origin.x + mScroll;
             const TextLine& item = lines[(size_t)line];
             return this->indexOnLine(text, item.begin, item.end, localX);
         }
@@ -653,7 +664,7 @@ namespace eokas
             return 0;
         }
         float scale = this->textScale(font);
-        float local = x - content.x + mScroll;
+        float local = x - content.origin.x + mScroll;
         if (local <= 0.0f)
         {
             return 0;
@@ -678,55 +689,48 @@ namespace eokas
         return text.length();
     }
 
-    void UIInput::render(UIShape& shape)
+    void UIInput::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
+        primitive.pushScaleAround(rect.origin, localScale);
         this->clampCaret();
         this->ensureCaretVisible();
-        Color bg = hovered ? hoverColor : background;
-        shape.addQuad(rect, UIFont::solidUV(), bg);
+        Color bg = hovered ? hoverFill : background;
+        primitive.addQuad(rect, UIFont::solidUV(), bg);
         if (focused)
         {
-            this->drawBorder(shape);
+            this->drawBorder(primitive);
         }
         Rect content = this->contentRect();
         UIFont* font = this->activeFont();
-        if (font != nullptr && content.width > 0.0f && content.height > 0.0f)
+        if (font != nullptr && content.size.x > 0.0f && content.size.y > 0.0f)
         {
             if (!text.isEmpty())
             {
-                this->drawSelection(shape, content);
+                this->drawSelection(primitive, content);
                 UIText* t = this->label();
-                Color color = t != nullptr ? t->color : caretColor;
-                this->drawGlyphRun(shape, text, color, content, mScroll);
+                Color color = t != nullptr ? t->style.color : caret.color;
+                this->drawGlyphRun(primitive, text, color, content, mScroll);
             }
             else if (!placeholder.isEmpty())
             {
-                this->drawGlyphRun(shape, placeholder, placeholderColor, content, 0.0f);
+                this->drawGlyphRun(primitive, placeholder, placeholderStyle.color, content, 0.0f);
             }
-            this->drawCaret(shape, content);
+            this->drawCaret(primitive, content);
         }
-        UIWidget::render(shape);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 
-    void UIInput::drawBorder(UIShape& shape) const
+    void UIInput::drawBorder(UIPrimitive& primitive) const
     {
-        float t = borderThickness;
-        if (t <= 0.0f || rect.width <= 0.0f || rect.height <= 0.0f)
-        {
-            return;
-        }
-        Rect uv = UIFont::solidUV();
-        shape.addQuad(Rect(rect.x, rect.y, rect.width, t), uv, borderColor);
-        shape.addQuad(Rect(rect.x, rect.y + rect.height - t, rect.width, t), uv, borderColor);
-        shape.addQuad(Rect(rect.x, rect.y, t, rect.height), uv, borderColor);
-        shape.addQuad(Rect(rect.x + rect.width - t, rect.y, t, rect.height), uv, borderColor);
+        UIStroke::border(primitive, rect, border);
     }
 
-    void UIInput::drawSelection(UIShape& shape, const Rect& content) const
+    void UIInput::drawSelection(UIPrimitive& primitive, const Rect& content) const
     {
         if (!this->hasSelection())
         {
@@ -743,8 +747,8 @@ namespace eokas
             }
             std::vector<TextLine> lines = splitLines(text);
             float lineH = this->lineBox(font);
-            float right = content.x + content.width;
-            float bottom = content.y + content.height;
+            float right = content.origin.x + content.size.x;
+            float bottom = content.origin.y + content.size.y;
             for (size_t i = 0; i < lines.size(); ++i)
             {
                 size_t begin = lines[i].begin;
@@ -760,11 +764,11 @@ namespace eokas
                 }
                 bool throughBreak = i + 1 < lines.size() && b > end;
                 size_t sel1 = b < end ? b : end;
-                float x0 = content.x + this->advanceBetween(text, begin, sel0) - mScroll;
-                float x1 = throughBreak ? right : content.x + this->advanceBetween(text, begin, sel1) - mScroll;
-                if (x0 < content.x)
+                float x0 = content.origin.x + this->advanceBetween(text, begin, sel0) - mScroll;
+                float x1 = throughBreak ? right : content.origin.x + this->advanceBetween(text, begin, sel1) - mScroll;
+                if (x0 < content.origin.x)
                 {
-                    x0 = content.x;
+                    x0 = content.origin.x;
                 }
                 if (x1 > right)
                 {
@@ -774,36 +778,36 @@ namespace eokas
                 {
                     continue;
                 }
-                float y0 = content.y + (float)i * lineH - mScrollY;
+                float y0 = content.origin.y + (float)i * lineH - mScrollY;
                 float h = lineH;
                 float uvPos = 0.0f;
                 float uvSize = 1.0f;
-                if (!clipSpan(y0, h, uvPos, uvSize, content.y, bottom))
+                if (!clipSpan(y0, h, uvPos, uvSize, content.origin.y, bottom))
                 {
                     continue;
                 }
-                shape.addQuad(Rect(snap(x0), snap(y0), snap(x1) - snap(x0), h), UIFont::solidUV(), selectionColor);
+                primitive.addQuad(Rect(snap(x0), snap(y0), snap(x1) - snap(x0), h), UIFont::solidUV(), selection);
             }
             return;
         }
-        float x0 = content.x + this->offsetOf(a) - mScroll;
-        float x1 = content.x + this->offsetOf(b) - mScroll;
-        if (x0 < content.x)
+        float x0 = content.origin.x + this->offsetOf(a) - mScroll;
+        float x1 = content.origin.x + this->offsetOf(b) - mScroll;
+        if (x0 < content.origin.x)
         {
-            x0 = content.x;
+            x0 = content.origin.x;
         }
-        if (x1 > content.x + content.width)
+        if (x1 > content.origin.x + content.size.x)
         {
-            x1 = content.x + content.width;
+            x1 = content.origin.x + content.size.x;
         }
         if (x1 <= x0)
         {
             return;
         }
-        shape.addQuad(Rect(snap(x0), snap(content.y), snap(x1) - snap(x0), content.height), UIFont::solidUV(), selectionColor);
+        primitive.addQuad(Rect(snap(x0), snap(content.origin.y), snap(x1) - snap(x0), content.size.y), UIFont::solidUV(), selection);
     }
 
-    void UIInput::drawGlyphRun(UIShape& shape, const String& value, const Color& color, const Rect& content, float scroll) const
+    void UIInput::drawGlyphRun(UIPrimitive& primitive, const String& value, const Color& color, const Rect& content, float scroll) const
     {
         UIFont* font = this->activeFont();
         if (font == nullptr)
@@ -814,27 +818,27 @@ namespace eokas
         if (!multiline)
         {
             float tight = (font->ascender() - font->descender()) * scale;
-            float textTop = snap(content.y + (content.height - tight) * 0.5f);
+            float textTop = snap(content.origin.y + (content.size.y - tight) * 0.5f);
             float baseline = textTop + font->ascender() * scale;
-            this->paintRange(shape, value, 0, value.length(), color, content, baseline, scroll);
+            this->paintRange(primitive, value, 0, value.length(), color, content, baseline, scroll);
             return;
         }
         std::vector<TextLine> lines = splitLines(value);
         float lineH = this->lineBox(font);
-        float bottom = content.y + content.height;
+        float bottom = content.origin.y + content.size.y;
         for (size_t i = 0; i < lines.size(); ++i)
         {
-            float top = content.y - mScrollY + (float)i * lineH;
-            if (top + lineH <= content.y || top >= bottom)
+            float top = content.origin.y - mScrollY + (float)i * lineH;
+            if (top + lineH <= content.origin.y || top >= bottom)
             {
                 continue;
             }
             float baseline = top + font->ascender() * scale;
-            this->paintRange(shape, value, lines[i].begin, lines[i].end, color, content, baseline, scroll);
+            this->paintRange(primitive, value, lines[i].begin, lines[i].end, color, content, baseline, scroll);
         }
     }
 
-    void UIInput::paintRange(UIShape& shape, const String& value, size_t begin, size_t end, const Color& color, const Rect& content, float baseline, float scrollX) const
+    void UIInput::paintRange(UIPrimitive& primitive, const String& value, size_t begin, size_t end, const Color& color, const Rect& content, float baseline, float scrollX) const
     {
         UIFont* font = this->activeFont();
         if (font == nullptr || begin >= end)
@@ -846,8 +850,8 @@ namespace eokas
             end = value.length();
         }
         float scale = this->textScale(font);
-        float cursorX = snap(content.x - scrollX);
-        float right = content.x + content.width;
+        float cursorX = snap(content.origin.x - scrollX);
+        float right = content.origin.x + content.size.x;
         size_t index = begin;
         while (index < end)
         {
@@ -858,28 +862,28 @@ namespace eokas
             }
             const UIFontGlyph& g = font->glyph(codepoint);
             float advance = g.advance * scale;
-            if (g.uv.width > 0.0f && g.uv.height > 0.0f)
+            if (g.uv.size.x > 0.0f && g.uv.size.y > 0.0f)
             {
                 float destX = cursorX + g.bearingX * scale;
                 float destY = baseline - g.bearingY * scale;
                 float destW = g.width * scale;
                 float destH = g.height * scale;
-                float u = g.uv.x;
-                float v = g.uv.y;
-                float uw = g.uv.width;
-                float uh = g.uv.height;
-                bool visibleX = clipSpan(destX, destW, u, uw, content.x, right);
-                bool visibleY = clipSpan(destY, destH, v, uh, content.y, content.y + content.height);
+                float u = g.uv.origin.x;
+                float v = g.uv.origin.y;
+                float uw = g.uv.size.x;
+                float uh = g.uv.size.y;
+                bool visibleX = clipSpan(destX, destW, u, uw, content.origin.x, right);
+                bool visibleY = clipSpan(destY, destH, v, uh, content.origin.y, content.origin.y + content.size.y);
                 if (visibleX && visibleY)
                 {
-                    shape.addQuad(Rect(snap(destX), snap(destY), destW, destH), Rect(u, v, uw, uh), color);
+                    primitive.addQuad(Rect(snap(destX), snap(destY), destW, destH), Rect(u, v, uw, uh), color);
                 }
             }
             cursorX += advance;
         }
     }
 
-    void UIInput::drawCaret(UIShape& shape, const Rect& content) const
+    void UIInput::drawCaret(UIPrimitive& primitive, const Rect& content) const
     {
         if (!focused)
         {
@@ -902,28 +906,28 @@ namespace eokas
             std::vector<TextLine> lines = splitLines(text);
             size_t line = lineOf(lines, mCaret);
             float lineH = this->lineBox(font);
-            float x = snap(content.x + this->offsetOf(mCaret) - mScroll);
-            if (x < content.x || x >= content.x + content.width)
+            float x = snap(content.origin.x + this->offsetOf(mCaret) - mScroll);
+            if (x < content.origin.x || x >= content.origin.x + content.size.x)
             {
                 return;
             }
-            float y = content.y + (float)line * lineH - mScrollY;
+            float y = content.origin.y + (float)line * lineH - mScrollY;
             float h = lineH;
             float uvPos = 0.0f;
             float uvSize = 1.0f;
-            if (!clipSpan(y, h, uvPos, uvSize, content.y, content.y + content.height))
+            if (!clipSpan(y, h, uvPos, uvSize, content.origin.y, content.origin.y + content.size.y))
             {
                 return;
             }
-            shape.addQuad(Rect(x, snap(y), 1.0f, h), UIFont::solidUV(), caretColor);
+            primitive.addQuad(Rect(x, snap(y), 1.0f, h), UIFont::solidUV(), caret.color);
             return;
         }
-        float x = snap(content.x + this->offsetOf(mCaret) - mScroll);
-        if (x < content.x || x >= content.x + content.width)
+        float x = snap(content.origin.x + this->offsetOf(mCaret) - mScroll);
+        if (x < content.origin.x || x >= content.origin.x + content.size.x)
         {
             return;
         }
-        shape.addQuad(Rect(x, content.y, 1.0f, content.height), UIFont::solidUV(), caretColor);
+        primitive.addQuad(Rect(x, content.origin.y, 1.0f, content.size.y), UIFont::solidUV(), caret.color);
     }
 
     void UIInput::triggerPointerPress()

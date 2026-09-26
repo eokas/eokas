@@ -12,16 +12,15 @@ namespace eokas
         String placeholder;
         float paddingX = 8.0f;
         float paddingY = 6.0f;
-        float borderThickness = 1.0f;
         size_t maxLength = 0;
         bool readOnly = false;
         bool multiline = false;
-        Color background { 0.14f, 0.15f, 0.18f, 1.0f };
-        Color hoverColor { 0.20f, 0.22f, 0.28f, 1.0f };
-        Color borderColor { 0.32f, 0.44f, 0.68f, 1.0f };
-        Color placeholderColor { 0.55f, 0.58f, 0.64f, 1.0f };
-        Color caretColor { 0.92f, 0.92f, 0.94f, 1.0f };
-        Color selectionColor { 0.32f, 0.44f, 0.68f, 1.0f };
+        Color background { Color(0.14f, 0.15f, 0.18f, 1.0f) };
+        Color hoverFill { Color(0.20f, 0.22f, 0.28f, 1.0f) };
+        UIStrokeStyle border { Color(0.32f, 0.44f, 0.68f, 1.0f) };
+        UITextStyle placeholderStyle { {}, 16.0f, Color(0.55f, 0.58f, 0.64f, 1.0f) };
+        UIStrokeStyle caret { Color(0.92f, 0.92f, 0.94f, 1.0f) };
+        Color selection { Color(0.32f, 0.44f, 0.68f, 1.0f) };
         std::function<void(const String&)> onValueChanged;
         std::function<void(const String&)> onSubmit;
         std::function<void(const String&)> writeClipboard;
@@ -31,7 +30,7 @@ namespace eokas
         void setText(const String& value);
         UIText* label() const;
         bool acceptsKeyFocus() const override { return true; }
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
         void triggerPointerPress() override;
         void triggerPointerDrag(float x, float y, int button) override;
         void triggerPointerRelease() override;
@@ -73,11 +72,11 @@ namespace eokas
         void resetCaretBlink();
         float offsetOf(size_t index) const;
         size_t indexAt(float x, float y) const;
-        void drawBorder(UIShape& shape) const;
-        void drawSelection(UIShape& shape, const Rect& content) const;
-        void drawGlyphRun(UIShape& shape, const String& value, const Color& color, const Rect& content, float scroll) const;
-        void paintRange(UIShape& shape, const String& value, size_t begin, size_t end, const Color& color, const Rect& content, float baseline, float scrollX) const;
-        void drawCaret(UIShape& shape, const Rect& content) const;
+        void drawBorder(UIPrimitive& primitive) const;
+        void drawSelection(UIPrimitive& primitive, const Rect& content) const;
+        void drawGlyphRun(UIPrimitive& primitive, const String& value, const Color& color, const Rect& content, float scroll) const;
+        void paintRange(UIPrimitive& primitive, const String& value, size_t begin, size_t end, const Color& color, const Rect& content, float baseline, float scrollX) const;
+        void drawCaret(UIPrimitive& primitive, const Rect& content) const;
     };
 }
 

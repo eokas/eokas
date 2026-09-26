@@ -1,5 +1,6 @@
 #include "UIDocking.h"
 #include "../UIFont.h"
+#include "../UIStroke.h"
 #include "UIList.h"
 #include "UIText.h"
 #include <cmath>
@@ -17,19 +18,6 @@ namespace eokas
         float minf(float a, float b) { return a < b ? a : b; }
         float maxf(float a, float b) { return a > b ? a : b; }
 
-        void strokeRect(UIShape& shape, const Rect& area, float thickness, const Color& color)
-        {
-            if (thickness <= 0.0f || area.width <= 0.0f || area.height <= 0.0f) return;
-            float t = thickness;
-            if (t * 2.0f > area.width) t = area.width * 0.5f;
-            if (t * 2.0f > area.height) t = area.height * 0.5f;
-            Rect solid = UIFont::solidUV();
-            shape.addQuad(Rect(area.x, area.y, area.width, t), solid, color);
-            shape.addQuad(Rect(area.x, area.y + area.height - t, area.width, t), solid, color);
-            shape.addQuad(Rect(area.x, area.y, t, area.height), solid, color);
-            shape.addQuad(Rect(area.x + area.width - t, area.y, t, area.height), solid, color);
-        }
-
         float snap(float value)
         {
             return floorf(value + 0.5f);
@@ -40,14 +28,16 @@ namespace eokas
             scale = 1.0f;
             ascender = 0.0f;
             descender = 0.0f;
-            if (!text || !text->font || !text->font->isOpen()) return;
-            text->font->drawMetrics(text->fontSize, scale, ascender, descender);
+            UIFont* font = text ? UIFont::find(text->style.fontPath) : nullptr;
+            if (!text || font == nullptr || !font->isOpen()) return;
+            font->drawMetrics(text->style.fontSize, scale, ascender, descender);
         }
 
         float textAdvance(UIText* text)
         {
             if (!text) return 0.0f;
-            if (text->font == nullptr || !text->font->isOpen()) return text->rect.width;
+            UIFont* font = UIFont::find(text->style.fontPath);
+            if (font == nullptr || !font->isOpen()) return text->rect.size.x;
             float scale = 1.0f;
             float ascender = 0.0f;
             float descender = 0.0f;
@@ -58,7 +48,7 @@ namespace eokas
             {
                 uint32_t codepoint = 0;
                 if (!UIFont::nextUtf8(text->text.cstr(), text->text.length(), index, codepoint)) continue;
-                width += text->font->glyphSized(codepoint, text->fontSize).advance * scale;
+                width += font->glyphSized(codepoint, text->style.fontSize).advance * scale;
             }
             return width;
         }
@@ -70,19 +60,19 @@ namespace eokas
             float descender = 0.0f;
             textMetrics(text, scale, ascender, descender);
             float line = ascender - descender;
-            if (line < 1.0f && text) line = text->rect.height;
+            if (line < 1.0f && text) line = text->rect.size.y;
             return line;
         }
 
-        void hairline(UIShape& shape, float x, float y, float length, bool vertical, const Color& color)
+        void hairline(UIPrimitive& primitive, float x, float y, float length, bool vertical, const Color& color)
         {
             float sx = snap(x);
             float sy = snap(y);
             float span = snap(length);
             if (span < 1.0f) return;
             Rect solid = UIFont::solidUV();
-            if (vertical) shape.addQuad(Rect(sx, sy, 1.0f, span), solid, color);
-            else shape.addQuad(Rect(sx, sy, span, 1.0f), solid, color);
+            if (vertical) primitive.addQuad(Rect(sx, sy, 1.0f, span), solid, color);
+            else primitive.addQuad(Rect(sx, sy, span, 1.0f), solid, color);
         }
 
         void placeHeadContent(UIWidget* head)
@@ -96,27 +86,27 @@ namespace eokas
                 spacing = layout->spacing;
             }
             padX = snap(padX);
-            float x = snap(head->rect.x + padX);
-            float right = snap(head->rect.x + head->rect.width) - padX;
+            Vector2 pen(snap(padX), 0.0f);
+            float right = snap(head->rect.size.x) - padX;
             bool first = true;
             for (auto& child : head->children)
             {
                 if (!child || !child->visible) continue;
-                if (!first) x += spacing;
+                if (!first) pen.x += spacing;
                 first = false;
-                float w = child->rect.width;
-                float h = child->rect.height;
+                float w = child->rect.size.x;
+                float h = child->rect.size.y;
                 if (UIText* text = dynamic_cast<UIText*>(child.get()))
                 {
                     w = ceilf(textAdvance(text));
                     h = textLine(text);
                     if (w < 1.0f) w = 1.0f;
                 }
-                if (right > x && x + w > right) w = right - x;
-                float y = head->rect.y + (head->rect.height - h) * 0.5f;
-                if (y < head->rect.y) y = head->rect.y;
-                child->layout(Rect(snap(x), snap(y), w, h));
-                x += w;
+                if (right > pen.x && pen.x + w > right) w = right - pen.x;
+                pen.y = (head->rect.size.y - h) * 0.5f;
+                if (pen.y < 0.0f) pen.y = 0.0f;
+                child->layout(Rect(Vector2(snap(pen.x), snap(pen.y)), Vector2(w, h)));
+                pen.x += w;
             }
         }
 
@@ -133,14 +123,14 @@ namespace eokas
                     if (!first) content += layout->spacing;
                     first = false;
                     if (UIText* text = dynamic_cast<UIText*>(child.get())) content += textAdvance(text);
-                    else content += child->rect.width;
+                    else content += child->rect.size.x;
                 }
                 float width = content + layout->padding * 2.0f;
                 float minimum = layout->padding * 2.0f + 8.0f;
                 if (width < minimum) width = minimum;
                 return width;
             }
-            if (head->rect.width > 0.0f) return head->rect.width;
+            if (head->rect.size.x > 0.0f) return head->rect.size.x;
             return 48.0f;
         }
     }
@@ -167,20 +157,20 @@ namespace eokas
         for (auto& page : node.pages)
         {
             float h = 28.0f;
-            if (page && page->head() && page->head()->rect.height > 0.0f) h = page->head()->rect.height;
+            if (page && page->head() && page->head()->rect.size.y > 0.0f) h = page->head()->rect.size.y;
             if (h > headH) headH = h;
         }
-        if (headH > node.rect.height) headH = node.rect.height;
+        if (headH > node.rect.size.y) headH = node.rect.size.y;
         return headH;
     }
 
     UIDockPage::UIDockPage()
     {
         interactive = false;
-        color = { 0.16f, 0.16f, 0.18f, 1.0f };
+        fill = Color(0.16f, 0.16f, 0.18f, 1.0f);
         auto head = std::make_shared<UIWidget>();
         head->rect = Rect(0.0f, 0.0f, 0.0f, 28.0f);
-        head->color = { 0.24f, 0.26f, 0.32f, 1.0f };
+        head->fill = Color(0.24f, 0.26f, 0.32f, 1.0f);
         this->setHead(head);
     }
 
@@ -262,50 +252,47 @@ namespace eokas
     void UIDockPage::place(const Rect& headRect, const Rect& bodyRect, bool showBody, bool tabActive)
     {
         mTabActive = tabActive;
+        Rect pageRect = headRect;
+        if (showBody)
+        {
+            Vector2 headEnd = headRect.origin + headRect.size;
+            Vector2 bodyEnd = bodyRect.origin + bodyRect.size;
+            Vector2 corner(minf(headRect.origin.x, bodyRect.origin.x), minf(headRect.origin.y, bodyRect.origin.y));
+            Vector2 extent(maxf(headEnd.x, bodyEnd.x), maxf(headEnd.y, bodyEnd.y));
+            pageRect = Rect(corner, extent - corner);
+        }
+        this->rect = pageRect;
+        auto localOf = [&](const Rect& area)
+        {
+            return Rect(area.origin - pageRect.origin, area.size);
+        };
         if (mHead)
         {
             mHead->visible = visible;
             mHead->interactive = true;
-            mHead->rect = headRect;
+            mHead->rect = localOf(headRect);
             placeHeadContent(mHead.get());
         }
         if (mBody)
         {
             mBody->visible = showBody && visible;
-            mBody->layout(bodyRect);
+            mBody->layout(localOf(bodyRect));
         }
-        if (!showBody)
-        {
-            rect = headRect;
-            return;
-        }
-        float x0 = headRect.x;
-        float y0 = headRect.y;
-        float x1 = headRect.x + headRect.width;
-        float y1 = headRect.y + headRect.height;
-        if (mBody)
-        {
-            x0 = minf(x0, bodyRect.x);
-            y0 = minf(y0, bodyRect.y);
-            x1 = maxf(x1, bodyRect.x + bodyRect.width);
-            y1 = maxf(y1, bodyRect.y + bodyRect.height);
-        }
-        rect = Rect(x0, y0, x1 - x0, y1 - y0);
     }
 
     void UIDockPage::layout(const Rect& rect)
     {
         float headH = 28.0f;
-        if (mHead && mHead->rect.height > 0.0f) headH = snap(mHead->rect.height);
-        float w = snap(rect.width);
-        float h = snap(rect.height);
+        if (mHead && mHead->rect.size.y > 0.0f) headH = snap(mHead->rect.size.y);
+        float w = snap(rect.size.x);
+        float h = snap(rect.size.y);
         if (w < 1.0f) w = 1.0f;
         if (h < 1.0f) h = 1.0f;
         if (headH > h) headH = h;
         if (headH < 0.0f) headH = 0.0f;
         float bodyH = h - headH;
-        float x = snap(rect.x);
-        float y = snap(rect.y);
+        float x = snap(rect.origin.x);
+        float y = snap(rect.origin.y);
         this->place(Rect(x, y, w, headH), Rect(x, y + headH, w, bodyH), true, false);
         this->rect = Rect(x, y, w, h);
     }
@@ -315,7 +302,7 @@ namespace eokas
         this->layout(Rect(0.0f, 0.0f, width, height));
     }
 
-    void UIDockPage::render(UIShape& shape)
+    void UIDockPage::render(UIPrimitive& primitive)
     {
         if (!visible) return;
         Rect solid = UIFont::solidUV();
@@ -323,38 +310,52 @@ namespace eokas
         bool recolor = false;
         if (mTabActive && mHead)
         {
-            savedHead = mHead->color;
-            mHead->color = activeColor;
+            savedHead = mHead->fill;
+            mHead->fill = activeFill;
             recolor = true;
         }
-        if (mBody && mBody->visible && color.a > 0.0f) shape.addQuad(mBody->rect, solid, color);
-        if (mHead && mHead->visible && mHead->color.a > 0.0f) shape.addQuad(mHead->rect, solid, mHead->color);
-        if (mBody && mBody->visible && !shape.outsideClip(mBody->rect)) mBody->render(shape);
+        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushClip(primitive.toScreen(rect));
+        primitive.pushOrigin(primitive.toScreen(rect.origin));
+        if (mBody && mBody->visible && fill.a > 0.0f)
+        {
+            primitive.pushScaleAround(mBody->rect.origin, mBody->localScale);
+            primitive.addQuad(mBody->rect, solid, fill);
+            primitive.popOrigin();
+        }
+        if (mHead && mHead->visible && mHead->fill.a > 0.0f)
+        {
+            primitive.pushScaleAround(mHead->rect.origin, mHead->localScale);
+            primitive.addQuad(mHead->rect, solid, mHead->fill);
+            primitive.popOrigin();
+        }
+        if (mBody && mBody->visible && !primitive.outsideClip(mBody->finalRect())) mBody->render(primitive);
         if (mHead && mHead->visible)
         {
-            Vector2 origin = shape.offset();
-            float hx = snap(mHead->rect.x);
-            float hy = snap(mHead->rect.y);
-            float hw = snap(mHead->rect.x + mHead->rect.width) - hx;
-            float hh = snap(mHead->rect.y + mHead->rect.height) - hy;
+            primitive.pushClip(primitive.toScreen(mHead->finalRect()));
+            mHead->UIWidget::render(primitive);
+            primitive.popClip();
+            float hx = snap(mHead->rect.origin.x);
+            float hy = snap(mHead->rect.origin.y);
+            float hw = snap(mHead->rect.origin.x + mHead->rect.size.x) - hx;
+            float hh = snap(mHead->rect.origin.y + mHead->rect.size.y) - hy;
             if (hw < 0.0f) hw = 0.0f;
             if (hh < 0.0f) hh = 0.0f;
-            Rect clip(origin.x + hx, origin.y + hy, hw, hh);
-            shape.pushClip(clip);
-            mHead->UIWidget::render(shape);
-            shape.popClip();
             if (mSpace == nullptr && hh >= 1.0f)
             {
-                hairline(shape, hx, hy + hh - 1.0f, hw, false, Color(0.55f, 0.58f, 0.66f, 1.0f));
+                hairline(primitive, hx, hy + hh - 1.0f, hw, false, Color(0.55f, 0.58f, 0.66f, 1.0f));
             }
         }
-        if (recolor && mHead) mHead->color = savedHead;
+        primitive.popOrigin();
+        primitive.popClip();
+        primitive.popOrigin();
+        if (recolor && mHead) mHead->fill = savedHead;
     }
 
     UIDockSpace::UIDockSpace()
     {
         interactive = true;
-        color = { 0.14f, 0.14f, 0.16f, 1.0f };
+        fill = Color(0.14f, 0.14f, 0.16f, 1.0f);
         mRoot = std::make_unique<Node>();
     }
 
@@ -566,30 +567,43 @@ namespace eokas
         return this->findPageNode(node->second.get(), page);
     }
 
-    UIDockSpace::Node* UIDockSpace::findLeaf(Node* node, float x, float y)
+    Vector2 UIDockSpace::toLocal(const Vector2& point) const
+    {
+        return point - rect.origin;
+    }
+
+    Vector2 UIDockSpace::pointerLocal(float x, float y) const
+    {
+        Vector2 delta(x - rect.origin.x, y - rect.origin.y);
+        if (localScale.x == 0.0f || localScale.y == 0.0f)
+        {
+            return Vector2::ZERO;
+        }
+        return Vector2(delta.x / localScale.x, delta.y / localScale.y);
+    }
+
+    UIDockSpace::Node* UIDockSpace::findLeaf(Node* node, const Vector2& point)
     {
         if (!node) return nullptr;
         Rect area = node->rect;
-        if (!area.contains(Vector2(x, y))) return nullptr;
+        if (!area.contains(point)) return nullptr;
         if (!node->split) return node;
-        if (auto* found = this->findLeaf(node->first.get(), x, y)) return found;
-        return this->findLeaf(node->second.get(), x, y);
+        if (auto* found = this->findLeaf(node->first.get(), point)) return found;
+        return this->findLeaf(node->second.get(), point);
     }
 
-    UIDockSpace::Node* UIDockSpace::nearestLeaf(Node* node, float x, float y)
+    UIDockSpace::Node* UIDockSpace::nearestLeaf(Node* node, const Vector2& point)
     {
         if (!node) return nullptr;
         if (!node->split) return node;
-        Node* a = this->nearestLeaf(node->first.get(), x, y);
-        Node* b = this->nearestLeaf(node->second.get(), x, y);
+        Node* a = this->nearestLeaf(node->first.get(), point);
+        Node* b = this->nearestLeaf(node->second.get(), point);
         if (!a) return b;
         if (!b) return a;
-        float ax = a->rect.x + a->rect.width * 0.5f;
-        float ay = a->rect.y + a->rect.height * 0.5f;
-        float bx = b->rect.x + b->rect.width * 0.5f;
-        float by = b->rect.y + b->rect.height * 0.5f;
-        float da = (ax - x) * (ax - x) + (ay - y) * (ay - y);
-        float db = (bx - x) * (bx - x) + (by - y) * (by - y);
+        Vector2 ac = a->rect.origin + a->rect.size * 0.5f;
+        Vector2 bc = b->rect.origin + b->rect.size * 0.5f;
+        float da = (ac - point).sqrmagnitude();
+        float db = (bc - point).sqrmagnitude();
         return da <= db ? a : b;
     }
 
@@ -603,7 +617,7 @@ namespace eokas
 
     float UIDockSpace::bandOf(const Rect& area) const
     {
-        float side = minf(area.width, area.height);
+        float side = minf(area.size.x, area.size.y);
         return minf(dropBand, side * 0.5f);
     }
 
@@ -616,18 +630,16 @@ namespace eokas
         return clampf(ratio, minRatio, maxRatio);
     }
 
-    UIDockMode UIDockSpace::zoneAt(const Rect& area, float x, float y) const
+    UIDockMode UIDockSpace::zoneAt(const Rect& area, const Vector2& point) const
     {
         float band = this->bandOf(area);
-        float cx0 = area.x + band;
-        float cy0 = area.y + band;
-        float cx1 = area.x + area.width - band;
-        float cy1 = area.y + area.height - band;
-        if (x >= cx0 && x < cx1 && y >= cy0 && y < cy1) return UIDockMode::Fill;
-        float left = x - area.x;
-        float right = area.x + area.width - x;
-        float top = y - area.y;
-        float bottom = area.y + area.height - y;
+        Vector2 innerMin = area.origin + Vector2(band, band);
+        Vector2 innerMax = area.origin + area.size - Vector2(band, band);
+        if (point.x >= innerMin.x && point.x < innerMax.x && point.y >= innerMin.y && point.y < innerMax.y) return UIDockMode::Fill;
+        float left = point.x - area.origin.x;
+        float right = area.origin.x + area.size.x - point.x;
+        float top = point.y - area.origin.y;
+        float bottom = area.origin.y + area.size.y - point.y;
         float best = left;
         UIDockMode mode = UIDockMode::Left;
         if (right < best) { best = right; mode = UIDockMode::Right; }
@@ -640,14 +652,14 @@ namespace eokas
     Rect UIDockSpace::previewRectFor(const Rect& area, UIDockMode mode) const
     {
         if (mode == UIDockMode::Fill || mode == UIDockMode::None) return area;
-        float innerW = area.width - splitterSize;
-        float innerH = area.height - splitterSize;
+        float innerW = area.size.x - splitterSize;
+        float innerH = area.size.y - splitterSize;
         if (innerW < 0.0f) innerW = 0.0f;
         if (innerH < 0.0f) innerH = 0.0f;
-        if (mode == UIDockMode::Left) return Rect(area.x, area.y, innerW * 0.5f, area.height);
-        if (mode == UIDockMode::Right) return Rect(area.x + innerW * 0.5f + splitterSize, area.y, innerW * 0.5f, area.height);
-        if (mode == UIDockMode::Top) return Rect(area.x, area.y, area.width, innerH * 0.5f);
-        return Rect(area.x, area.y + innerH * 0.5f + splitterSize, area.width, innerH * 0.5f);
+        if (mode == UIDockMode::Left) return Rect(area.origin.x, area.origin.y, innerW * 0.5f, area.size.y);
+        if (mode == UIDockMode::Right) return Rect(area.origin.x + innerW * 0.5f + splitterSize, area.origin.y, innerW * 0.5f, area.size.y);
+        if (mode == UIDockMode::Top) return Rect(area.origin.x, area.origin.y, area.size.x, innerH * 0.5f);
+        return Rect(area.origin.x, area.origin.y + innerH * 0.5f + splitterSize, area.size.x, innerH * 0.5f);
     }
 
     Rect UIDockSpace::splitterRect(Node* node) const
@@ -656,37 +668,37 @@ namespace eokas
         Rect area = node->rect;
         if (node->vertical)
         {
-            float inner = area.height - splitterSize;
+            float inner = area.size.y - splitterSize;
             if (inner < 0.0f) inner = 0.0f;
-            float ratio = this->fitRatio(node->ratio, area.height);
-            return Rect(area.x, area.y + inner * ratio, area.width, splitterSize);
+            float ratio = this->fitRatio(node->ratio, area.size.y);
+            return Rect(area.origin.x, area.origin.y + inner * ratio, area.size.x, splitterSize);
         }
-        float inner = area.width - splitterSize;
+        float inner = area.size.x - splitterSize;
         if (inner < 0.0f) inner = 0.0f;
-        float ratio = this->fitRatio(node->ratio, area.width);
-        return Rect(area.x + inner * ratio, area.y, splitterSize, area.height);
+        float ratio = this->fitRatio(node->ratio, area.size.x);
+        return Rect(area.origin.x + inner * ratio, area.origin.y, splitterSize, area.size.y);
     }
 
-    UIDockSpace::Node* UIDockSpace::findSplitter(Node* node, float x, float y, float slop) const
+    UIDockSpace::Node* UIDockSpace::findSplitter(Node* node, const Vector2& point, float slop) const
     {
         if (!node || !node->split) return nullptr;
-        if (auto* found = this->findSplitter(node->first.get(), x, y, slop)) return found;
-        if (auto* found = this->findSplitter(node->second.get(), x, y, slop)) return found;
+        if (auto* found = this->findSplitter(node->first.get(), point, slop)) return found;
+        if (auto* found = this->findSplitter(node->second.get(), point, slop)) return found;
         Rect gap = this->splitterRect(node);
         if (slop > 0.0f)
         {
             if (node->vertical)
             {
-                gap.y -= slop;
-                gap.height += slop * 2.0f;
+                gap.origin.y -= slop;
+                gap.size.y += slop * 2.0f;
             }
             else
             {
-                gap.x -= slop;
-                gap.width += slop * 2.0f;
+                gap.origin.x -= slop;
+                gap.size.x += slop * 2.0f;
             }
         }
-        if (gap.contains(Vector2(x, y))) return node;
+        if (gap.contains(point)) return node;
         return nullptr;
     }
 
@@ -697,7 +709,7 @@ namespace eokas
             vertical = mDragSplitter->vertical;
             return true;
         }
-        Node* hit = this->findSplitter(mRoot.get(), x, y, 2.0f);
+        Node* hit = this->findSplitter(mRoot.get(), this->pointerLocal(x, y), 2.0f);
         if (!hit) return false;
         vertical = hit->vertical;
         return true;
@@ -705,7 +717,7 @@ namespace eokas
 
     void UIDockSpace::setHover(float x, float y)
     {
-        mHoverSplitter = this->findSplitter(mRoot.get(), x, y, 2.0f);
+        mHoverSplitter = this->findSplitter(mRoot.get(), this->pointerLocal(x, y), 2.0f);
     }
 
     void UIDockSpace::layoutLeaf(Node* node)
@@ -713,10 +725,10 @@ namespace eokas
         if (!node) return;
         Rect area = node->rect;
         if (node->pages.empty()) return;
-        float left = snap(area.x);
-        float top = snap(area.y);
-        float right = snap(area.x + area.width);
-        float bottom = snap(area.y + area.height);
+        float left = snap(area.origin.x);
+        float top = snap(area.origin.y);
+        float right = snap(area.origin.x + area.size.x);
+        float bottom = snap(area.origin.y + area.size.y);
         float headH = snap(this->tabStrip(*node));
         if (top + headH > bottom) headH = bottom - top;
         if (headH < 0.0f) headH = 0.0f;
@@ -764,7 +776,7 @@ namespace eokas
             this->layoutLeaf(node);
             return;
         }
-        float span = node->vertical ? area.height : area.width;
+        float span = node->vertical ? area.size.y : area.size.x;
         float ratio = this->fitRatio(node->ratio, span);
         float inner = span - splitterSize;
         if (inner < 0.0f) inner = 0.0f;
@@ -772,13 +784,13 @@ namespace eokas
         float secondSize = inner - firstSize;
         if (node->vertical)
         {
-            this->layoutNode(node->first.get(), Rect(area.x, area.y, area.width, firstSize));
-            this->layoutNode(node->second.get(), Rect(area.x, area.y + firstSize + splitterSize, area.width, secondSize));
+            this->layoutNode(node->first.get(), Rect(area.origin.x, area.origin.y, area.size.x, firstSize));
+            this->layoutNode(node->second.get(), Rect(area.origin.x, area.origin.y + firstSize + splitterSize, area.size.x, secondSize));
         }
         else
         {
-            this->layoutNode(node->first.get(), Rect(area.x, area.y, firstSize, area.height));
-            this->layoutNode(node->second.get(), Rect(area.x + firstSize + splitterSize, area.y, secondSize, area.height));
+            this->layoutNode(node->first.get(), Rect(area.origin.x, area.origin.y, firstSize, area.size.y));
+            this->layoutNode(node->second.get(), Rect(area.origin.x + firstSize + splitterSize, area.origin.y, secondSize, area.size.y));
         }
     }
 
@@ -792,14 +804,14 @@ namespace eokas
     {
         Node* leaf = this->findPageNode(mRoot.get(), page);
         if (!leaf) return false;
-        bounds = leaf->rect;
+        bounds = Rect(rect.origin + leaf->rect.origin, leaf->rect.size);
         return true;
     }
 
     void UIDockSpace::layoutTree()
     {
         if (!mRoot) return;
-        this->layoutNode(mRoot.get(), rect);
+        this->layoutNode(mRoot.get(), Rect(Vector2::ZERO, rect.size));
     }
 
     void UIDockSpace::dockPage(const std::shared_ptr<UIDockPage>& page, UIDockMode mode)
@@ -817,10 +829,9 @@ namespace eokas
             Node* leaf = this->firstLeaf(mRoot.get());
             if (mRoot->split)
             {
-                float cx = rect.x + rect.width * 0.5f;
-                float cy = rect.y + rect.height * 0.5f;
-                leaf = this->findLeaf(mRoot.get(), cx, cy);
-                if (!leaf) leaf = this->nearestLeaf(mRoot.get(), cx, cy);
+                Vector2 center = this->toLocal(rect.origin + rect.size * 0.5f);
+                leaf = this->findLeaf(mRoot.get(), center);
+                if (!leaf) leaf = this->nearestLeaf(mRoot.get(), center);
             }
             this->fillLeaf(leaf, page);
         }
@@ -851,15 +862,16 @@ namespace eokas
     bool UIDockSpace::showPreview(float localX, float localY)
     {
         this->layout(this->rect);
-        Node* leaf = this->findLeaf(mRoot.get(), localX, localY);
-        if (!leaf) leaf = this->nearestLeaf(mRoot.get(), localX, localY);
+        Vector2 local = this->pointerLocal(localX, localY);
+        Node* leaf = this->findLeaf(mRoot.get(), local);
+        if (!leaf) leaf = this->nearestLeaf(mRoot.get(), local);
         if (!leaf)
         {
             this->clearPreview();
             return false;
         }
         Rect area = leaf->rect;
-        if (!area.contains(Vector2(localX, localY)))
+        if (!area.contains(local))
         {
             this->clearPreview();
             return false;
@@ -867,12 +879,12 @@ namespace eokas
         float tabH = this->tabStrip(*leaf);
         Rect zones = area;
         UIDockMode mode = UIDockMode::Fill;
-        if (localY >= area.y + tabH)
+        if (local.y >= area.origin.y + tabH)
         {
-            zones.y += tabH;
-            zones.height -= tabH;
-            if (zones.height < 0.0f) zones.height = 0.0f;
-            mode = this->zoneAt(zones, localX, localY);
+            zones.origin.y += tabH;
+            zones.size.y -= tabH;
+            if (zones.size.y < 0.0f) zones.size.y = 0.0f;
+            mode = this->zoneAt(zones, local);
         }
         mPreview = true;
         mPreviewLeaf = leaf;
@@ -902,117 +914,121 @@ namespace eokas
         this->layout(this->rect);
     }
 
-    void UIDockSpace::renderNode(Node* node, UIShape& shape, const Vector2& origin)
+    void UIDockSpace::renderNode(Node* node, UIPrimitive& primitive)
     {
         if (!node) return;
         if (node->split)
         {
-            this->renderNode(node->first.get(), shape, origin);
-            this->renderNode(node->second.get(), shape, origin);
+            this->renderNode(node->first.get(), primitive);
+            this->renderNode(node->second.get(), primitive);
             Rect gap = this->splitterRect(node);
             bool hot = node == mDragSplitter || node == mHoverSplitter;
-            Color color = hot ? splitterHoverColor : splitterColor;
-            shape.addQuad(gap, UIFont::solidUV(), color);
+            Color color = hot ? splitterHover : splitter;
+            primitive.addQuad(gap, UIFont::solidUV(), color);
             return;
         }
-        Rect screen(origin.x + node->rect.x, origin.y + node->rect.y, node->rect.width, node->rect.height);
-        shape.pushClip(screen);
-        if (node->pages.empty()) shape.addQuad(node->rect, UIFont::solidUV(), emptyColor);
+        Rect screen = primitive.toScreen(node->rect);
+        primitive.pushClip(screen);
+        if (node->pages.empty()) primitive.addQuad(node->rect, UIFont::solidUV(), empty);
         else
         {
-            float left = snap(node->rect.x);
-            float top = snap(node->rect.y);
-            float stripW = snap(node->rect.x + node->rect.width) - left;
+            float left = snap(node->rect.origin.x);
+            float top = snap(node->rect.origin.y);
+            float stripW = snap(node->rect.origin.x + node->rect.size.x) - left;
             float headH = snap(this->tabStrip(*node));
             if (headH > 0.0f && stripW > 0.0f)
             {
-                Color bar = emptyColor;
+                Color bar = empty;
                 for (auto& page : node->pages)
                 {
                     if (page && page->head())
                     {
-                        bar = page->head()->color;
+                        bar = page->head()->fill;
                         break;
                     }
                 }
-                shape.addQuad(Rect(left, top, stripW, headH), UIFont::solidUV(), bar);
+                primitive.addQuad(Rect(left, top, stripW, headH), UIFont::solidUV(), bar);
             }
         }
         for (int i = 0; i < (int)node->pages.size(); ++i)
         {
             if (i == node->active) continue;
-            if (node->pages[i]) node->pages[i]->render(shape);
+            if (node->pages[i]) node->pages[i]->render(primitive);
         }
         if (node->active >= 0 && node->active < (int)node->pages.size() && node->pages[node->active])
         {
-            node->pages[node->active]->render(shape);
+            node->pages[node->active]->render(primitive);
         }
         if (!node->pages.empty())
         {
-            float left = snap(node->rect.x);
-            float top = snap(node->rect.y);
-            float right = snap(node->rect.x + node->rect.width);
+            float left = snap(node->rect.origin.x);
+            float top = snap(node->rect.origin.y);
+            float right = snap(node->rect.origin.x + node->rect.size.x);
             float headH = snap(this->tabStrip(*node));
             if (headH >= 1.0f && right > left)
             {
-                hairline(shape, left, top + headH - 1.0f, right - left, false, borderColor);
+                hairline(primitive, left, top + headH - 1.0f, right - left, false, border.color);
                 int count = (int)node->pages.size();
                 for (int i = 0; i < count; ++i)
                 {
                     auto& page = node->pages[i];
                     if (!page || !page->head()) continue;
                     const Rect& tab = page->head()->rect;
-                    float hx = snap(tab.x);
-                    float hw = snap(tab.x + tab.width) - hx;
+                    float left = page->rect.origin.x + tab.origin.x;
+                    float hx = snap(left);
+                    float hw = snap(left + tab.size.x) - hx;
                     if (hw < 1.0f) continue;
                     float tabRight = hx + hw;
                     if (tabRight < right - 0.5f)
                     {
-                        hairline(shape, tabRight - 1.0f, top, headH - 1.0f, true, borderColor);
+                        hairline(primitive, tabRight - 1.0f, top, headH - 1.0f, true, border.color);
                     }
                     if (i == node->active)
                     {
                         float accent = headH >= 2.0f ? 2.0f : 1.0f;
-                        shape.addQuad(Rect(hx, top + headH - accent, hw, accent), UIFont::solidUV(), page->tabMark);
+                        primitive.addQuad(Rect(hx, top + headH - accent, hw, accent), UIFont::solidUV(), page->tabMark);
                     }
                 }
             }
         }
-        shape.popClip();
-        strokeRect(shape, node->rect, 1.0f, borderColor);
+        primitive.popClip();
+        UIStroke::border(primitive, node->rect, border);
     }
 
-    void UIDockSpace::render(UIShape& shape)
+    void UIDockSpace::render(UIPrimitive& primitive)
     {
         if (!visible) return;
-        Vector2 origin = shape.offset();
-        Rect screen(origin.x + rect.x, origin.y + rect.y, rect.width, rect.height);
-        shape.pushClip(screen);
-        this->renderNode(mRoot.get(), shape, origin);
-        if (mPreview && mPreviewRect.width > 0.0f && mPreviewRect.height > 0.0f)
+        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushClip(primitive.toScreen(rect));
+        primitive.pushOrigin(primitive.toScreen(rect.origin));
+        this->renderNode(mRoot.get(), primitive);
+        if (mPreview && mPreviewRect.size.x > 0.0f && mPreviewRect.size.y > 0.0f)
         {
-            shape.addQuad(mPreviewRect, UIFont::solidUV(), previewColor);
+            primitive.addQuad(mPreviewRect, UIFont::solidUV(), preview);
         }
-        strokeRect(shape, rect, 1.0f, borderColor);
-        shape.popClip();
+        UIStroke::border(primitive, Rect(Vector2::ZERO, rect.size), border);
+        primitive.popOrigin();
+        primitive.popClip();
+        primitive.popOrigin();
     }
 
     void UIDockSpace::triggerPointerDrag(float x, float y, int button)
     {
         if (button != 0) return;
+        Vector2 local = this->pointerLocal(x, y);
         if (!mSplitterTracking)
         {
-            mDragSplitter = this->findSplitter(mRoot.get(), x, y, 0.0f);
+            mDragSplitter = this->findSplitter(mRoot.get(), local, 0.0f);
             if (!mDragSplitter) return;
             mSplitterTracking = true;
             Rect gap = this->splitterRect(mDragSplitter);
-            mSplitterGrab = mDragSplitter->vertical ? (y - gap.y) : (x - gap.x);
+            mSplitterGrab = mDragSplitter->vertical ? (local.y - gap.origin.y) : (local.x - gap.origin.x);
         }
         if (!mDragSplitter) return;
         Rect area = mDragSplitter->rect;
-        float span = mDragSplitter->vertical ? area.height : area.width;
-        float origin = mDragSplitter->vertical ? area.y : area.x;
-        float pointer = mDragSplitter->vertical ? y : x;
+        float span = mDragSplitter->vertical ? area.size.y : area.size.x;
+        float origin = mDragSplitter->vertical ? area.origin.y : area.origin.x;
+        float pointer = mDragSplitter->vertical ? local.y : local.x;
         float inner = span - splitterSize;
         if (inner <= 0.0f) return;
         float first = pointer - mSplitterGrab - origin;

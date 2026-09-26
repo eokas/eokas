@@ -11,8 +11,8 @@ namespace eokas
     public:
         float paddingX = 12.0f;
         float paddingY = 2.0f;
-        Color background { 0.16f, 0.16f, 0.20f, 1.0f };
-        Color hoverColor { 0.28f, 0.38f, 0.58f, 1.0f };
+        Color background { Color(0.16f, 0.16f, 0.20f, 1.0f) };
+        Color hoverFill { Color(0.28f, 0.38f, 0.58f, 1.0f) };
         std::shared_ptr<UIWidget> content;
 
         UIMenuItem();
@@ -21,7 +21,7 @@ namespace eokas
         UIText* label() const;
         void syncSize();
         void layout(const Rect& rect) override;
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
     };
 
     class UIMenu : public UIWidget
@@ -35,7 +35,7 @@ namespace eokas
         UIMenu();
         void addItem(const std::shared_ptr<UIMenuItem>& item);
         void layout(const Rect& rect) override;
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
     };
 }
 

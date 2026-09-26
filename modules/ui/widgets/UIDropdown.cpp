@@ -1,5 +1,6 @@
 #include "UIDropdown.h"
 #include "../UIFont.h"
+#include "../UIStroke.h"
 #include <cmath>
 
 namespace eokas
@@ -18,15 +19,16 @@ namespace eokas
             {
                 return textH;
             }
-            if (text->fontSize > 0.0f)
+            if (text->style.fontSize > 0.0f)
             {
-                textH = text->fontSize;
+                textH = text->style.fontSize;
             }
-            if (text->font != nullptr && text->font->isOpen())
+            UIFont* font = UIFont::find(text->style.fontPath);
+            if (font != nullptr && font->isOpen())
             {
-                float bake = (float)text->font->pixelSize();
-                float scale = (text->fontSize > 0.0f ? text->fontSize : bake) / bake;
-                textH = (text->font->ascender() - text->font->descender()) * scale;
+                float bake = (float)font->pixelSize();
+                float scale = (text->style.fontSize > 0.0f ? text->style.fontSize : bake) / bake;
+                textH = (font->ascender() - font->descender()) * scale;
             }
             return textH;
         }
@@ -38,14 +40,14 @@ namespace eokas
                 return;
             }
             float height = snap(lineHeight(text));
-            float width = area.width;
-            float x = snap(area.x + paddingX);
-            float innerH = area.height - paddingY * 2.0f;
+            float width = area.size.x;
+            float x = snap(area.origin.x + paddingX);
+            float innerH = area.size.y - paddingY * 2.0f;
             if (innerH < 0.0f)
             {
                 innerH = 0.0f;
             }
-            float y = snap(area.y + paddingY + (innerH - height) * 0.5f);
+            float y = snap(area.origin.y + paddingY + (innerH - height) * 0.5f);
             text->layout(Rect(x, y, width, height));
         }
     }
@@ -69,33 +71,32 @@ namespace eokas
     void UIDropdownItem::layout(const Rect& rect)
     {
         this->rect = rect;
-        placeLabel(mLabel.get(), rect, paddingX, paddingY);
+        placeLabel(mLabel.get(), Rect(Vector2::ZERO, rect.size), paddingX, paddingY);
     }
 
-    void UIDropdownItem::render(UIShape& shape)
+    void UIDropdownItem::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
+        primitive.pushScaleAround(rect.origin, localScale);
         Color bg = background;
         if (pressed)
         {
-            bg = pressedColor;
+            bg = pressedFill;
         }
         else if (hovered)
         {
-            bg = hoverColor;
+            bg = hoverFill;
         }
         else if (selected)
         {
-            bg = selectedColor;
+            bg = selectedFill;
         }
-        shape.addQuad(rect, UIFont::solidUV(), bg);
-        if (mLabel)
-        {
-            mLabel->render(shape);
-        }
+        primitive.addQuad(rect, UIFont::solidUV(), bg);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 
     void UIDropdownItem::triggerClick()
@@ -278,13 +279,9 @@ namespace eokas
         {
             return;
         }
-        text->fontPath = mCaption->fontPath;
-        text->fontSize = mCaption->fontSize;
-        if (mCaption->font != nullptr)
-        {
-            text->font = mCaption->font;
-        }
-        text->color = textColor;
+        text->style.fontPath = mCaption->style.fontPath;
+        text->style.fontSize = mCaption->style.fontSize;
+        text->style.color = this->text.color;
     }
 
     void UIDropdown::syncCaption()
@@ -297,11 +294,11 @@ namespace eokas
         if (item != nullptr && item->label() != nullptr)
         {
             mCaption->text = item->label()->text;
-            mCaption->color = textColor;
+            mCaption->style.color = this->text.color;
             return;
         }
         mCaption->text = placeholder;
-        mCaption->color = placeholderColor;
+        mCaption->style.color = placeholderStyle.color;
     }
 
     void UIDropdown::syncPopup()
@@ -310,15 +307,15 @@ namespace eokas
         {
             return;
         }
-        float rowH = rect.height;
+        float rowH = rect.size.y;
         if (rowH < 1.0f)
         {
             rowH = 1.0f;
         }
-        float y = rect.y + rect.height;
+        float y = 0.0f;
         dropdown->visible = expanded && visible;
         dropdown->interactive = interactive;
-        float panelY = snap(y);
+        float panelY = snap(rect.size.y);
         for (auto& item : mItems)
         {
             if (!item)
@@ -330,15 +327,15 @@ namespace eokas
             item->selected = item->index == value;
             item->paddingX = paddingX;
             item->paddingY = paddingY;
-            item->background = popupColor;
-            item->hoverColor = itemHoverColor;
-            item->pressedColor = itemPressedColor;
-            item->selectedColor = itemSelectedColor;
+            item->background = popup;
+            item->hoverFill = itemHover;
+            item->pressedFill = itemPressed;
+            item->selectedFill = itemSelected;
             this->copyFont(item->label());
-            item->layout(Rect(rect.x, snap(y), rect.width, rowH));
+            item->layout(Rect(Vector2(0.0f, snap(y)), Vector2(rect.size.x, rowH)));
             y += rowH;
         }
-        dropdown->layout(Rect(rect.x, panelY, rect.width, rowH * (float)mItems.size()));
+        dropdown->layout(Rect(Vector2(0.0f, panelY), Vector2(rect.size.x, rowH * (float)mItems.size())));
     }
 
     int UIDropdown::neighbor(int direction) const
@@ -374,51 +371,42 @@ namespace eokas
 
     void UIDropdown::layoutCaption()
     {
-        placeLabel(mCaption.get(), rect, paddingX, paddingY);
+        placeLabel(mCaption.get(), Rect(Vector2::ZERO, rect.size), paddingX, paddingY);
     }
 
-    void UIDropdown::drawBorder(UIShape& shape, const Rect& area) const
+    void UIDropdown::drawBorder(UIPrimitive& primitive, const Rect& area) const
     {
-        float t = borderThickness;
-        if (t <= 0.0f || area.width <= 0.0f || area.height <= 0.0f)
-        {
-            return;
-        }
-        Rect uv = UIFont::solidUV();
-        shape.addQuad(Rect(area.x, area.y, area.width, t), uv, borderColor);
-        shape.addQuad(Rect(area.x, area.y + area.height - t, area.width, t), uv, borderColor);
-        shape.addQuad(Rect(area.x, area.y, t, area.height), uv, borderColor);
-        shape.addQuad(Rect(area.x + area.width - t, area.y, t, area.height), uv, borderColor);
+        UIStroke::border(primitive, area, border);
     }
 
-    void UIDropdown::drawChevron(UIShape& shape) const
+    void UIDropdown::drawChevron(UIPrimitive& primitive) const
     {
-        float s = snap(Math::min_s(rect.height * 0.28f, 8.0f));
+        float s = snap(Math::min_s(rect.size.y * 0.28f, 8.0f));
         if (s < 4.0f)
         {
             s = 4.0f;
         }
-        float cx = snap(rect.x + rect.width - paddingX - s * 0.5f);
-        float cy = snap(rect.y + rect.height * 0.5f);
+        float cx = snap(rect.origin.x + rect.size.x - paddingX - s * 0.5f);
+        float cy = snap(rect.origin.y + rect.size.y * 0.5f);
         Rect uv = UIFont::solidUV();
         if (expanded)
         {
-            shape.addQuad(
+            primitive.addQuad(
                 Vector2(cx - s * 0.5f, cy + s * 0.25f),
                 Vector2(cx + s * 0.5f, cy + s * 0.25f),
                 Vector2(cx, cy - s * 0.35f),
                 Vector2(cx, cy - s * 0.35f),
                 uv,
-                chevronColor);
+                chevron);
             return;
         }
-        shape.addQuad(
+        primitive.addQuad(
             Vector2(cx - s * 0.5f, cy - s * 0.25f),
             Vector2(cx + s * 0.5f, cy - s * 0.25f),
             Vector2(cx, cy + s * 0.35f),
             Vector2(cx, cy + s * 0.35f),
             uv,
-            chevronColor);
+            chevron);
     }
 
     void UIDropdown::layout(const Rect& rect)
@@ -429,25 +417,27 @@ namespace eokas
         this->syncPopup();
     }
 
-    void UIDropdown::render(UIShape& shape)
+    void UIDropdown::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
+        primitive.pushScaleAround(rect.origin, localScale);
         Color bg = background;
         if (interactive && pressed)
         {
-            bg = pressedColor;
+            bg = pressedFill;
         }
         else if (interactive && (hovered || expanded))
         {
-            bg = hoverColor;
+            bg = hoverFill;
         }
-        shape.addQuad(rect, UIFont::solidUV(), bg);
-        this->drawBorder(shape, rect);
-        this->drawChevron(shape);
-        UIWidget::render(shape);
+        primitive.addQuad(rect, UIFont::solidUV(), bg);
+        this->drawBorder(primitive, rect);
+        this->drawChevron(primitive);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 
     void UIDropdown::triggerClick()

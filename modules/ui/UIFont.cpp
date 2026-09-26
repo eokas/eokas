@@ -8,6 +8,55 @@
 
 namespace eokas
 {
+    namespace
+    {
+        std::map<String, UIFont*>& fontRegistry()
+        {
+            static std::map<String, UIFont*> fonts;
+            return fonts;
+        }
+
+        void unbindFont(UIFont* font)
+        {
+            std::map<String, UIFont*>& fonts = fontRegistry();
+            for (auto it = fonts.begin(); it != fonts.end(); )
+            {
+                if (it->second == font)
+                {
+                    it = fonts.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+    }
+
+    void UIFont::bind(const String& path, UIFont* font)
+    {
+        if (path.isEmpty() || font == nullptr)
+        {
+            return;
+        }
+        fontRegistry()[path] = font;
+    }
+
+    UIFont* UIFont::find(const String& path)
+    {
+        if (path.isEmpty())
+        {
+            return nullptr;
+        }
+        std::map<String, UIFont*>& fonts = fontRegistry();
+        auto found = fonts.find(path);
+        if (found == fonts.end() || found->second == nullptr || !found->second->isOpen())
+        {
+            return nullptr;
+        }
+        return found->second;
+    }
+
     UIFont::UIFont()
     {
         memset(mGlyphs, 0, sizeof(mGlyphs));
@@ -93,6 +142,7 @@ namespace eokas
 
     void UIFont::close()
     {
+        unbindFont(this);
         if (mFallback != nullptr)
         {
             FT_Done_Face((FT_Face)mFallback);

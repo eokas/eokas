@@ -2,11 +2,14 @@
 #define _EOKAS_UI_FRAME_H_
 
 #include "UIWidget.h"
-#include "UIShape.h"
+#include "UIPrimitive.h"
 #include <memory>
+#include <vector>
 
 namespace eokas
 {
+    class UICanvas;
+
     class UIFrame
     {
     public:
@@ -17,7 +20,7 @@ namespace eokas
         void setRoot(const std::shared_ptr<UIWidget>& widget);
 
         void flush();
-        UIShape::Ref shape() const;
+        UIPrimitive::Ref primitive() const;
 
         UIWidget* hitTest(float x, float y);
         void onMouseMove(float x, float y);
@@ -30,10 +33,14 @@ namespace eokas
         UIWidget* focus() const;
 
     private:
-        UIWidget* hitTestNode(UIWidget* widget, float x, float y, float originX, float originY);
-        bool findWidget(UIWidget* node, UIWidget* target, float originX, float originY, float& outX, float& outY) const;
+        UIWidget* hitTestNode(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale);
+        bool findWidget(UIWidget* node, UIWidget* target, const Vector2& origin, const Vector2& scale, Vector2& outOrigin, Vector2& outScale) const;
+        bool collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const;
+        UIWidget* dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const;
         void dispatchDrag(float x, float y);
-        bool routeWheel(UIWidget* widget, float x, float y, float originX, float originY, float deltaX, float deltaY);
+        bool routeWheel(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale, const Vector2& delta);
+        bool routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale, const Vector2& delta);
+        void endCanvasDrag(UIWidget* widget);
         void resetPointerState(UIWidget* widget);
         bool containsWidget(UIWidget* node, UIWidget* target) const;
         bool focusAlive();
@@ -42,11 +49,14 @@ namespace eokas
         float mHeight = 0.0f;
 
         std::shared_ptr<UIWidget> mRoot;
-        UIShape::Ref mShape;
+        UIPrimitive::Ref mPrimitive;
 
         UIWidget* mHovered = nullptr;
         UIWidget* mPressed = nullptr;
         int mPressedButton = -1;
+        float mPressX = 0.0f;
+        float mPressY = 0.0f;
+        bool mDragged = false;
         UIWidget* mFocused = nullptr;
     };
 }

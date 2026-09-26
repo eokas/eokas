@@ -6,7 +6,7 @@ namespace eokas
 {
     UIRegion::UIRegion()
     {
-        color.a = 0.0f;
+        fill.a = 0.0f;
         this->setHead(std::make_shared<UIWidget>());
     }
 
@@ -84,30 +84,30 @@ namespace eokas
     void UIRegion::layout(const Rect& rect)
     {
         this->rect = rect;
-        float width = rect.width;
+        float width = rect.size.x;
         if (width <= 0.0f)
         {
             width = 0.0f;
-            if (mHead && mHead->rect.width > width)
+            if (mHead && mHead->rect.size.x > width)
             {
-                width = mHead->rect.width;
+                width = mHead->rect.size.x;
             }
-            if (mExpanded && mBody && mBody->rect.width > width)
+            if (mExpanded && mBody && mBody->rect.size.x > width)
             {
-                width = mBody->rect.width;
+                width = mBody->rect.size.x;
             }
         }
 
         float headH = 0.0f;
-        if (mHead && mHead->rect.height > 0.0f)
+        if (mHead && mHead->rect.size.y > 0.0f)
         {
-            headH = mHead->rect.height;
+            headH = mHead->rect.size.y;
         }
 
         float bodyH = 0.0f;
-        if (mBody && mBody->rect.height > 0.0f)
+        if (mBody && mBody->rect.size.y > 0.0f)
         {
-            bodyH = mBody->rect.height;
+            bodyH = mBody->rect.size.y;
         }
 
         float gap = mSpacing;
@@ -116,14 +116,13 @@ namespace eokas
             gap = 0.0f;
         }
 
-        float x = floorf(rect.x + 0.5f);
-        float y = floorf(rect.y + 0.5f);
+        Vector2 headPos = Vector2::ZERO;
         if (mHead)
         {
             mHead->visible = visible;
             mHead->interactive = interactive;
-            mHead->layout(Rect(x, y, width, headH));
-            headH = mHead->rect.height;
+            mHead->layout(Rect(headPos, Vector2(width, headH)));
+            headH = mHead->rect.size.y;
         }
 
         bool showBody = mExpanded && visible && mBody != nullptr;
@@ -132,9 +131,9 @@ namespace eokas
             mBody->visible = showBody;
             if (showBody)
             {
-                float bodyY = floorf(rect.y + headH + gap + 0.5f);
-                mBody->layout(Rect(x, bodyY, width, bodyH));
-                bodyH = mBody->rect.height;
+                Vector2 bodyPos(0.0f, floorf(headH + gap + 0.5f));
+                mBody->layout(Rect(bodyPos, Vector2(width, bodyH)));
+                bodyH = mBody->rect.size.y;
             }
         }
 
@@ -143,20 +142,22 @@ namespace eokas
         {
             height += gap + bodyH;
         }
-        this->rect.width = width;
-        this->rect.height = height;
+        this->rect.size.x = width;
+        this->rect.size.y = height;
     }
 
-    void UIRegion::render(UIShape& shape)
+    void UIRegion::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
-        if (color.a > 0.0f)
+        primitive.pushScaleAround(rect.origin, localScale);
+        if (fill.a > 0.0f)
         {
-            shape.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(rect, UIFont::solidUV(), fill);
         }
-        UIWidget::render(shape);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 }

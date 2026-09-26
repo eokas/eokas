@@ -90,11 +90,11 @@ namespace eokas
         std::map<String, std::vector<UIText*>> groups;
         for (UIText* text : texts)
         {
-            if (text == nullptr || text->fontPath.isEmpty())
+            if (text == nullptr || text->style.fontPath.isEmpty())
             {
                 continue;
             }
-            groups[text->fontPath].push_back(text);
+            groups[text->style.fontPath].push_back(text);
         }
 
         for (auto& entry : groups)
@@ -103,7 +103,7 @@ namespace eokas
             std::map<uint32_t, uint32_t> sizes;
             for (UIText* text : entry.second)
             {
-                uint32_t px = (uint32_t)(text->fontSize + 0.5f);
+                uint32_t px = (uint32_t)(text->style.fontSize + 0.5f);
                 if (px < 1) px = 1;
                 sizes[px] = px;
                 if (px > pixelSize) pixelSize = px;
@@ -112,10 +112,6 @@ namespace eokas
 
             UIFont* font = this->loadFont(entry.first.cstr(), pixelSize);
             for (auto& size : sizes) font->prepareSize(size.first);
-            for (UIText* text : entry.second)
-            {
-                text->font = font;
-            }
         }
 
         if (mFonts.empty())
@@ -129,9 +125,9 @@ namespace eokas
             {
                 continue;
             }
-            if (UIShape::Ref shape = frame->shape())
+            if (UIPrimitive::Ref primitive = frame->primitive())
             {
-                shape->setPendingUpload(font->atlasRgba(), font->atlasSize());
+                primitive->setPendingUpload(font->atlasRgba(), font->atlasSize());
             }
         }
     }
@@ -159,9 +155,9 @@ namespace eokas
                 {
                     continue;
                 }
-                if (UIShape::Ref shape = frame->shape())
+                if (UIPrimitive::Ref primitive = frame->primitive())
                 {
-                    shape->setPendingUpload(font->atlasRgba(), font->atlasSize());
+                    primitive->setPendingUpload(font->atlasRgba(), font->atlasSize());
                 }
             }
         }
@@ -289,15 +285,20 @@ namespace eokas
     {
         if (mSourceSpace)
         {
-            Rect screen = mSourceSpace->toScreen(Rect(x, y, 0.0f, 0.0f));
-            screenX = screen.x;
-            screenY = screen.y;
+            Vector2 point(x, y);
+            if (page && page->space() == mSourceSpace)
+            {
+                point += mSourceSpace->rect.origin + page->rect.origin;
+            }
+            Rect screen = mSourceSpace->toScreen(Rect(point, Vector2::ZERO));
+            screenX = screen.origin.x;
+            screenY = screen.origin.y;
             return;
         }
         if (Slot* slot = this->slotOf(page))
         {
-            screenX = slot->screenRect.x + x;
-            screenY = slot->screenRect.y + y;
+            screenX = slot->screenRect.origin.x + x;
+            screenY = slot->screenRect.origin.y + y;
             return;
         }
         screenX = x;
@@ -309,8 +310,8 @@ namespace eokas
         if (!page) return;
         if (Slot* slot = this->slotOf(page))
         {
-            mGrabScreenX = screenX - slot->screenRect.x;
-            mGrabScreenY = screenY - slot->screenRect.y;
+            mGrabScreenX = screenX - slot->screenRect.origin.x;
+            mGrabScreenY = screenY - slot->screenRect.origin.y;
             return;
         }
         Rect window(screenX, screenY, 320.0f, 240.0f);
@@ -327,15 +328,15 @@ namespace eokas
         void* windowHandle = nullptr;
         if (onCreateWindow) windowHandle = onCreateWindow(window);
         auto frame = std::make_unique<UIFrame>();
-        uint32_t width = (uint32_t)window.width;
-        uint32_t height = (uint32_t)window.height;
+        uint32_t width = (uint32_t)window.size.x;
+        uint32_t height = (uint32_t)window.size.y;
         if (width < 1) width = 1;
         if (height < 1) height = 1;
         frame->init(width, height);
         held->layoutInWindow((float)width, (float)height);
         frame->setRoot(held);
-        mGrabScreenX = screenX - window.x;
-        mGrabScreenY = screenY - window.y;
+        mGrabScreenX = screenX - window.origin.x;
+        mGrabScreenY = screenY - window.origin.y;
         Slot created;
         created.window = windowHandle;
         created.frame = std::move(frame);
@@ -350,8 +351,8 @@ namespace eokas
     {
         Slot* slot = this->slotOf(page);
         if (!slot) return;
-        slot->screenRect.x = screenX - mGrabScreenX;
-        slot->screenRect.y = screenY - mGrabScreenY;
+        slot->screenRect.origin.x = screenX - mGrabScreenX;
+        slot->screenRect.origin.y = screenY - mGrabScreenY;
         if (slot->window && onPlaceWindow) onPlaceWindow(slot->window, slot->screenRect);
         UIDockSpace* hit = nullptr;
         for (auto* space : mSpaces)
@@ -359,8 +360,8 @@ namespace eokas
             if (!space) continue;
             Rect screen = space->toScreen(space->rect);
             if (!screen.contains(Vector2(screenX, screenY))) continue;
-            float localX = space->rect.x + (screenX - screen.x);
-            float localY = space->rect.y + (screenY - screen.y);
+            float localX = space->rect.origin.x + (screenX - screen.origin.x);
+            float localY = space->rect.origin.y + (screenY - screen.origin.y);
             if (space->showPreview(localX, localY)) hit = space;
             else space->clearPreview();
         }
@@ -495,6 +496,7 @@ namespace eokas
         }
 
         UIFont* ptr = font.get();
+        UIFont::bind(fontPath, ptr);
         mFonts.push_back(std::move(font));
         return ptr;
     }

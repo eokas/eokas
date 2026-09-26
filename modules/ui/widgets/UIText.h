@@ -12,12 +12,15 @@ namespace eokas
     public:
         static constexpr float kDefaultFontSize = 16.0f;
 
-        UIText() { interactive = false; }
+        UIText()
+        {
+            interactive = false;
+            style.fontSize = kDefaultFontSize;
+            fill.a = 0.0f;
+        }
         String text;
-        String fontPath;
-        float fontSize = kDefaultFontSize;
-        UIFont* font = nullptr;
-        void render(UIShape& shape) override;
+        UITextStyle style;
+        void render(UIPrimitive& primitive) override;
     };
 }
 

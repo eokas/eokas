@@ -2,6 +2,11 @@
 
 namespace eokas
 {
+    Rect UIWidget::finalRect() const
+    {
+        return Rect(rect.origin, rect.size * localScale);
+    }
+
     void UIWidget::layout(const Rect& rect)
     {
         this->rect = rect;
@@ -15,26 +20,30 @@ namespace eokas
         }
     }
 
-    void UIWidget::render(UIShape& shape)
+    void UIWidget::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
+        Vector2 childOrigin = primitive.origin() + primitive.scale() * rect.origin;
+        Vector2 childScale = primitive.scale() * localScale;
+        primitive.pushTransform(childOrigin, childScale);
         for (auto& child : children)
         {
-            if (child && !child->floating && !shape.outsideClip(child->rect))
+            if (child && !child->floating && !primitive.outsideClip(child->finalRect()))
             {
-                child->render(shape);
+                child->render(primitive);
             }
         }
         for (auto& child : children)
         {
             if (child && child->floating)
             {
-                child->render(shape);
+                child->render(primitive);
             }
         }
+        primitive.popOrigin();
     }
 
     void UIWidget::triggerPointerDrag(float x, float y, int button)

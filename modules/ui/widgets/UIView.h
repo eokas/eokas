@@ -9,9 +9,9 @@ namespace eokas
     {
     public:
         float scrollbarThickness = 8.0f;
-        Color scrollbarColor { 0.45f, 0.48f, 0.55f, 1.0f };
-        Color scrollbarTrackColor { 0.20f, 0.21f, 0.24f, 1.0f };
-        Color scrollbarPressedColor { 0.32f, 0.44f, 0.68f, 1.0f };
+        Color scrollbar { Color(0.45f, 0.48f, 0.55f, 1.0f) };
+        Color scrollbarTrack { Color(0.20f, 0.21f, 0.24f, 1.0f) };
+        Color scrollbarPressed { Color(0.32f, 0.44f, 0.68f, 1.0f) };
 
         UIView();
         const std::shared_ptr<UIWidget>& root() const { return mRoot; }
@@ -24,7 +24,7 @@ namespace eokas
         bool scrollbarContains(float localX, float localY) const;
 
         void layout(const Rect& rect) override;
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
         void triggerPointerDrag(float x, float y, int button) override;
         void triggerPointerRelease() override;
 
@@ -53,13 +53,13 @@ namespace eokas
 
         void updateMetrics();
         void placeRoot();
-        void expandContent(const UIWidget* widget, float& minX, float& minY, float& maxX, float& maxY, bool& any) const;
+        void expandContent(const UIWidget* widget, const Vector2& origin, const Vector2& scale, float& minX, float& minY, float& maxX, float& maxY, bool& any) const;
         float barSize() const;
         Rect verticalTrack() const;
         Rect horizontalTrack() const;
         Rect verticalThumb() const;
         Rect horizontalThumb() const;
-        void drawScrollbars(UIShape& shape) const;
+        void drawScrollbars(UIPrimitive& primitive) const;
     };
 }
 

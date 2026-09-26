@@ -7,18 +7,12 @@
 
 namespace eokas
 {
-    struct UITableEdge
-    {
-        float thickness = 1.0f;
-        Color color { 0.55f, 0.58f, 0.66f, 1.0f };
-    };
-
     struct UITableBorder
     {
-        UITableEdge left;
-        UITableEdge top;
-        UITableEdge right;
-        UITableEdge bottom;
+        UIStrokeStyle left { Color(0.55f, 0.58f, 0.66f, 1.0f) };
+        UIStrokeStyle top { Color(0.55f, 0.58f, 0.66f, 1.0f) };
+        UIStrokeStyle right { Color(0.55f, 0.58f, 0.66f, 1.0f) };
+        UIStrokeStyle bottom { Color(0.55f, 0.58f, 0.66f, 1.0f) };
 
         UITableBorder() = default;
         UITableBorder(float thickness, const Color& color)
@@ -49,7 +43,7 @@ namespace eokas
         void clearBorder();
         UITableBorder border() const;
         void layout(const Rect& rect) override;
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
 
     private:
         int column() const;
@@ -110,7 +104,7 @@ namespace eokas
         UITableBorder border;
         float cellSpacing = 0.0f;
         float cellPadding = 0.0f;
-        Color disclosure { 0.75f, 0.78f, 0.84f, 1.0f };
+        Color disclosure { Color(0.75f, 0.78f, 0.84f, 1.0f) };
 
         UITable();
         int columnCount() const { return (int)mColumnWidths.size(); }
@@ -136,7 +130,7 @@ namespace eokas
 
         void layout(const Rect& rect) override;
         void refit();
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
 
     private:
         std::vector<float> mColumnWidths;

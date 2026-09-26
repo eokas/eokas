@@ -1,7 +1,8 @@
 #ifndef _EOKAS_UI_WIDGET_H_
 #define _EOKAS_UI_WIDGET_H_
 
-#include "UIShape.h"
+#include "UIPrimitive.h"
+#include "UIStyle.h"
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -37,11 +38,16 @@ namespace eokas
     class UIWidget
     {
     public:
+        // Position and size in the parent widget's local space.
+        // localScale scales around rect's top-left. (1, 1) is identity.
+        // Layout keeps rect.size unscaled. Children inherit this scale.
         Rect rect;
-        Color color { 1.0f, 1.0f, 1.0f, 1.0f };
+        Vector2 localScale { 1.0f, 1.0f };
+        Color fill { Color(1.0f, 1.0f, 1.0f, 1.0f) };
         bool visible = true;
         bool floating = false;
         bool interactive = true;
+        bool dragable = false;
         bool hovered = false;
         bool pressed = false;
         bool focused = false;
@@ -57,8 +63,9 @@ namespace eokas
         
 
         virtual ~UIWidget() = default;
+        Rect finalRect() const;
         virtual void layout(const Rect& rect);
-        virtual void render(UIShape& shape);
+        virtual void render(UIPrimitive& primitive);
 
         virtual void triggerPointerEnter();
         virtual void triggerPointerLeave();

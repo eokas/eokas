@@ -1,4 +1,4 @@
-#include "UIShape.h"
+#include "UIPrimitive.h"
 #include <cstring>
 #include <stdexcept>
 #include <vector>
@@ -56,18 +56,18 @@ namespace eokas
             {
                 return;
             }
-            float limit = clip.x;
+            float limit = clip.origin.x;
             if (edge == 1)
             {
-                limit = clip.x + clip.width;
+                limit = clip.origin.x + clip.size.x;
             }
             else if (edge == 2)
             {
-                limit = clip.y;
+                limit = clip.origin.y;
             }
             else if (edge == 3)
             {
-                limit = clip.y + clip.height;
+                limit = clip.origin.y + clip.size.y;
             }
             for (size_t i = 0; i < input.size(); ++i)
             {
@@ -128,7 +128,7 @@ namespace eokas
 
         void emitClippedTriangle(std::vector<UIVertex>& vertices, std::vector<uint32_t>& indices, const ClipVert& a, const ClipVert& b, const ClipVert& c, const Rect& clip, const Vector4& color)
         {
-            if (clip.width <= 0.0f || clip.height <= 0.0f)
+            if (clip.size.x <= 0.0f || clip.size.y <= 0.0f)
             {
                 return;
             }
@@ -153,47 +153,78 @@ namespace eokas
         }
     }
 
-    UIShape::UIShape()
+    UIPrimitive::UIPrimitive()
     {
         screenSpace = true;
     }
 
-    void UIShape::begin()
+    void UIPrimitive::begin()
     {
         mVertices.clear();
         mIndices.clear();
         indexCount = 0;
-        mOffset = Vector2(0.0f, 0.0f);
-        mOffsetStack.clear();
+        mOrigin = Vector2(0.0f, 0.0f);
+        mScale = Vector2(1.0f, 1.0f);
+        mTransformStack.clear();
         mClipStack.clear();
     }
 
-    void UIShape::pushOffset(const Vector2& next)
+    Vector2 UIPrimitive::toScreen(const Vector2& local) const
     {
-        mOffsetStack.push_back(mOffset);
-        mOffset = next;
+        return mOrigin + mScale * local;
     }
 
-    void UIShape::popOffset()
+    Rect UIPrimitive::toScreen(const Rect& local) const
     {
-        if (mOffsetStack.empty())
+        Vector2 a = this->toScreen(local.origin);
+        Vector2 b = this->toScreen(local.origin + local.size);
+        float x0 = a.x < b.x ? a.x : b.x;
+        float y0 = a.y < b.y ? a.y : b.y;
+        float x1 = a.x > b.x ? a.x : b.x;
+        float y1 = a.y > b.y ? a.y : b.y;
+        return Rect(x0, y0, x1 - x0, y1 - y0);
+    }
+
+    void UIPrimitive::pushTransform(const Vector2& origin, const Vector2& scale)
+    {
+        mTransformStack.push_back({ mOrigin, mScale });
+        mOrigin = origin;
+        mScale = scale;
+    }
+
+    void UIPrimitive::pushScaleAround(const Vector2& pivot, const Vector2& localScale)
+    {
+        Vector2 nextScale = mScale * localScale;
+        Vector2 nextOrigin = mOrigin + mScale * (pivot * (Vector2::ONE - localScale));
+        this->pushTransform(nextOrigin, nextScale);
+    }
+
+    void UIPrimitive::pushOrigin(const Vector2& next)
+    {
+        this->pushTransform(next, mScale);
+    }
+
+    void UIPrimitive::popOrigin()
+    {
+        if (mTransformStack.empty())
         {
             return;
         }
-        mOffset = mOffsetStack.back();
-        mOffsetStack.pop_back();
+        mOrigin = mTransformStack.back().origin;
+        mScale = mTransformStack.back().scale;
+        mTransformStack.pop_back();
     }
 
-    void UIShape::pushClip(const Rect& screenClip)
+    void UIPrimitive::pushClip(const Rect& screenClip)
     {
         Rect next = screenClip;
         if (!mClipStack.empty())
         {
             const Rect& prev = mClipStack.back();
-            float x0 = greater(prev.x, screenClip.x);
-            float y0 = greater(prev.y, screenClip.y);
-            float x1 = lesser(prev.x + prev.width, screenClip.x + screenClip.width);
-            float y1 = lesser(prev.y + prev.height, screenClip.y + screenClip.height);
+            float x0 = greater(prev.origin.x, screenClip.origin.x);
+            float y0 = greater(prev.origin.y, screenClip.origin.y);
+            float x1 = lesser(prev.origin.x + prev.size.x, screenClip.origin.x + screenClip.size.x);
+            float y1 = lesser(prev.origin.y + prev.size.y, screenClip.origin.y + screenClip.size.y);
             float w = x1 - x0;
             float h = y1 - y0;
             if (w < 0.0f)
@@ -209,7 +240,7 @@ namespace eokas
         mClipStack.push_back(next);
     }
 
-    void UIShape::popClip()
+    void UIPrimitive::popClip()
     {
         if (!mClipStack.empty())
         {
@@ -217,56 +248,61 @@ namespace eokas
         }
     }
 
-    bool UIShape::outsideClip(const Rect& local) const
+    bool UIPrimitive::outsideClip(const Rect& local) const
     {
         if (mClipStack.empty())
         {
             return false;
         }
         const Rect& clip = mClipStack.back();
-        if (clip.width <= 0.0f || clip.height <= 0.0f)
+        if (clip.size.x <= 0.0f || clip.size.y <= 0.0f)
         {
             return true;
         }
-        float x0 = local.x + mOffset.x;
-        float y0 = local.y + mOffset.y;
-        float x1 = x0 + local.width;
-        float y1 = y0 + local.height;
-        float cx1 = clip.x + clip.width;
-        float cy1 = clip.y + clip.height;
-        return x1 < clip.x || x0 > cx1 || y1 < clip.y || y0 > cy1;
+        Rect screen = this->toScreen(local);
+        float x0 = screen.origin.x;
+        float y0 = screen.origin.y;
+        float x1 = x0 + screen.size.x;
+        float y1 = y0 + screen.size.y;
+        float cx1 = clip.origin.x + clip.size.x;
+        float cy1 = clip.origin.y + clip.size.y;
+        return x1 < clip.origin.x || x0 > cx1 || y1 < clip.origin.y || y0 > cy1;
     }
 
-    void UIShape::setTexture(Texture::Ref tex)
+    void UIPrimitive::setTexture(Texture::Ref tex)
     {
         texture = tex;
     }
 
-    void UIShape::setPendingUpload(const std::vector<uint8_t>& rgba, uint32_t atlasSize)
+    void UIPrimitive::setPendingUpload(const std::vector<uint8_t>& rgba, uint32_t atlasSize)
     {
         mPendingUploadRgba = rgba;
         mPendingAtlasSize = atlasSize;
         mTextureDirty = true;
     }
 
-    void UIShape::addQuad(const Rect& screen, const Rect& uv, const Color& color)
+    void UIPrimitive::addQuad(const Rect& screen, const Rect& uv, const Color& color)
     {
         this->addQuad(
-            Vector2(screen.x, screen.y),
-            Vector2(screen.x + screen.width, screen.y),
-            Vector2(screen.x + screen.width, screen.y + screen.height),
-            Vector2(screen.x, screen.y + screen.height),
+            Vector2(screen.origin.x, screen.origin.y),
+            Vector2(screen.origin.x + screen.size.x, screen.origin.y),
+            Vector2(screen.origin.x + screen.size.x, screen.origin.y + screen.size.y),
+            Vector2(screen.origin.x, screen.origin.y + screen.size.y),
             uv,
             color);
     }
 
-    void UIShape::addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color)
+    void UIPrimitive::addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color)
     {
         Vector4 vertexColor(color.r, color.g, color.b, color.a);
-        ClipVert q0 { p0.x + mOffset.x, p0.y + mOffset.y, uv.x, uv.y };
-        ClipVert q1 { p1.x + mOffset.x, p1.y + mOffset.y, uv.x + uv.width, uv.y };
-        ClipVert q2 { p2.x + mOffset.x, p2.y + mOffset.y, uv.x + uv.width, uv.y + uv.height };
-        ClipVert q3 { p3.x + mOffset.x, p3.y + mOffset.y, uv.x, uv.y + uv.height };
+        Vector2 s0 = this->toScreen(p0);
+        Vector2 s1 = this->toScreen(p1);
+        Vector2 s2 = this->toScreen(p2);
+        Vector2 s3 = this->toScreen(p3);
+        ClipVert q0 { s0.x, s0.y, uv.origin.x, uv.origin.y };
+        ClipVert q1 { s1.x, s1.y, uv.origin.x + uv.size.x, uv.origin.y };
+        ClipVert q2 { s2.x, s2.y, uv.origin.x + uv.size.x, uv.origin.y + uv.size.y };
+        ClipVert q3 { s3.x, s3.y, uv.origin.x, uv.origin.y + uv.size.y };
 
         if (mClipStack.empty())
         {
@@ -280,11 +316,44 @@ namespace eokas
         emitClippedTriangle(mVertices, mIndices, q0, q2, q3, clip, vertexColor);
     }
 
-    void UIShape::end()
+    void UIPrimitive::addTriangles(const Vector2* vertices, uint32_t triangleCount, const Rect& uv, const Color& color)
+    {
+        if (vertices == nullptr || triangleCount == 0)
+        {
+            return;
+        }
+        Vector4 vertexColor(color.r, color.g, color.b, color.a);
+        float u0 = uv.origin.x;
+        float v0 = uv.origin.y;
+        float u1 = uv.origin.x + uv.size.x;
+        float v1 = uv.origin.y + uv.size.y;
+        for (uint32_t i = 0; i < triangleCount; ++i)
+        {
+            const Vector2& p0 = vertices[i * 3];
+            const Vector2& p1 = vertices[i * 3 + 1];
+            const Vector2& p2 = vertices[i * 3 + 2];
+            Vector2 s0 = this->toScreen(p0);
+            Vector2 s1 = this->toScreen(p1);
+            Vector2 s2 = this->toScreen(p2);
+            ClipVert c0 { s0.x, s0.y, u0, v0 };
+            ClipVert c1 { s1.x, s1.y, u1, v0 };
+            ClipVert c2 { s2.x, s2.y, u1, v1 };
+            if (mClipStack.empty())
+            {
+                emitTriangle(mVertices, mIndices, c0, c1, c2, vertexColor);
+            }
+            else
+            {
+                emitClippedTriangle(mVertices, mIndices, c0, c1, c2, mClipStack.back(), vertexColor);
+            }
+        }
+    }
+
+    void UIPrimitive::end()
     {
         if (mVertices.size() > mMaxQuads * 4)
         {
-            throw std::runtime_error("UIShape: vertex count exceeds maxQuads.");
+            throw std::runtime_error("UIPrimitive: vertex count exceeds maxQuads.");
         }
 
         indexCount = (uint32_t)mIndices.size();
@@ -292,7 +361,7 @@ namespace eokas
         indexLength = (uint32_t)(mIndices.size() * sizeof(uint32_t));
     }
 
-    void UIShape::createResources(Device::Ref device)
+    void UIPrimitive::createResources(Device::Ref device)
     {
         vertexStride = sizeof(UIVertex);
         indexFormat = Format::R32_UINT;
@@ -318,7 +387,7 @@ namespace eokas
         Primitive::createResources(device);
     }
 
-    void UIShape::upload(CommandBuffer::Ref cmd)
+    void UIPrimitive::upload(CommandBuffer::Ref cmd)
     {
         if (!mTextureDirty || !texture || !cmd)
         {
@@ -328,7 +397,7 @@ namespace eokas
         mTextureDirty = false;
     }
 
-    void UIShape::encode(CommandBuffer::Ref cmd)
+    void UIPrimitive::encode(CommandBuffer::Ref cmd)
     {
         uint32_t vertexBytes = (uint32_t)(mVertices.size() * sizeof(UIVertex));
         uint32_t indexBytes = (uint32_t)(mIndices.size() * sizeof(uint32_t));

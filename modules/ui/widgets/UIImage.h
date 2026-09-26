@@ -35,7 +35,7 @@ namespace eokas
         UIBorder border;
         UIImageType type = UIImageType::Simple;
         bool fillCenter = true;
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
     };
 }
 

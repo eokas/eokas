@@ -18,7 +18,7 @@ namespace eokas
         void addChild(const std::shared_ptr<UIWidget>& child);
         void layout(const Rect& rect) override;
         void refit();
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
     };
 }
 

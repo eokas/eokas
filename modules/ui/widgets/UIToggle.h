@@ -9,22 +9,22 @@ namespace eokas
     {
     public:
         bool value = false;
-        Color offColor { 0.24f, 0.26f, 0.32f, 1.0f };
-        Color onColor { 0.32f, 0.44f, 0.68f, 1.0f };
-        Color offHoverColor { 0.32f, 0.36f, 0.44f, 1.0f };
-        Color onHoverColor { 0.40f, 0.54f, 0.78f, 1.0f };
-        Color offPressedColor { 0.16f, 0.18f, 0.22f, 1.0f };
-        Color onPressedColor { 0.18f, 0.28f, 0.50f, 1.0f };
-        Color thumbColor { 0.92f, 0.92f, 0.94f, 1.0f };
+        Color off { Color(0.24f, 0.26f, 0.32f, 1.0f) };
+        Color on { Color(0.32f, 0.44f, 0.68f, 1.0f) };
+        Color offHover { Color(0.32f, 0.36f, 0.44f, 1.0f) };
+        Color onHover { Color(0.40f, 0.54f, 0.78f, 1.0f) };
+        Color offPressed { Color(0.16f, 0.18f, 0.22f, 1.0f) };
+        Color onPressed { Color(0.18f, 0.28f, 0.50f, 1.0f) };
+        Color thumb { Color(0.92f, 0.92f, 0.94f, 1.0f) };
         std::function<void(bool)> onValueChanged;
 
         void setValue(bool v);
-        void render(UIShape& shape) override;
+        void render(UIPrimitive& primitive) override;
         void triggerClick() override;
 
     private:
         Color capsuleColor() const;
-        void addDisc(UIShape& shape, float cx, float cy, float radius, const Color& color);
+        void addDisc(UIPrimitive& primitive, float cx, float cy, float radius, const Color& color);
     };
 }
 

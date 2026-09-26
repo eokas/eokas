@@ -100,15 +100,15 @@ namespace eokas
         else if (type == SliderType::Vertical)
         {
             float half = thumbSize * 0.5f;
-            float span = rect.height - thumbSize;
-            float origin = rect.y + rect.height - half;
+            float span = rect.size.y - thumbSize;
+            float origin = rect.origin.y + rect.size.y - half;
             t = (span > 0.0f) ? Math::clamp((origin - y) / span, 0.0f, 1.0f) : 0.0f;
         }
         else
         {
             float half = thumbSize * 0.5f;
-            float span = rect.width - thumbSize;
-            float origin = rect.x + half;
+            float span = rect.size.x - thumbSize;
+            float origin = rect.origin.x + half;
             t = (span > 0.0f) ? Math::clamp((x - origin) / span, 0.0f, 1.0f) : 0.0f;
         }
         this->commitValue(minValue + (maxValue - minValue) * t);
@@ -121,8 +121,8 @@ namespace eokas
 
     float UISlider::pointerAngle(float x, float y) const
     {
-        float cx = rect.x + rect.width * 0.5f;
-        float cy = rect.y + rect.height * 0.5f;
+        float cx = rect.origin.x + rect.size.x * 0.5f;
+        float cy = rect.origin.y + rect.size.y * 0.5f;
         float dx = x - cx;
         float dy = y - cy;
         float angle = (type == SliderType::Angular) ? atan2f(-dy, dx) : atan2f(dx, -dy);
@@ -189,37 +189,39 @@ namespace eokas
     {
         if (!interactive)
         {
-            return thumbColor;
+            return thumb;
         }
         if (pressed)
         {
-            return thumbPressedColor;
+            return thumbPressed;
         }
         if (hovered)
         {
-            return thumbHoverColor;
+            return thumbHover;
         }
-        return thumbColor;
+        return thumb;
     }
 
-    void UISlider::render(UIShape& shape)
+    void UISlider::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
+        primitive.pushScaleAround(rect.origin, localScale);
         if (this->ring())
         {
-            this->renderRing(shape);
+            this->renderRing(primitive);
         }
         else
         {
-            this->renderLinear(shape, type == SliderType::Vertical);
+            this->renderLinear(primitive, type == SliderType::Vertical);
         }
-        UIWidget::render(shape);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 
-    void UISlider::renderLinear(UIShape& shape, bool vertical)
+    void UISlider::renderLinear(UIPrimitive& primitive, bool vertical)
     {
         float t = this->valueT();
         float half = thumbSize * 0.5f;
@@ -227,78 +229,78 @@ namespace eokas
         if (vertical)
         {
             float thick = trackThickness;
-            if (thick > rect.width)
+            if (thick > rect.size.x)
             {
-                thick = rect.width;
+                thick = rect.size.x;
             }
-            float axisX = snap(rect.x + rect.width * 0.5f);
+            float axisX = snap(rect.origin.x + rect.size.x * 0.5f);
             float trackX = axisX - thick * 0.5f;
-            shape.addQuad(Rect(trackX, rect.y, thick, rect.height), solid, trackColor);
+            primitive.addQuad(Rect(trackX, rect.origin.y, thick, rect.size.y), solid, track);
 
-            float span = rect.height - thumbSize;
+            float span = rect.size.y - thumbSize;
             if (span < 0.0f)
             {
                 span = 0.0f;
             }
-            float thumbCenter = snap(rect.y + rect.height - half - span * t);
-            float fillH = rect.y + rect.height - thumbCenter;
+            float thumbCenter = snap(rect.origin.y + rect.size.y - half - span * t);
+            float fillH = rect.origin.y + rect.size.y - thumbCenter;
             if (fillH > 0.0f)
             {
-                shape.addQuad(Rect(trackX, thumbCenter, thick, fillH), solid, fillColor);
+                primitive.addQuad(Rect(trackX, thumbCenter, thick, fillH), solid, fill);
             }
-            this->addDisc(shape, axisX, thumbCenter, half, this->thumbDrawColor());
+            this->addDisc(primitive, axisX, thumbCenter, half, this->thumbDrawColor());
             return;
         }
 
         float thick = trackThickness;
-        if (thick > rect.height)
+        if (thick > rect.size.y)
         {
-            thick = rect.height;
+            thick = rect.size.y;
         }
-        float axisY = snap(rect.y + rect.height * 0.5f);
+        float axisY = snap(rect.origin.y + rect.size.y * 0.5f);
         float trackY = axisY - thick * 0.5f;
-        shape.addQuad(Rect(rect.x, trackY, rect.width, thick), solid, trackColor);
+        primitive.addQuad(Rect(rect.origin.x, trackY, rect.size.x, thick), solid, track);
 
-        float span = rect.width - thumbSize;
+        float span = rect.size.x - thumbSize;
         if (span < 0.0f)
         {
             span = 0.0f;
         }
-        float thumbCenter = snap(rect.x + half + span * t);
-        if (thumbCenter > rect.x)
+        float thumbCenter = snap(rect.origin.x + half + span * t);
+        if (thumbCenter > rect.origin.x)
         {
-            shape.addQuad(Rect(rect.x, trackY, thumbCenter - rect.x, thick), solid, fillColor);
+            primitive.addQuad(Rect(rect.origin.x, trackY, thumbCenter - rect.origin.x, thick), solid, fill);
         }
-        this->addDisc(shape, thumbCenter, axisY, half, this->thumbDrawColor());
+        this->addDisc(primitive, thumbCenter, axisY, half, this->thumbDrawColor());
     }
 
-    void UISlider::renderRing(UIShape& shape)
+    void UISlider::renderRing(UIPrimitive& primitive)
     {
         float t = this->valueT();
-        float cx = snap(rect.x + rect.width * 0.5f);
-        float cy = snap(rect.y + rect.height * 0.5f);
-        float extent = Math::min_s(rect.width, rect.height);
+        float cx = snap(rect.origin.x + rect.size.x * 0.5f);
+        float cy = snap(rect.origin.y + rect.size.y * 0.5f);
+        float extent = Math::min_s(rect.size.x, rect.size.y);
         float inset = Math::max_s(thumbSize, trackThickness) * 0.5f;
         float radius = extent * 0.5f - inset;
         if (radius > 0.0f)
         {
-            this->addArc(shape, cx, cy, radius, 0.0f, Math::PI_MUL_2, trackColor);
+            this->addArc(primitive, cx, cy, radius, 0.0f, Math::PI_MUL_2, track);
             if (t >= 1.0f)
             {
-                this->addArc(shape, cx, cy, radius, 0.0f, Math::PI_MUL_2, fillColor);
+                this->addArc(primitive, cx, cy, radius, 0.0f, Math::PI_MUL_2, fill);
             }
             else if (t > 0.0f)
             {
-                this->addArc(shape, cx, cy, radius, 0.0f, t * Math::PI_MUL_2, fillColor);
+                this->addArc(primitive, cx, cy, radius, 0.0f, t * Math::PI_MUL_2, fill);
             }
         }
 
         float drawRadius = radius > 0.0f ? radius : 0.0f;
         Vector2 p = this->ringPoint(cx, cy, drawRadius, t * Math::PI_MUL_2);
-        this->addDisc(shape, p.x, p.y, thumbSize * 0.5f, this->thumbDrawColor());
+        this->addDisc(primitive, p.x, p.y, thumbSize * 0.5f, this->thumbDrawColor());
     }
 
-    void UISlider::addDisc(UIShape& shape, float cx, float cy, float radius, const Color& color)
+    void UISlider::addDisc(UIPrimitive& primitive, float cx, float cy, float radius, const Color& color)
     {
         if (radius <= 0.0f)
         {
@@ -312,11 +314,11 @@ namespace eokas
             float a1 = Math::PI_MUL_2 * ((float)(i + 1) / (float)kThumbSegments);
             Vector2 e0(cx + cosf(a0) * radius, cy + sinf(a0) * radius);
             Vector2 e1(cx + cosf(a1) * radius, cy + sinf(a1) * radius);
-            shape.addQuad(center, e0, e1, center, uv, color);
+            primitive.addQuad(center, e0, e1, center, uv, color);
         }
     }
 
-    void UISlider::addArc(UIShape& shape, float cx, float cy, float radius, float a0, float a1, const Color& color)
+    void UISlider::addArc(UIPrimitive& primitive, float cx, float cy, float radius, float a0, float a1, const Color& color)
     {
         float sweep = a1 - a0;
         if (sweep <= 0.0f)
@@ -339,7 +341,7 @@ namespace eokas
         {
             float s0 = a0 + sweep * ((float)i / (float)steps);
             float s1 = a0 + sweep * ((float)(i + 1) / (float)steps);
-            shape.addQuad(
+            primitive.addQuad(
                 this->ringPoint(cx, cy, inner, s0),
                 this->ringPoint(cx, cy, outer, s0),
                 this->ringPoint(cx, cy, outer, s1),

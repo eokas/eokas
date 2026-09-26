@@ -4,19 +4,21 @@
 
 namespace eokas
 {
-    void UIText::render(UIShape& shape)
+    void UIText::render(UIPrimitive& primitive)
     {
+        UIFont* font = UIFont::find(style.fontPath);
         if (!visible || font == nullptr || !font->isOpen())
         {
             return;
         }
 
+        primitive.pushScaleAround(rect.origin, localScale);
         float scale = 1.0f;
         float ascender = 0.0f;
         float descender = 0.0f;
-        font->drawMetrics(fontSize, scale, ascender, descender);
-        float baseline = floorf(rect.y + ascender + 0.5f);
-        float cursorX = floorf(rect.x + 0.5f);
+        font->drawMetrics(style.fontSize, scale, ascender, descender);
+        float baseline = floorf(rect.origin.y + ascender + 0.5f);
+        float cursorX = floorf(rect.origin.x + 0.5f);
         size_t index = 0;
         while (index < text.length())
         {
@@ -25,19 +27,20 @@ namespace eokas
             {
                 continue;
             }
-            const UIFontGlyph& g = font->glyphSized(codepoint, fontSize);
-            if (g.uv.width > 0.0f && g.uv.height > 0.0f)
+            const UIFontGlyph& g = font->glyphSized(codepoint, style.fontSize);
+            if (g.uv.size.x > 0.0f && g.uv.size.y > 0.0f)
             {
                 float destX = floorf(cursorX + g.bearingX * scale + 0.5f);
                 float destY = floorf(baseline - g.bearingY * scale + 0.5f);
                 float destW = (float)(int)(g.width * scale + 0.5f);
                 float destH = (float)(int)(g.height * scale + 0.5f);
                 Rect dest(destX, destY, destW, destH);
-                shape.addQuad(dest, g.uv, color);
+                primitive.addQuad(dest, g.uv, style.color);
             }
             cursorX += g.advance * scale;
         }
 
-        UIWidget::render(shape);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 }

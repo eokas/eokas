@@ -638,10 +638,8 @@ namespace eokas
         bool contains(const Vector2 &point);
 
     public:
-        f32_t x;
-        f32_t y;
-        f32_t width;
-        f32_t height;
+        Vector2 origin;
+        Vector2 size;
     };
 
     /**

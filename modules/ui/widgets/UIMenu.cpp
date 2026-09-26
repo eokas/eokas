@@ -45,26 +45,27 @@ namespace eokas
 
         if (UIText* t = this->label())
         {
-            if (t->font != nullptr && t->font->isOpen())
+            UIFont* font = UIFont::find(t->style.fontPath);
+            if (font != nullptr && font->isOpen())
             {
-                float bake = (float)t->font->pixelSize();
-                float scale = (t->fontSize > 0.0f ? t->fontSize : bake) / bake;
+                float bake = (float)font->pixelSize();
+                float scale = (t->style.fontSize > 0.0f ? t->style.fontSize : bake) / bake;
                 float width = 0.0f;
                 for (size_t i = 0; i < t->text.length(); i++)
                 {
-                    width += t->font->glyph(t->text.at(i)).advance * scale;
+                    width += font->glyph(t->text.at(i)).advance * scale;
                 }
-                t->rect.width = floorf(width + 0.5f);
-                float tight = t->font->ascender() - t->font->descender();
-                t->rect.height = floorf(tight * scale + 0.5f);
+                t->rect.size.x = floorf(width + 0.5f);
+                float tight = font->ascender() - font->descender();
+                t->rect.size.y = floorf(tight * scale + 0.5f);
             }
-            rect.width = t->rect.width + paddingX * 2.0f;
-            rect.height = t->rect.height + paddingY * 2.0f;
+            rect.size.x = t->rect.size.x + paddingX * 2.0f;
+            rect.size.y = t->rect.size.y + paddingY * 2.0f;
             return;
         }
 
-        rect.width = content->rect.width + paddingX * 2.0f;
-        rect.height = content->rect.height + paddingY * 2.0f;
+        rect.size.x = content->rect.size.x + paddingX * 2.0f;
+        rect.size.y = content->rect.size.y + paddingY * 2.0f;
     }
 
     void UIMenuItem::layout(const Rect& rect)
@@ -74,21 +75,22 @@ namespace eokas
         {
             return;
         }
-        float x = floorf(rect.x + paddingX + 0.5f);
-        float y = floorf(rect.y + paddingY + 0.5f);
-        content->layout(Rect(x, y, content->rect.width, content->rect.height));
+        Vector2 pos(floorf(paddingX + 0.5f), floorf(paddingY + 0.5f));
+        content->layout(Rect(pos, content->rect.size));
     }
 
-    void UIMenuItem::render(UIShape& shape)
+    void UIMenuItem::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
 
-        Color bg = hovered ? hoverColor : background;
-        shape.addQuad(rect, UIFont::solidUV(), bg);
-        UIWidget::render(shape);
+        primitive.pushScaleAround(rect.origin, localScale);
+        Color bg = hovered ? hoverFill : background;
+        primitive.addQuad(rect, UIFont::solidUV(), bg);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 
     UIMenu::UIMenu()
@@ -97,7 +99,7 @@ namespace eokas
         list->direction = direction;
         list->padding = padding;
         list->spacing = spacing;
-        list->color = Color(0.0f, 0.0f, 0.0f, 0.0f);
+        list->fill = Color(0.0f, 0.0f, 0.0f, 0.0f);
         children.push_back(list);
     }
 
@@ -133,27 +135,27 @@ namespace eokas
                 continue;
             }
             item->syncSize();
-            if (item->rect.width > maxItemWidth)
+            if (item->rect.size.x > maxItemWidth)
             {
-                maxItemWidth = item->rect.width;
+                maxItemWidth = item->rect.size.x;
             }
-            if (item->rect.height > maxItemHeight)
+            if (item->rect.size.y > maxItemHeight)
             {
-                maxItemHeight = item->rect.height;
+                maxItemHeight = item->rect.size.y;
             }
-            sumItemHeight += item->rect.height;
+            sumItemHeight += item->rect.size.y;
             itemCount += 1;
         }
 
         float gap = itemCount > 1 ? spacing * (float)(itemCount - 1) : 0.0f;
         if (direction == UIDirection::Horizontal)
         {
-            this->rect.height = padding * 2.0f + maxItemHeight;
+            this->rect.size.y = padding * 2.0f + maxItemHeight;
         }
         else
         {
-            this->rect.width = padding * 2.0f + maxItemWidth;
-            this->rect.height = padding * 2.0f + sumItemHeight + gap;
+            this->rect.size.x = padding * 2.0f + maxItemWidth;
+            this->rect.size.y = padding * 2.0f + sumItemHeight + gap;
         }
 
         for (auto& child : list->children)
@@ -165,28 +167,30 @@ namespace eokas
             }
             if (direction == UIDirection::Horizontal)
             {
-                item->rect.height = maxItemHeight;
+                item->rect.size.y = maxItemHeight;
             }
             else
             {
-                item->rect.width = maxItemWidth;
+                item->rect.size.x = maxItemWidth;
             }
         }
 
-        list->layout(this->rect);
+        list->layout(Rect(Vector2::ZERO, this->rect.size));
     }
 
-    void UIMenu::render(UIShape& shape)
+    void UIMenu::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
 
-        if (color.a > 0.0f)
+        primitive.pushScaleAround(rect.origin, localScale);
+        if (fill.a > 0.0f)
         {
-            shape.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(rect, UIFont::solidUV(), fill);
         }
-        UIWidget::render(shape);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 }

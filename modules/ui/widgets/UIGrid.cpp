@@ -27,13 +27,13 @@ namespace eokas
                 continue;
             }
             items.push_back(child.get());
-            if (child->rect.width > maxW)
+            if (child->rect.size.x > maxW)
             {
-                maxW = child->rect.width;
+                maxW = child->rect.size.x;
             }
         }
 
-        float innerW = rect.width - pad * 2.0f;
+        float innerW = rect.size.x - pad * 2.0f;
         float cellW = cellWidth;
         if (cellW <= 0.0f)
         {
@@ -54,7 +54,7 @@ namespace eokas
 
         int count = (int)items.size();
         int rows = count > 0 ? (count + cols - 1) / cols : 0;
-        float y = rect.y + pad;
+        float y = pad;
         for (int row = 0; row < rows; ++row)
         {
             if (row > 0)
@@ -70,26 +70,24 @@ namespace eokas
                     break;
                 }
                 UIWidget* item = items[index];
-                float x = rect.x + pad + (cellW + gapX) * (float)col;
-                float width = item->rect.width;
-                float height = item->rect.height;
-                item->layout(Rect(floorf(x + 0.5f), floorf(y + 0.5f), width, height));
-                if (cellHeight <= 0.0f && item->rect.height > rowH)
+                Vector2 cell(pad + (cellW + gapX) * (float)col, y);
+                item->layout(Rect(Vector2(floorf(cell.x + 0.5f), floorf(cell.y + 0.5f)), item->rect.size));
+                if (cellHeight <= 0.0f && item->rect.size.y > rowH)
                 {
-                    rowH = item->rect.height;
+                    rowH = item->rect.size.y;
                 }
             }
             y += rowH;
         }
 
-        if (rect.width <= 0.0f)
+        if (rect.size.x <= 0.0f)
         {
             float gaps = cols > 1 ? gapX * (float)(cols - 1) : 0.0f;
-            this->rect.width = pad * 2.0f + cellW * (float)cols + gaps;
+            this->rect.size.x = pad * 2.0f + cellW * (float)cols + gaps;
         }
-        if (rect.height <= 0.0f)
+        if (rect.size.y <= 0.0f)
         {
-            this->rect.height = (y - rect.y) + pad;
+            this->rect.size.y = y + pad;
         }
     }
 
@@ -109,17 +107,17 @@ namespace eokas
                 continue;
             }
             items.push_back(child.get());
-            if (child->rect.width > maxW)
+            if (child->rect.size.x > maxW)
             {
-                maxW = child->rect.width;
+                maxW = child->rect.size.x;
             }
         }
 
         float cellW = cellWidth;
-        bool writeWidth = cellW > 0.0f || rect.width <= 0.0f;
+        bool writeWidth = cellW > 0.0f || rect.size.x <= 0.0f;
         if (cellW <= 0.0f)
         {
-            float innerW = rect.width - pad * 2.0f;
+            float innerW = rect.size.x - pad * 2.0f;
             if (innerW > 0.0f)
             {
                 float gaps = gapX * (float)(cols - 1);
@@ -154,34 +152,36 @@ namespace eokas
                     {
                         break;
                     }
-                    if (items[index]->rect.height > rowH)
+                    if (items[index]->rect.size.y > rowH)
                     {
-                        rowH = items[index]->rect.height;
+                        rowH = items[index]->rect.size.y;
                     }
                 }
             }
             contentH += rowH;
         }
         contentH += pad;
-        rect.height = contentH;
+        rect.size.y = contentH;
 
         if (writeWidth)
         {
             float gaps = cols > 1 ? gapX * (float)(cols - 1) : 0.0f;
-            rect.width = pad * 2.0f + cellW * (float)cols + gaps;
+            rect.size.x = pad * 2.0f + cellW * (float)cols + gaps;
         }
     }
 
-    void UIGrid::render(UIShape& shape)
+    void UIGrid::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
-        if (color.a > 0.0f)
+        primitive.pushScaleAround(rect.origin, localScale);
+        if (fill.a > 0.0f)
         {
-            shape.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(rect, UIFont::solidUV(), fill);
         }
-        UIWidget::render(shape);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 }

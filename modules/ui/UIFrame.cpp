@@ -1,6 +1,9 @@
 #include "UIFrame.h"
+#include "widgets/UICanvas.h"
+#include "widgets/UIChart.h"
 #include "widgets/UIView.h"
 
+#include <cmath>
 #include <cstddef>
 
 namespace eokas
@@ -8,6 +11,25 @@ namespace eokas
     namespace
     {
         constexpr const char* kUIShaderPath = "../shaders/UI.hlsl";
+
+        bool liveScale(const Vector2& scale)
+        {
+            return scale.x != 0.0f && scale.y != 0.0f;
+        }
+
+        Vector2 parentPoint(const Vector2& point, const Vector2& origin, const Vector2& scale)
+        {
+            return Vector2(
+                (point.x - origin.x) / scale.x,
+                (point.y - origin.y) / scale.y);
+        }
+
+        Vector2 layoutPoint(const UIWidget* widget, const Vector2& parentLocal)
+        {
+            return widget->rect.origin + Vector2(
+                (parentLocal.x - widget->rect.origin.x) / widget->localScale.x,
+                (parentLocal.y - widget->rect.origin.y) / widget->localScale.y);
+        }
     }
 
     void UIFrame::init(uint32_t width, uint32_t height)
@@ -17,6 +39,9 @@ namespace eokas
         mHovered = nullptr;
         mPressed = nullptr;
         mPressedButton = -1;
+        mPressX = 0.0f;
+        mPressY = 0.0f;
+        mDragged = false;
         mFocused = nullptr;
 
         if (!mRoot)
@@ -24,30 +49,30 @@ namespace eokas
             mRoot = std::make_shared<UIWidget>();
         }
 
-        mShape = std::make_shared<UIShape>();
-        mShape->material = std::make_shared<Material>();
-        mShape->material->setShaderPath(kUIShaderPath);
-        mShape->material->addVertexElement({"POSITION", 0, (uint32_t)offsetof(UIVertex, position), Format::R32G32_FLOAT});
-        mShape->material->addVertexElement({"TEXCOORD", 0, (uint32_t)offsetof(UIVertex, uv), Format::R32G32_FLOAT});
-        mShape->material->addVertexElement({"COLOR", 0, (uint32_t)offsetof(UIVertex, color), Format::R32G32B32A32_FLOAT});
-        mShape->material->setCullMode(CullMode::None);
+        mPrimitive = std::make_shared<UIPrimitive>();
+        mPrimitive->material = std::make_shared<Material>();
+        mPrimitive->material->setShaderPath(kUIShaderPath);
+        mPrimitive->material->addVertexElement({"POSITION", 0, (uint32_t)offsetof(UIVertex, position), Format::R32G32_FLOAT});
+        mPrimitive->material->addVertexElement({"TEXCOORD", 0, (uint32_t)offsetof(UIVertex, uv), Format::R32G32_FLOAT});
+        mPrimitive->material->addVertexElement({"COLOR", 0, (uint32_t)offsetof(UIVertex, color), Format::R32G32B32A32_FLOAT});
+        mPrimitive->material->setCullMode(CullMode::None);
         DepthStencilState depthStencil;
         depthStencil.depthTest = false;
         depthStencil.depthWrite = false;
         depthStencil.depthFunc = CompareOp::Always;
-        mShape->material->setDepthStencilState(depthStencil);
+        mPrimitive->material->setDepthStencilState(depthStencil);
         SamplerState sampler;
         sampler.minFilter = SamplerFilterMode::Linear;
         sampler.magFilter = SamplerFilterMode::Linear;
         sampler.mipFilter = SamplerFilterMode::Point;
-        mShape->material->setSamplerState(0, sampler);
+        mPrimitive->material->setSamplerState(0, sampler);
         BlendState blend;
         blend.enabled = true;
         blend.srcColor = BlendFactor::SrcAlpha;
         blend.dstColor = BlendFactor::OneMinusSrcAlpha;
         blend.srcAlpha = BlendFactor::One;
         blend.dstAlpha = BlendFactor::OneMinusSrcAlpha;
-        mShape->material->setBlendState(blend);
+        mPrimitive->material->setBlendState(blend);
     }
 
     void UIFrame::quit()
@@ -57,12 +82,15 @@ namespace eokas
         mHovered = nullptr;
         mPressed = nullptr;
         mPressedButton = -1;
+        mPressX = 0.0f;
+        mPressY = 0.0f;
+        mDragged = false;
         mRoot.reset();
-        if (mShape)
+        if (mPrimitive)
         {
-            mShape->material.reset();
+            mPrimitive->material.reset();
         }
-        mShape.reset();
+        mPrimitive.reset();
     }
 
     const std::shared_ptr<UIWidget>& UIFrame::root() const
@@ -77,28 +105,31 @@ namespace eokas
         mHovered = nullptr;
         mPressed = nullptr;
         mPressedButton = -1;
+        mPressX = 0.0f;
+        mPressY = 0.0f;
+        mDragged = false;
         mRoot = widget;
     }
 
     void UIFrame::flush()
     {
-        if (!mShape)
+        if (!mPrimitive)
         {
             return;
         }
 
-        mShape->begin();
+        mPrimitive->begin();
         if (mRoot)
         {
             mRoot->layout(mRoot->rect);
-            mRoot->render(*mShape);
+            mRoot->render(*mPrimitive);
         }
-        mShape->end();
+        mPrimitive->end();
     }
 
-    UIShape::Ref UIFrame::shape() const
+    UIPrimitive::Ref UIFrame::primitive() const
     {
-        return mShape;
+        return mPrimitive;
     }
 
     UIWidget* UIFrame::hitTest(float x, float y)
@@ -107,13 +138,19 @@ namespace eokas
         {
             mRoot->layout(mRoot->rect);
         }
-        return this->hitTestNode(mRoot.get(), x, y, 0.0f, 0.0f);
+        return this->hitTestNode(mRoot.get(), Vector2(x, y), Vector2::ZERO, Vector2(1.0f, 1.0f));
     }
 
     void UIFrame::onMouseMove(float x, float y)
     {
         if (mPressed != nullptr)
         {
+            float dx = x - mPressX;
+            float dy = y - mPressY;
+            if (dx * dx + dy * dy > 16.0f)
+            {
+                mDragged = true;
+            }
             this->dispatchDrag(x, y);
         }
 
@@ -158,6 +195,9 @@ namespace eokas
                 this->setFocus(nullptr);
             }
         }
+        mPressX = x;
+        mPressY = y;
+        mDragged = false;
         mPressed->triggerPointerPress();
         this->dispatchDrag(x, y);
     }
@@ -168,20 +208,48 @@ namespace eokas
         UIWidget* pressed = mPressed;
         if (pressed != nullptr && button == mPressedButton)
         {
+            this->endCanvasDrag(mRoot.get());
             pressed->triggerPointerRelease();
-            if (hit == pressed && button == 0)
+            UICanvas* canvas = nullptr;
+            this->dragTargetOf(pressed, canvas);
+            if (!mDragged && hit == pressed && button == 0)
             {
                 pressed->triggerClick();
+                if (canvas != nullptr)
+                {
+                    if (UIChart* chart = dynamic_cast<UIChart*>(pressed))
+                    {
+                        canvas->select(chart);
+                    }
+                }
+            }
+            else if (mDragged && canvas != nullptr)
+            {
+                if (UIChart* chart = dynamic_cast<UIChart*>(pressed))
+                {
+                    float dropX = x;
+                    float dropY = y;
+                    Vector2 origin = Vector2::ZERO;
+                    Vector2 scale(1.0f, 1.0f);
+                    if (this->findWidget(mRoot.get(), canvas, Vector2::ZERO, Vector2(1.0f, 1.0f), origin, scale) && liveScale(scale))
+                    {
+                        Vector2 local = parentPoint(Vector2(x, y), origin, scale);
+                        dropX = local.x;
+                        dropY = local.y;
+                    }
+                    canvas->dispatchDrop(chart, hit, dropX, dropY);
+                }
             }
         }
         mPressed = nullptr;
         mPressedButton = -1;
+        mDragged = false;
         this->onMouseMove(x, y);
     }
 
     void UIFrame::onMouseWheel(float x, float y, float deltaX, float deltaY)
     {
-        this->routeWheel(mRoot.get(), x, y, 0.0f, 0.0f, deltaX, deltaY);
+        this->routeWheel(mRoot.get(), Vector2(x, y), Vector2::ZERO, Vector2(1.0f, 1.0f), Vector2(deltaX, deltaY));
     }
 
     void UIFrame::dispatchDrag(float x, float y)
@@ -190,13 +258,109 @@ namespace eokas
         {
             return;
         }
-        float ox = 0.0f;
-        float oy = 0.0f;
-        this->findWidget(mRoot.get(), mPressed, 0.0f, 0.0f, ox, oy);
-        mPressed->triggerPointerDrag(x - ox, y - oy, mPressedButton);
+        UICanvas* canvas = nullptr;
+        UIWidget* target = this->dragTargetOf(mPressed, canvas);
+        if (canvas != nullptr && target != nullptr && target != canvas)
+        {
+            Vector2 origin = Vector2::ZERO;
+            Vector2 scale(1.0f, 1.0f);
+            if (this->findWidget(mRoot.get(), target, Vector2::ZERO, Vector2(1.0f, 1.0f), origin, scale) && liveScale(scale))
+            {
+                Vector2 local = parentPoint(Vector2(x, y), origin, scale);
+                canvas->dragChild(target, local.x, local.y);
+                return;
+            }
+        }
+        Vector2 origin = Vector2::ZERO;
+        Vector2 scale(1.0f, 1.0f);
+        this->findWidget(mRoot.get(), mPressed, Vector2::ZERO, Vector2(1.0f, 1.0f), origin, scale);
+        Vector2 local = Vector2::ZERO;
+        if (liveScale(scale))
+        {
+            local = parentPoint(Vector2(x, y), origin, scale);
+        }
+        mPressed->triggerPointerDrag(local.x, local.y, mPressedButton);
     }
 
-    bool UIFrame::findWidget(UIWidget* node, UIWidget* target, float originX, float originY, float& outX, float& outY) const
+    bool UIFrame::collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const
+    {
+        if (node == nullptr)
+        {
+            return false;
+        }
+        path.push_back(node);
+        if (node == target)
+        {
+            return true;
+        }
+        if (UIView* view = dynamic_cast<UIView*>(node))
+        {
+            for (auto& child : view->root()->children)
+            {
+                if (this->collectPath(child.get(), target, path))
+                {
+                    return true;
+                }
+            }
+            path.pop_back();
+            return false;
+        }
+        for (auto& child : node->children)
+        {
+            if (this->collectPath(child.get(), target, path))
+            {
+                return true;
+            }
+        }
+        path.pop_back();
+        return false;
+    }
+
+    UIWidget* UIFrame::dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const
+    {
+        canvas = nullptr;
+        std::vector<UIWidget*> path;
+        if (!this->collectPath(mRoot.get(), pressed, path))
+        {
+            return nullptr;
+        }
+        int canvasIndex = -1;
+        for (int i = 0; i < (int)path.size(); ++i)
+        {
+            if (dynamic_cast<UICanvas*>(path[(size_t)i]) != nullptr)
+            {
+                canvasIndex = i;
+            }
+        }
+        if (canvasIndex < 0)
+        {
+            return nullptr;
+        }
+        canvas = static_cast<UICanvas*>(path[(size_t)canvasIndex]);
+        int viewIndex = -1;
+        for (int i = canvasIndex + 1; i < (int)path.size(); ++i)
+        {
+            if (dynamic_cast<UIView*>(path[(size_t)i]) != nullptr)
+            {
+                viewIndex = i;
+            }
+        }
+        int start = (int)path.size() - 1;
+        if (viewIndex >= 0)
+        {
+            start = viewIndex;
+        }
+        for (int i = start; i > canvasIndex; --i)
+        {
+            if (path[(size_t)i]->dragable)
+            {
+                return path[(size_t)i];
+            }
+        }
+        return nullptr;
+    }
+
+    bool UIFrame::findWidget(UIWidget* node, UIWidget* target, const Vector2& origin, const Vector2& scale, Vector2& outOrigin, Vector2& outScale) const
     {
         if (node == nullptr)
         {
@@ -204,18 +368,19 @@ namespace eokas
         }
         if (node == target)
         {
-            outX = originX;
-            outY = originY;
+            outOrigin = origin;
+            outScale = scale;
             return true;
         }
+        Vector2 nextOrigin = origin + scale * node->rect.origin;
+        Vector2 nextScale = scale * node->localScale;
         if (UIView* view = dynamic_cast<UIView*>(node))
         {
-            const std::shared_ptr<UIWidget>& content = view->root();
-            float cx = originX + content->rect.x;
-            float cy = originY + content->rect.y;
-            for (auto& child : content->children)
+            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->rect.origin;
+            Vector2 contentScale = nextScale * view->root()->localScale;
+            for (auto& child : view->root()->children)
             {
-                if (this->findWidget(child.get(), target, cx, cy, outX, outY))
+                if (this->findWidget(child.get(), target, contentOrigin, contentScale, outOrigin, outScale))
                 {
                     return true;
                 }
@@ -224,7 +389,7 @@ namespace eokas
         }
         for (auto& child : node->children)
         {
-            if (this->findWidget(child.get(), target, originX, originY, outX, outY))
+            if (this->findWidget(child.get(), target, nextOrigin, nextScale, outOrigin, outScale))
             {
                 return true;
             }
@@ -232,55 +397,167 @@ namespace eokas
         return false;
     }
 
-    bool UIFrame::routeWheel(UIWidget* widget, float x, float y, float originX, float originY, float deltaX, float deltaY)
+    bool UIFrame::routeWheel(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale, const Vector2& delta)
     {
-        if (widget == nullptr || !widget->visible)
+        if (widget == nullptr || !widget->visible || !liveScale(scale))
         {
             return false;
         }
-
-        if (UIView* view = dynamic_cast<UIView*>(widget))
+        if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
         {
-            const std::shared_ptr<UIWidget>& content = view->root();
-            float cx = originX + content->rect.x;
-            float cy = originY + content->rect.y;
-            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            Vector2 nextOrigin = origin + scale * canvas->rect.origin;
+            Vector2 nextScale = scale * canvas->localScale;
+            for (auto it = canvas->children.rbegin(); it != canvas->children.rend(); ++it)
             {
-                if (*it && (*it)->floating && this->routeWheel(it->get(), x, y, cx, cy, deltaX, deltaY))
+                if (*it && this->routeNestedCanvas(it->get(), point, nextOrigin, nextScale, delta))
                 {
                     return true;
                 }
             }
-            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
-            {
-                if (*it && !(*it)->floating && this->routeWheel(it->get(), x, y, cx, cy, deltaX, deltaY))
-                {
-                    return true;
-                }
-            }
-            Vector2 local(x - originX, y - originY);
-            if (!view->rect.contains(local))
+            if (!liveScale(canvas->localScale))
             {
                 return false;
             }
-            return view->scrollBy(deltaX, deltaY);
+            Vector2 parentLocal = parentPoint(point, origin, scale);
+            Vector2 layout = layoutPoint(canvas, parentLocal);
+            if (!canvas->rect.contains(layout))
+            {
+                return false;
+            }
+            UIWidget* hit = this->hitTestNode(canvas, point, origin, scale);
+            if (UIChart* chart = dynamic_cast<UIChart*>(hit))
+            {
+                Vector2 chartOrigin = Vector2::ZERO;
+                Vector2 chartScale(1.0f, 1.0f);
+                if (this->findWidget(mRoot.get(), chart, Vector2::ZERO, Vector2(1.0f, 1.0f), chartOrigin, chartScale) && liveScale(chartScale))
+                {
+                    float current = chart->localScale.x == 0.0f ? 1.0f : chart->localScale.x;
+                    float factor = expf(-delta.y * chart->scaleSensitivity);
+                    chart->scaleAt(parentPoint(point, chartOrigin, chartScale), current * factor);
+                    return true;
+                }
+            }
+            float current = canvas->localScale.x;
+            if (current == 0.0f)
+            {
+                current = 1.0f;
+            }
+            float factor = expf(-delta.y * canvas->scaleSensitivity);
+            canvas->scaleAt(parentLocal, current * factor);
+            return true;
         }
-
+        Vector2 nextOrigin = origin + scale * widget->rect.origin;
+        Vector2 nextScale = scale * widget->localScale;
+        if (UIView* view = dynamic_cast<UIView*>(widget))
+        {
+            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->rect.origin;
+            Vector2 contentScale = nextScale * view->root()->localScale;
+            const std::shared_ptr<UIWidget>& content = view->root();
+            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            {
+                if (*it && (*it)->floating && this->routeWheel(it->get(), point, contentOrigin, contentScale, delta))
+                {
+                    return true;
+                }
+            }
+            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            {
+                if (*it && !(*it)->floating && this->routeWheel(it->get(), point, contentOrigin, contentScale, delta))
+                {
+                    return true;
+                }
+            }
+            if (!liveScale(widget->localScale))
+            {
+                return false;
+            }
+            Vector2 layout = layoutPoint(widget, parentPoint(point, origin, scale));
+            if (!view->rect.contains(layout))
+            {
+                return false;
+            }
+            return view->scrollBy(delta.x, delta.y);
+        }
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
-            if (*it && (*it)->floating && this->routeWheel(it->get(), x, y, originX, originY, deltaX, deltaY))
+            if (*it && (*it)->floating && this->routeWheel(it->get(), point, nextOrigin, nextScale, delta))
             {
                 return true;
             }
         }
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
-            if (*it && !(*it)->floating && this->routeWheel(it->get(), x, y, originX, originY, deltaX, deltaY))
+            if (*it && !(*it)->floating && this->routeWheel(it->get(), point, nextOrigin, nextScale, delta))
             {
                 return true;
             }
         }
         return false;
+    }
+
+    bool UIFrame::routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale, const Vector2& delta)
+    {
+        if (widget == nullptr || !widget->visible || !liveScale(scale))
+        {
+            return false;
+        }
+        if (dynamic_cast<UICanvas*>(widget) != nullptr)
+        {
+            return this->routeWheel(widget, point, origin, scale, delta);
+        }
+        if (UIView* view = dynamic_cast<UIView*>(widget))
+        {
+            if (!liveScale(view->localScale))
+            {
+                return false;
+            }
+            Vector2 nextOrigin = origin + scale * view->rect.origin;
+            Vector2 nextScale = scale * view->localScale;
+            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->rect.origin;
+            Vector2 contentScale = nextScale * view->root()->localScale;
+            for (auto it = view->root()->children.rbegin(); it != view->root()->children.rend(); ++it)
+            {
+                if (*it && this->routeNestedCanvas(it->get(), point, contentOrigin, contentScale, delta))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        Vector2 nextOrigin = origin + scale * widget->rect.origin;
+        Vector2 nextScale = scale * widget->localScale;
+        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
+        {
+            if (*it && this->routeNestedCanvas(it->get(), point, nextOrigin, nextScale, delta))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void UIFrame::endCanvasDrag(UIWidget* widget)
+    {
+        if (widget == nullptr)
+        {
+            return;
+        }
+        if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
+        {
+            canvas->endDrag();
+        }
+        if (UIView* view = dynamic_cast<UIView*>(widget))
+        {
+            for (auto& child : view->root()->children)
+            {
+                this->endCanvasDrag(child.get());
+            }
+            return;
+        }
+        for (auto& child : widget->children)
+        {
+            this->endCanvasDrag(child.get());
+        }
     }
 
     void UIFrame::onChar(uint32_t codepoint)
@@ -328,39 +605,45 @@ namespace eokas
         return mFocused;
     }
 
-    UIWidget* UIFrame::hitTestNode(UIWidget* widget, float x, float y, float originX, float originY)
+    UIWidget* UIFrame::hitTestNode(UIWidget* widget, const Vector2& point, const Vector2& origin, const Vector2& scale)
     {
-        if (widget == nullptr || !widget->visible)
+        if (widget == nullptr || !widget->visible || !liveScale(scale) || !liveScale(widget->localScale))
         {
             return nullptr;
         }
-
+        Vector2 parentLocal = parentPoint(point, origin, scale);
+        Vector2 layout = layoutPoint(widget, parentLocal);
+        if (UIChart* chart = dynamic_cast<UIChart*>(widget))
+        {
+            if (!chart->contains(layout))
+            {
+                return nullptr;
+            }
+        }
+        Vector2 nextOrigin = origin + scale * widget->rect.origin;
+        Vector2 nextScale = scale * widget->localScale;
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
+            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->rect.origin;
+            Vector2 contentScale = nextScale * view->root()->localScale;
             const std::shared_ptr<UIWidget>& content = view->root();
-            float cx = originX + content->rect.x;
-            float cy = originY + content->rect.y;
             for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
             {
                 if (*it && (*it)->floating)
                 {
-                    UIWidget* hit = this->hitTestNode(it->get(), x, y, cx, cy);
-                    if (hit != nullptr)
+                    if (UIWidget* hit = this->hitTestNode(it->get(), point, contentOrigin, contentScale))
                     {
                         return hit;
                     }
                 }
             }
-
-            Vector2 local(x - originX, y - originY);
-            if (view->scrollbarContains(local.x, local.y))
+            if (view->scrollbarContains(layout.x, layout.y))
             {
                 return view;
             }
-            Rect vp = view->viewport();
-            if (!vp.contains(local))
+            if (!view->viewport().contains(layout))
             {
-                if (widget->interactive && widget->rect.contains(local))
+                if (widget->interactive && widget->rect.contains(layout))
                 {
                     return widget;
                 }
@@ -370,46 +653,39 @@ namespace eokas
             {
                 if (*it && !(*it)->floating)
                 {
-                    UIWidget* hit = this->hitTestNode(it->get(), x, y, cx, cy);
-                    if (hit != nullptr)
+                    if (UIWidget* hit = this->hitTestNode(it->get(), point, contentOrigin, contentScale))
                     {
                         return hit;
                     }
                 }
             }
-            if (widget->interactive && widget->rect.contains(local))
+            if (widget->interactive && widget->rect.contains(layout))
             {
                 return widget;
             }
             return nullptr;
         }
-
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
             if (*it && (*it)->floating)
             {
-                UIWidget* hit = this->hitTestNode(it->get(), x, y, originX, originY);
-                if (hit != nullptr)
+                if (UIWidget* hit = this->hitTestNode(it->get(), point, nextOrigin, nextScale))
                 {
                     return hit;
                 }
             }
         }
-
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
             if (*it && !(*it)->floating)
             {
-                UIWidget* hit = this->hitTestNode(it->get(), x, y, originX, originY);
-                if (hit != nullptr)
+                if (UIWidget* hit = this->hitTestNode(it->get(), point, nextOrigin, nextScale))
                 {
                     return hit;
                 }
             }
         }
-
-        Vector2 local(x - originX, y - originY);
-        if (widget->interactive && widget->rect.contains(local))
+        if (widget->interactive && widget->rect.contains(layout))
         {
             return widget;
         }
@@ -423,6 +699,10 @@ namespace eokas
             return;
         }
         widget->resetPointerState();
+        if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
+        {
+            canvas->endDrag();
+        }
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
             for (auto& child : view->root()->children)

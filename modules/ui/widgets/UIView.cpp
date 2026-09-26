@@ -83,7 +83,7 @@ namespace eokas
 
     Rect UIView::viewport() const
     {
-        return Rect(rect.x, rect.y, mInnerW, mInnerH);
+        return Rect(rect.origin.x, rect.origin.y, mInnerW, mInnerH);
     }
 
     bool UIView::scrollbarContains(float localX, float localY) const
@@ -110,8 +110,7 @@ namespace eokas
 
     void UIView::placeRoot()
     {
-        mRoot->rect.x = rect.x - mScrollX;
-        mRoot->rect.y = rect.y - mScrollY;
+        mRoot->rect.origin = Vector2(-mScrollX, -mScrollY);
     }
 
     float UIView::barSize() const
@@ -119,26 +118,30 @@ namespace eokas
         return scrollbarThickness > 0.0f ? scrollbarThickness : 0.0f;
     }
 
-    void UIView::expandContent(const UIWidget* widget, float& minX, float& minY, float& maxX, float& maxY, bool& any) const
+    void UIView::expandContent(const UIWidget* widget, const Vector2& origin, const Vector2& scale, float& minX, float& minY, float& maxX, float& maxY, bool& any) const
     {
         if (widget == nullptr || !widget->visible || widget->floating)
         {
             return;
         }
-        float x1 = widget->rect.x + widget->rect.width;
-        float y1 = widget->rect.y + widget->rect.height;
+        Vector2 topLeft = origin + scale * widget->rect.origin;
+        Vector2 end = topLeft + scale * widget->localScale * widget->rect.size;
+        float x0 = topLeft.x < end.x ? topLeft.x : end.x;
+        float y0 = topLeft.y < end.y ? topLeft.y : end.y;
+        float x1 = topLeft.x > end.x ? topLeft.x : end.x;
+        float y1 = topLeft.y > end.y ? topLeft.y : end.y;
         if (!any)
         {
-            minX = widget->rect.x;
-            minY = widget->rect.y;
+            minX = x0;
+            minY = y0;
             maxX = x1;
             maxY = y1;
             any = true;
         }
         else
         {
-            minX = minf(minX, widget->rect.x);
-            minY = minf(minY, widget->rect.y);
+            minX = minf(minX, x0);
+            minY = minf(minY, y0);
             maxX = maxf(maxX, x1);
             maxY = maxf(maxY, y1);
         }
@@ -146,9 +149,10 @@ namespace eokas
         {
             return;
         }
+        Vector2 childScale = scale * widget->localScale;
         for (auto& child : widget->children)
         {
-            this->expandContent(child.get(), minX, minY, maxX, maxY, any);
+            this->expandContent(child.get(), topLeft, childScale, minX, minY, maxX, maxY, any);
         }
     }
 
@@ -174,11 +178,11 @@ namespace eokas
         float maxY = 0.0f;
         for (auto& child : mRoot->children)
         {
-            this->expandContent(child.get(), minX, minY, maxX, maxY, any);
+            this->expandContent(child.get(), Vector2::ZERO, mRoot->localScale, minX, minY, maxX, maxY, any);
         }
 
-        float outerW = rect.width > 0.0f ? rect.width : 0.0f;
-        float outerH = rect.height > 0.0f ? rect.height : 0.0f;
+        float outerW = rect.size.x > 0.0f ? rect.size.x : 0.0f;
+        float outerH = rect.size.y > 0.0f ? rect.size.y : 0.0f;
         float bar = this->barSize();
         if (!any)
         {
@@ -192,8 +196,8 @@ namespace eokas
             mMaxScrollY = 0.0f;
             mScrollX = 0.0f;
             mScrollY = 0.0f;
-            mRoot->rect.width = 0.0f;
-            mRoot->rect.height = 0.0f;
+            mRoot->rect.size.x = 0.0f;
+            mRoot->rect.size.y = 0.0f;
             this->placeRoot();
             return;
         }
@@ -262,99 +266,99 @@ namespace eokas
         }
         mScrollX = clampf(mScrollX, mMinScrollX, mMaxScrollX);
         mScrollY = clampf(mScrollY, mMinScrollY, mMaxScrollY);
-        mRoot->rect.width = contentW;
-        mRoot->rect.height = contentH;
+        mRoot->rect.size.x = contentW;
+        mRoot->rect.size.y = contentH;
         this->placeRoot();
     }
 
     Rect UIView::verticalTrack() const
     {
-        return Rect(rect.x + mInnerW, rect.y, this->barSize(), mInnerH);
+        return Rect(rect.origin.x + mInnerW, rect.origin.y, this->barSize(), mInnerH);
     }
 
     Rect UIView::horizontalTrack() const
     {
-        return Rect(rect.x, rect.y + mInnerH, mInnerW, this->barSize());
+        return Rect(rect.origin.x, rect.origin.y + mInnerH, mInnerW, this->barSize());
     }
 
     Rect UIView::verticalThumb() const
     {
         Rect track = this->verticalTrack();
-        float thumb = thumbSpan(track.height, mMinScrollY, mMaxScrollY);
+        float thumb = thumbSpan(track.size.y, mMinScrollY, mMaxScrollY);
         float span = mMaxScrollY - mMinScrollY;
-        float travel = track.height - thumb;
+        float travel = track.size.y - thumb;
         float t = (span > 0.0f) ? (mScrollY - mMinScrollY) / span : 0.0f;
         t = clampf(t, 0.0f, 1.0f);
-        return Rect(track.x, track.y + t * travel, track.width, thumb);
+        return Rect(track.origin.x, track.origin.y + t * travel, track.size.x, thumb);
     }
 
     Rect UIView::horizontalThumb() const
     {
         Rect track = this->horizontalTrack();
-        float thumb = thumbSpan(track.width, mMinScrollX, mMaxScrollX);
+        float thumb = thumbSpan(track.size.x, mMinScrollX, mMaxScrollX);
         float span = mMaxScrollX - mMinScrollX;
-        float travel = track.width - thumb;
+        float travel = track.size.x - thumb;
         float t = (span > 0.0f) ? (mScrollX - mMinScrollX) / span : 0.0f;
         t = clampf(t, 0.0f, 1.0f);
-        return Rect(track.x + t * travel, track.y, thumb, track.height);
+        return Rect(track.origin.x + t * travel, track.origin.y, thumb, track.size.y);
     }
 
-    void UIView::drawScrollbars(UIShape& shape) const
+    void UIView::drawScrollbars(UIPrimitive& primitive) const
     {
         Rect solid = UIFont::solidUV();
         if (mShowV)
         {
-            shape.addQuad(this->verticalTrack(), solid, scrollbarTrackColor);
-            Color thumb = (mDrag == BarDrag::VerticalThumb) ? scrollbarPressedColor : scrollbarColor;
-            shape.addQuad(this->verticalThumb(), solid, thumb);
+            primitive.addQuad(this->verticalTrack(), solid, scrollbarTrack);
+            Color thumb = (mDrag == BarDrag::VerticalThumb) ? scrollbarPressed : scrollbar;
+            primitive.addQuad(this->verticalThumb(), solid, thumb);
         }
         if (mShowH)
         {
-            shape.addQuad(this->horizontalTrack(), solid, scrollbarTrackColor);
-            Color thumb = (mDrag == BarDrag::HorizontalThumb) ? scrollbarPressedColor : scrollbarColor;
-            shape.addQuad(this->horizontalThumb(), solid, thumb);
+            primitive.addQuad(this->horizontalTrack(), solid, scrollbarTrack);
+            Color thumb = (mDrag == BarDrag::HorizontalThumb) ? scrollbarPressed : scrollbar;
+            primitive.addQuad(this->horizontalThumb(), solid, thumb);
         }
         if (mShowV && mShowH)
         {
             float bar = this->barSize();
-            shape.addQuad(Rect(rect.x + mInnerW, rect.y + mInnerH, bar, bar), solid, scrollbarTrackColor);
+            primitive.addQuad(Rect(rect.origin.x + mInnerW, rect.origin.y + mInnerH, bar, bar), solid, scrollbarTrack);
         }
     }
 
-    void UIView::render(UIShape& shape)
+    void UIView::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
-        if (color.a > 0.0f)
+        primitive.pushScaleAround(rect.origin, localScale);
+        if (fill.a > 0.0f)
         {
-            shape.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(rect, UIFont::solidUV(), fill);
         }
 
-        Vector2 parent = shape.offset();
         Rect vp = this->viewport();
-        Rect screenClip(parent.x + vp.x, parent.y + vp.y, vp.width, vp.height);
-        Vector2 content = parent + Vector2(mRoot->rect.x, mRoot->rect.y);
-        shape.pushOffset(content);
-        shape.pushClip(screenClip);
+        primitive.pushClip(primitive.toScreen(vp));
+        Vector2 contentScale = primitive.scale() * mRoot->localScale;
+        primitive.pushTransform(primitive.toScreen(rect.origin + mRoot->rect.origin), contentScale);
         for (auto& child : mRoot->children)
         {
-            if (child && !child->floating && !shape.outsideClip(child->rect))
+            if (child && !child->floating && !primitive.outsideClip(child->finalRect()))
             {
-                child->render(shape);
+                child->render(primitive);
             }
         }
-        shape.popClip();
+        primitive.popClip();
         for (auto& child : mRoot->children)
         {
             if (child && child->floating)
             {
-                child->render(shape);
+                child->render(primitive);
             }
         }
-        shape.popOffset();
-        this->drawScrollbars(shape);
+        primitive.popOrigin();
+        this->drawScrollbars(primitive);
+        primitive.popOrigin();
     }
 
     void UIView::triggerPointerDrag(float x, float y, int button)
@@ -363,7 +367,17 @@ namespace eokas
         {
             return;
         }
-        Vector2 point(x, y);
+        float lx = x;
+        float ly = y;
+        if (localScale.x != 0.0f)
+        {
+            lx = rect.origin.x + (x - rect.origin.x) / localScale.x;
+        }
+        if (localScale.y != 0.0f)
+        {
+            ly = rect.origin.y + (y - rect.origin.y) / localScale.y;
+        }
+        Vector2 point(lx, ly);
         if (mDrag == BarDrag::None)
         {
             if (mShowV)
@@ -372,7 +386,7 @@ namespace eokas
                 if (thumb.contains(point))
                 {
                     mDrag = BarDrag::VerticalThumb;
-                    mGrab = y - thumb.y;
+                    mGrab = ly - thumb.origin.y;
                 }
             }
             if (mDrag == BarDrag::None && mShowH)
@@ -381,7 +395,7 @@ namespace eokas
                 if (thumb.contains(point))
                 {
                     mDrag = BarDrag::HorizontalThumb;
-                    mGrab = x - thumb.x;
+                    mGrab = lx - thumb.origin.x;
                 }
             }
             if (mDrag == BarDrag::None && mShowV)
@@ -390,7 +404,7 @@ namespace eokas
                 if (track.contains(point))
                 {
                     Rect thumb = this->verticalThumb();
-                    mScrollY += (y < thumb.y) ? -mInnerH : mInnerH;
+                    mScrollY += (ly < thumb.origin.y) ? -mInnerH : mInnerH;
                     mScrollY = clampf(mScrollY, mMinScrollY, mMaxScrollY);
                     this->placeRoot();
                     mDrag = BarDrag::Track;
@@ -403,7 +417,7 @@ namespace eokas
                 if (track.contains(point))
                 {
                     Rect thumb = this->horizontalThumb();
-                    mScrollX += (x < thumb.x) ? -mInnerW : mInnerW;
+                    mScrollX += (lx < thumb.origin.x) ? -mInnerW : mInnerW;
                     mScrollX = clampf(mScrollX, mMinScrollX, mMaxScrollX);
                     this->placeRoot();
                     mDrag = BarDrag::Track;
@@ -415,18 +429,18 @@ namespace eokas
         if (mDrag == BarDrag::VerticalThumb)
         {
             Rect track = this->verticalTrack();
-            float thumb = thumbSpan(track.height, mMinScrollY, mMaxScrollY);
-            float travel = track.height - thumb;
-            float t = (travel > 0.0f) ? (y - mGrab - track.y) / travel : 0.0f;
+            float thumb = thumbSpan(track.size.y, mMinScrollY, mMaxScrollY);
+            float travel = track.size.y - thumb;
+            float t = (travel > 0.0f) ? (ly - mGrab - track.origin.y) / travel : 0.0f;
             mScrollY = clampf(mMinScrollY + t * (mMaxScrollY - mMinScrollY), mMinScrollY, mMaxScrollY);
             this->placeRoot();
         }
         else if (mDrag == BarDrag::HorizontalThumb)
         {
             Rect track = this->horizontalTrack();
-            float thumb = thumbSpan(track.width, mMinScrollX, mMaxScrollX);
-            float travel = track.width - thumb;
-            float t = (travel > 0.0f) ? (x - mGrab - track.x) / travel : 0.0f;
+            float thumb = thumbSpan(track.size.x, mMinScrollX, mMaxScrollX);
+            float travel = track.size.x - thumb;
+            float t = (travel > 0.0f) ? (lx - mGrab - track.origin.x) / travel : 0.0f;
             mScrollX = clampf(mMinScrollX + t * (mMaxScrollX - mMinScrollX), mMinScrollX, mMaxScrollX);
             this->placeRoot();
         }

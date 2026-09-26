@@ -12,8 +12,7 @@ namespace eokas
     void UIList::layout(const Rect& rect)
     {
         this->rect = rect;
-        float cursorX = rect.x + padding;
-        float cursorY = rect.y + padding;
+        Vector2 cursor(padding, padding);
         bool first = true;
         for (auto& child : children)
         {
@@ -25,24 +24,22 @@ namespace eokas
             {
                 if (direction == UIDirection::Horizontal)
                 {
-                    cursorX += spacing;
+                    cursor.x += spacing;
                 }
                 else
                 {
-                    cursorY += spacing;
+                    cursor.y += spacing;
                 }
             }
             first = false;
-            float width = child->rect.width;
-            float height = child->rect.height;
-            child->layout(Rect(floorf(cursorX + 0.5f), floorf(cursorY + 0.5f), width, height));
+            child->layout(Rect(Vector2(floorf(cursor.x + 0.5f), floorf(cursor.y + 0.5f)), child->rect.size));
             if (direction == UIDirection::Horizontal)
             {
-                cursorX += child->rect.width;
+                cursor.x += child->rect.size.x;
             }
             else
             {
-                cursorY += child->rect.height;
+                cursor.y += child->rect.size.y;
             }
         }
     }
@@ -64,34 +61,36 @@ namespace eokas
             any = true;
             if (direction == UIDirection::Horizontal)
             {
-                main += child->rect.width;
+                main += child->rect.size.x;
             }
             else
             {
-                main += child->rect.height;
+                main += child->rect.size.y;
             }
         }
         main += padding;
         if (direction == UIDirection::Horizontal)
         {
-            rect.width = main;
+            rect.size.x = main;
         }
         else
         {
-            rect.height = main;
+            rect.size.y = main;
         }
     }
 
-    void UIList::render(UIShape& shape)
+    void UIList::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
-        if (color.a > 0.0f)
+        primitive.pushScaleAround(rect.origin, localScale);
+        if (fill.a > 0.0f)
         {
-            shape.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(rect, UIFont::solidUV(), fill);
         }
-        UIWidget::render(shape);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 }

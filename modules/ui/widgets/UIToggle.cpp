@@ -37,44 +37,45 @@ namespace eokas
     {
         if (pressed)
         {
-            return value ? onPressedColor : offPressedColor;
+            return value ? onPressed : offPressed;
         }
         if (hovered)
         {
-            return value ? onHoverColor : offHoverColor;
+            return value ? onHover : offHover;
         }
-        return value ? onColor : offColor;
+        return value ? on : off;
     }
 
-    void UIToggle::render(UIShape& shape)
+    void UIToggle::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
 
-        float thick = snap(Math::min_s(rect.width, rect.height));
+        float thick = snap(Math::min_s(rect.size.x, rect.size.y));
         if (thick <= 0.0f)
         {
-            UIWidget::render(shape);
+            UIWidget::render(primitive);
             return;
         }
+        primitive.pushScaleAround(rect.origin, localScale);
 
         float radius = thick * 0.5f;
-        float cy = snap(rect.y + rect.height * 0.5f);
-        float left = snap(rect.x + radius);
-        float right = snap(rect.x + rect.width - radius);
+        float cy = snap(rect.origin.y + rect.size.y * 0.5f);
+        float left = snap(rect.origin.x + radius);
+        float right = snap(rect.origin.x + rect.size.x - radius);
         if (right < left)
         {
             right = left;
         }
 
         Color bg = this->capsuleColor();
-        this->addDisc(shape, left, cy, radius, bg);
+        this->addDisc(primitive, left, cy, radius, bg);
         if (right > left)
         {
-            shape.addQuad(Rect(left, cy - radius, right - left, thick), UIFont::solidUV(), bg);
-            this->addDisc(shape, right, cy, radius, bg);
+            primitive.addQuad(Rect(left, cy - radius, right - left, thick), UIFont::solidUV(), bg);
+            this->addDisc(primitive, right, cy, radius, bg);
         }
 
         float inset = snap(thick * 0.12f);
@@ -84,11 +85,12 @@ namespace eokas
         }
         float thumbRadius = radius - inset;
         float thumbX = value ? right : left;
-        this->addDisc(shape, thumbX, cy, thumbRadius, thumbColor);
-        UIWidget::render(shape);
+        this->addDisc(primitive, thumbX, cy, thumbRadius, thumb);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 
-    void UIToggle::addDisc(UIShape& shape, float cx, float cy, float radius, const Color& color)
+    void UIToggle::addDisc(UIPrimitive& primitive, float cx, float cy, float radius, const Color& color)
     {
         if (radius <= 0.0f)
         {
@@ -102,7 +104,7 @@ namespace eokas
             float a1 = Math::PI_MUL_2 * ((float)(i + 1) / (float)kDiscSegments);
             Vector2 e0(cx + cosf(a0) * radius, cy + sinf(a0) * radius);
             Vector2 e1(cx + cosf(a1) * radius, cy + sinf(a1) * radius);
-            shape.addQuad(center, e0, e1, center, uv, color);
+            primitive.addQuad(center, e0, e1, center, uv, color);
         }
     }
 }

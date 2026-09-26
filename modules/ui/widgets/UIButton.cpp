@@ -45,23 +45,24 @@ namespace eokas
         }
         if (UIText* t = this->label())
         {
-            if (t->font != nullptr && t->font->isOpen())
+            UIFont* font = UIFont::find(t->style.fontPath);
+            if (font != nullptr && font->isOpen())
             {
-                float bake = (float)t->font->pixelSize();
-                float scale = (t->fontSize > 0.0f ? t->fontSize : bake) / bake;
+                float bake = (float)font->pixelSize();
+                float scale = (t->style.fontSize > 0.0f ? t->style.fontSize : bake) / bake;
                 float width = 0.0f;
                 for (size_t i = 0; i < t->text.length(); i++)
                 {
-                    width += t->font->glyph(t->text.at(i)).advance * scale;
+                    width += font->glyph(t->text.at(i)).advance * scale;
                 }
-                t->rect.width = floorf(width + 0.5f);
-                float tight = t->font->ascender() - t->font->descender();
-                t->rect.height = floorf(tight * scale + 0.5f);
+                t->rect.size.x = floorf(width + 0.5f);
+                float tight = font->ascender() - font->descender();
+                t->rect.size.y = floorf(tight * scale + 0.5f);
             }
         }
 
-        float innerW = rect.width - paddingX * 2.0f;
-        float innerH = rect.height - paddingY * 2.0f;
+        float innerW = rect.size.x - paddingX * 2.0f;
+        float innerH = rect.size.y - paddingY * 2.0f;
         if (innerW < 0.0f)
         {
             innerW = 0.0f;
@@ -70,28 +71,31 @@ namespace eokas
         {
             innerH = 0.0f;
         }
-        float x = rect.x + paddingX + (innerW - content->rect.width) * 0.5f;
-        float y = rect.y + paddingY + (innerH - content->rect.height) * 0.5f;
-        content->layout(Rect(floorf(x + 0.5f), floorf(y + 0.5f), content->rect.width, content->rect.height));
+        Vector2 pos(
+            paddingX + (innerW - content->rect.size.x) * 0.5f,
+            paddingY + (innerH - content->rect.size.y) * 0.5f);
+        content->layout(Rect(Vector2(floorf(pos.x + 0.5f), floorf(pos.y + 0.5f)), content->rect.size));
     }
 
-    void UIButton::render(UIShape& shape)
+    void UIButton::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
 
+        primitive.pushScaleAround(rect.origin, localScale);
         Color bg = background;
         if (pressed)
         {
-            bg = pressedColor;
+            bg = pressedFill;
         }
         else if (hovered)
         {
-            bg = hoverColor;
+            bg = hoverFill;
         }
-        shape.addQuad(rect, UIFont::solidUV(), bg);
-        UIWidget::render(shape);
+        primitive.addQuad(rect, UIFont::solidUV(), bg);
+        primitive.popOrigin();
+        UIWidget::render(primitive);
     }
 }

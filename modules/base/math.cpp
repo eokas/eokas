@@ -1670,19 +1670,20 @@ namespace eokas {
     ============================================================
     */
     Rect::Rect()
-        : x(0), y(0), width(0), height(0) {
+        : origin(), size() {
     }
-    
+
     Rect::Rect(f32_t x, f32_t y, f32_t w, f32_t h)
-        : x(x), y(y), width(w), height(h) {
+        : origin(x, y), size(w, h) {
     }
-    
-    Rect::Rect(const Vector2& pos, const Vector2& size)
-        : x(pos.x), y(pos.y), width(size.x), height(size.y) {
+
+    Rect::Rect(const Vector2& pos, const Vector2& extent)
+        : origin(pos), size(extent) {
     }
-    
+
     bool Rect::contains(const Vector2& p) {
-        return p.x >= this->x && p.x <= this->x + this->width && p.y >= this->y && p.y <= this->y + this->height;
+        Vector2 end = origin + size;
+        return p.x >= origin.x && p.x <= end.x && p.y >= origin.y && p.y <= end.y;
     }
     
     /*

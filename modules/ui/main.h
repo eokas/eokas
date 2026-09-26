@@ -1,7 +1,7 @@
 #ifndef _EOKAS_UI_MAIN_H_
 #define _EOKAS_UI_MAIN_H_
 
-#include "UIShape.h"
+#include "UIPrimitive.h"
 #include "UIWidget.h"
 #include "UIFrame.h"
 #include "widgets/UIImage.h"
@@ -10,6 +10,12 @@
 #include "widgets/UIGrid.h"
 #include "widgets/UITable.h"
 #include "widgets/UIView.h"
+#include "widgets/UICanvas.h"
+#include "widgets/UIChart.h"
+#include "charts/UIEllipse.h"
+#include "charts/UIRectangle.h"
+#include "charts/UIDiamond.h"
+#include "charts/UILink.h"
 #include "UIFont.h"
 #include "widgets/UIMenu.h"
 #include "widgets/UIButton.h"

@@ -51,6 +51,8 @@ namespace eokas
         static bool nextUtf8(const char* data, size_t size, size_t& index, uint32_t& codepoint);
         static String encodeUtf8(uint32_t codepoint);
         static Rect solidUV();
+        static void bind(const String& path, UIFont* font);
+        static UIFont* find(const String& path);
 
     private:
         struct SizeRun
