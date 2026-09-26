@@ -15,7 +15,7 @@ namespace eokas
         float scaleSensitivity = 0.002f;
 
         UICanvas();
-        void scaleAt(const Vector2& pivot, float value);
+        void scaleAt(const Vector2& focal, float value);
         void addChild(const std::shared_ptr<UIWidget>& child);
         void layout(const Rect& rect) override;
         void render(UIPrimitive& primitive) override;

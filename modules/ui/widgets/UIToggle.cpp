@@ -53,18 +53,18 @@ namespace eokas
             return;
         }
 
-        float thick = snap(Math::min_s(rect.size.x, rect.size.y));
+        float thick = snap(Math::min_s(shape.size.x, shape.size.y));
         if (thick <= 0.0f)
         {
             UIWidget::render(primitive);
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
 
         float radius = thick * 0.5f;
-        float cy = snap(rect.origin.y + rect.size.y * 0.5f);
-        float left = snap(rect.origin.x + radius);
-        float right = snap(rect.origin.x + rect.size.x - radius);
+        float cy = snap(shape.top() + shape.size.y * 0.5f);
+        float left = snap(shape.left() + radius);
+        float right = snap(shape.left() + shape.size.x - radius);
         if (right < left)
         {
             right = left;

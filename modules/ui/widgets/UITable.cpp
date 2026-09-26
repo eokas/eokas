@@ -161,7 +161,7 @@ namespace eokas
             {
                 return;
             }
-            Rect next = table->rect;
+            Rect next = Rect(table->shape.left(), table->shape.top(), table->shape.size.x, table->shape.size.y);
             next.size.y = 0.0f;
             table->layout(next);
         }
@@ -224,7 +224,11 @@ namespace eokas
 
     void UITableCell::layout(const Rect& rect)
     {
-        this->rect = rect;
+        {
+            Rect _box = rect;
+            shape.size = _box.size;
+            shape.origin = _box.origin + shape.pivot * shape.size;
+        }
         if (!mContent)
         {
             return;
@@ -240,7 +244,7 @@ namespace eokas
             pad = 0.0f;
         }
         Vector2 pos(left + pad + this->shift(), top + pad);
-        mContent->layout(Rect(Vector2(snap(pos.x), snap(pos.y)), mContent->rect.size));
+        mContent->layout(Rect(Vector2(snap(pos.x), snap(pos.y)), mContent->shape.size));
     }
 
     void UITableCell::render(UIPrimitive& primitive)
@@ -249,16 +253,16 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         float left = 0.0f;
         float top = 0.0f;
         float right = 0.0f;
         float bottom = 0.0f;
-        fittedInsets(rect, this->border(), left, top, right, bottom);
+        fittedInsets(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), this->border(), left, top, right, bottom);
         float pad = mTable != nullptr ? mTable->cellPadding : 0.0f;
         if (pad < 0.0f)
         {
@@ -269,18 +273,18 @@ namespace eokas
         {
             int depth = mRow->depth();
             float indent = shift / (float)(depth + 1);
-            float slotY = rect.origin.y + top;
-            float slotH = rect.size.y - top - bottom;
+            float slotY = shape.top() + top;
+            float slotH = shape.size.y - top - bottom;
             if (slotH < 0.0f)
             {
                 slotH = 0.0f;
             }
-            drawDisclosure(primitive, Rect(rect.origin.x + left + pad + (float)depth * indent, slotY, indent, slotH), mRow->expanded(), mTable->disclosure);
+            drawDisclosure(primitive, Rect(shape.left() + left + pad + (float)depth * indent, slotY, indent, slotH), mRow->expanded(), mTable->disclosure);
         }
-        float x = rect.origin.x + left + pad + shift;
-        float y = rect.origin.y + top + pad;
-        float w = rect.size.x - left - right - pad * 2.0f - shift;
-        float h = rect.size.y - top - bottom - pad * 2.0f;
+        float x = shape.left() + left + pad + shift;
+        float y = shape.top() + top + pad;
+        float w = shape.size.x - left - right - pad * 2.0f - shift;
+        float h = shape.size.y - top - bottom - pad * 2.0f;
         if (w < 0.0f)
         {
             w = 0.0f;
@@ -299,8 +303,8 @@ namespace eokas
         primitive.pushClip(Rect(clipX, clipY, clipW, clipH));
         UIWidget::render(primitive);
         primitive.popClip();
-        primitive.pushScaleAround(rect.origin, localScale);
-        drawBorder(primitive, rect, this->border());
+        primitive.pushScaleAround(shape.origin, shape.scale);
+        drawBorder(primitive, Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), this->border());
         primitive.popOrigin();
     }
 
@@ -749,7 +753,7 @@ namespace eokas
         {
             return 0.0f;
         }
-        return horizontal ? body->rect.size.x : body->rect.size.y;
+        return horizontal ? body->shape.size.x : body->shape.size.y;
     }
 
     float UITable::columnPreferred(int index) const
@@ -876,7 +880,11 @@ namespace eokas
 
     void UITable::layout(const Rect& rect)
     {
-        this->rect = rect;
+        {
+            Rect _box = rect;
+            shape.size = _box.size;
+            shape.origin = _box.origin + shape.pivot * shape.size;
+        }
         this->syncChildren();
         std::vector<float> widths;
         float usedW = 0.0f;
@@ -898,11 +906,13 @@ namespace eokas
         this->resolveTracks(given, preferred, rect.size.y, heights, usedH);
         if (rect.size.x <= 0.0f)
         {
-            this->rect.size.x = usedW;
+            shape.origin.x += shape.pivot.x * ((usedW) - shape.size.x);
+            shape.size.x = usedW;
         }
         if (rect.size.y <= 0.0f)
         {
-            this->rect.size.y = usedH;
+            shape.origin.y += shape.pivot.y * ((usedH) - shape.size.y);
+            shape.size.y = usedH;
         }
         float gap = this->spacing();
         int columns = this->columnCount();
@@ -923,7 +933,11 @@ namespace eokas
                 y += gap;
             }
             float rowH = heights[(size_t)i];
-            lines[(size_t)i]->rect = Rect(Vector2(0.0f, snap(y)), Vector2(rowW, rowH));
+            {
+                Rect _box = Rect(Vector2(0.0f, snap(y)), Vector2(rowW, rowH));
+                lines[(size_t)i]->shape.size = _box.size;
+                lines[(size_t)i]->shape.origin = _box.origin + lines[(size_t)i]->shape.pivot * lines[(size_t)i]->shape.size;
+            }
             float x = 0.0f;
             for (int column = 0; column < columns; ++column)
             {
@@ -944,7 +958,7 @@ namespace eokas
 
     void UITable::refit()
     {
-        Rect next = rect;
+        Rect next = Rect(shape.left(), shape.top(), shape.size.x, shape.size.y);
         next.size.x = 0.0f;
         next.size.y = 0.0f;
         this->layout(next);
@@ -956,10 +970,10 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         primitive.popOrigin();
         UIWidget::render(primitive);

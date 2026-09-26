@@ -1,7 +1,9 @@
 #ifndef _EOKAS_UI_WIDGET_H_
 #define _EOKAS_UI_WIDGET_H_
 
+#include "UIKey.h"
 #include "UIPrimitive.h"
+#include "UIShape.h"
 #include "UIStyle.h"
 #include <chrono>
 #include <functional>
@@ -11,38 +13,13 @@
 
 namespace eokas
 {
-    enum class UIKey
-    {
-        Backspace,
-        Delete,
-        Left,
-        Right,
-        Up,
-        Down,
-        Home,
-        End,
-        Enter,
-        Escape,
-        A,
-        C,
-        X,
-        V
-    };
-
-    struct UIKeyMods
-    {
-        bool ctrl = false;
-        bool shift = false;
-    };
-
     class UIWidget
     {
     public:
-        // Position and size in the parent widget's local space.
-        // localScale scales around rect's top-left. (1, 1) is identity.
-        // Layout keeps rect.size unscaled. Children inherit this scale.
-        Rect rect;
-        Vector2 localScale { 1.0f, 1.0f };
+        // origin is the pivot in the parent widget's local space.
+        // Default pivot is the center. layout writes size and origin, and keeps pivot and scale.
+        // Children stay in unscaled layout space. (0, 0) is left() / top().
+        UIShape shape;
         Color color { Color(1.0f, 1.0f, 1.0f, 1.0f) };
         bool visible = true;
         bool floating = false;
@@ -63,7 +40,7 @@ namespace eokas
         
 
         virtual ~UIWidget() = default;
-        Rect finalRect() const;
+        Rect visualRect() const;
         virtual void layout(const Rect& rect);
         virtual void render(UIPrimitive& primitive);
         virtual bool contains(const Vector2& point) const;

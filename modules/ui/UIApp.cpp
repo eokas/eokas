@@ -288,7 +288,7 @@ namespace eokas
             Vector2 point(x, y);
             if (page && page->space() == mSourceSpace)
             {
-                point += mSourceSpace->rect.origin + page->rect.origin;
+                point += Vector2(mSourceSpace->shape.left(), mSourceSpace->shape.top()) + Vector2(page->shape.left(), page->shape.top());
             }
             Rect screen = mSourceSpace->toScreen(Rect(point, Vector2::ZERO));
             screenX = screen.origin.x;
@@ -319,7 +319,7 @@ namespace eokas
         if (page->space())
         {
             UIDockSpace* space = page->space();
-            space->layout(space->rect);
+            space->layout(Rect(space->shape.left(), space->shape.top(), space->shape.size.x, space->shape.size.y));
             Rect local;
             if (space->pageBounds(page, local)) window = space->toScreen(local);
             held = space->takePage(page);
@@ -358,10 +358,10 @@ namespace eokas
         for (auto* space : mSpaces)
         {
             if (!space) continue;
-            Rect screen = space->toScreen(space->rect);
+            Rect screen = space->toScreen(Rect(space->shape.left(), space->shape.top(), space->shape.size.x, space->shape.size.y));
             if (!screen.contains(Vector2(screenX, screenY))) continue;
-            float localX = space->rect.origin.x + (screenX - screen.origin.x);
-            float localY = space->rect.origin.y + (screenY - screen.origin.y);
+            float localX = space->shape.left() + (screenX - screen.origin.x);
+            float localY = space->shape.top() + (screenY - screen.origin.y);
             if (space->showPreview(localX, localY)) hit = space;
             else space->clearPreview();
         }

@@ -83,7 +83,7 @@ namespace eokas
 
     Rect UIView::viewport() const
     {
-        return Rect(rect.origin.x, rect.origin.y, mInnerW, mInnerH);
+        return Rect(shape.left(), shape.top(), mInnerW, mInnerH);
     }
 
     bool UIView::scrollbarContains(float localX, float localY) const
@@ -110,22 +110,18 @@ namespace eokas
 
     UIWidget* UIView::pick(const Vector2& point)
     {
-        if (!visible || localScale.x == 0.0f || localScale.y == 0.0f)
+        if (!visible || shape.scale.x == 0.0f || shape.scale.y == 0.0f)
         {
             return nullptr;
         }
-        Vector2 local(
-            (point.x - rect.origin.x) / localScale.x,
-            (point.y - rect.origin.y) / localScale.y);
-        Vector2 layout = rect.origin + local;
+        Vector2 local = shape.toLocal(point);
+        Vector2 layout = Vector2(shape.left(), shape.top()) + local;
         bool inside = this->contains(layout);
-        bool contentScale = mRoot && mRoot->localScale.x != 0.0f && mRoot->localScale.y != 0.0f;
+        bool contentScale = mRoot && mRoot->shape.scale.x != 0.0f && mRoot->shape.scale.y != 0.0f;
         Vector2 content = Vector2::ZERO;
         if (contentScale)
         {
-            content = Vector2(
-                (local.x - mRoot->rect.origin.x) / mRoot->localScale.x,
-                (local.y - mRoot->rect.origin.y) / mRoot->localScale.y);
+            content = mRoot->shape.toLocal(local);
             for (auto it = mRoot->children.rbegin(); it != mRoot->children.rend(); ++it)
             {
                 if (*it && (*it)->floating)
@@ -171,7 +167,7 @@ namespace eokas
 
     void UIView::placeRoot()
     {
-        mRoot->rect.origin = Vector2(-mScrollX, -mScrollY);
+        mRoot->shape.origin = (Vector2(-mScrollX, -mScrollY)) + mRoot->shape.pivot * mRoot->shape.size;
     }
 
     float UIView::barSize() const
@@ -185,8 +181,8 @@ namespace eokas
         {
             return;
         }
-        Vector2 topLeft = origin + scale * widget->rect.origin;
-        Vector2 end = topLeft + scale * widget->localScale * widget->rect.size;
+        Vector2 topLeft = origin + scale * widget->shape.toParent(Vector2(widget->shape.left(), widget->shape.top()));
+        Vector2 end = topLeft + scale * widget->shape.scale * widget->shape.size;
         float x0 = topLeft.x < end.x ? topLeft.x : end.x;
         float y0 = topLeft.y < end.y ? topLeft.y : end.y;
         float x1 = topLeft.x > end.x ? topLeft.x : end.x;
@@ -210,7 +206,7 @@ namespace eokas
         {
             return;
         }
-        Vector2 childScale = scale * widget->localScale;
+        Vector2 childScale = scale * widget->shape.scale;
         for (auto& child : widget->children)
         {
             this->expandContent(child.get(), topLeft, childScale, minX, minY, maxX, maxY, any);
@@ -219,12 +215,16 @@ namespace eokas
 
     void UIView::layout(const Rect& rect)
     {
-        this->rect = rect;
+        {
+            Rect _box = rect;
+            shape.size = _box.size;
+            shape.origin = _box.origin + shape.pivot * shape.size;
+        }
         for (auto& child : mRoot->children)
         {
             if (child)
             {
-                child->layout(child->rect);
+                child->layout(Rect(child->shape.left(), child->shape.top(), child->shape.size.x, child->shape.size.y));
             }
         }
         this->updateMetrics();
@@ -239,11 +239,11 @@ namespace eokas
         float maxY = 0.0f;
         for (auto& child : mRoot->children)
         {
-            this->expandContent(child.get(), Vector2::ZERO, mRoot->localScale, minX, minY, maxX, maxY, any);
+            this->expandContent(child.get(), Vector2::ZERO, mRoot->shape.scale, minX, minY, maxX, maxY, any);
         }
 
-        float outerW = rect.size.x > 0.0f ? rect.size.x : 0.0f;
-        float outerH = rect.size.y > 0.0f ? rect.size.y : 0.0f;
+        float outerW = shape.size.x > 0.0f ? shape.size.x : 0.0f;
+        float outerH = shape.size.y > 0.0f ? shape.size.y : 0.0f;
         float bar = this->barSize();
         if (!any)
         {
@@ -257,8 +257,10 @@ namespace eokas
             mMaxScrollY = 0.0f;
             mScrollX = 0.0f;
             mScrollY = 0.0f;
-            mRoot->rect.size.x = 0.0f;
-            mRoot->rect.size.y = 0.0f;
+            mRoot->shape.origin.x += mRoot->shape.pivot.x * ((0.0f) - mRoot->shape.size.x);
+            mRoot->shape.size.x = 0.0f;
+            mRoot->shape.origin.y += mRoot->shape.pivot.y * ((0.0f) - mRoot->shape.size.y);
+            mRoot->shape.size.y = 0.0f;
             this->placeRoot();
             return;
         }
@@ -327,19 +329,21 @@ namespace eokas
         }
         mScrollX = clampf(mScrollX, mMinScrollX, mMaxScrollX);
         mScrollY = clampf(mScrollY, mMinScrollY, mMaxScrollY);
-        mRoot->rect.size.x = contentW;
-        mRoot->rect.size.y = contentH;
+        mRoot->shape.origin.x += mRoot->shape.pivot.x * ((contentW) - mRoot->shape.size.x);
+        mRoot->shape.size.x = contentW;
+        mRoot->shape.origin.y += mRoot->shape.pivot.y * ((contentH) - mRoot->shape.size.y);
+        mRoot->shape.size.y = contentH;
         this->placeRoot();
     }
 
     Rect UIView::verticalTrack() const
     {
-        return Rect(rect.origin.x + mInnerW, rect.origin.y, this->barSize(), mInnerH);
+        return Rect(shape.left() + mInnerW, shape.top(), this->barSize(), mInnerH);
     }
 
     Rect UIView::horizontalTrack() const
     {
-        return Rect(rect.origin.x, rect.origin.y + mInnerH, mInnerW, this->barSize());
+        return Rect(shape.left(), shape.top() + mInnerH, mInnerW, this->barSize());
     }
 
     Rect UIView::verticalThumb() const
@@ -382,7 +386,7 @@ namespace eokas
         if (mShowV && mShowH)
         {
             float bar = this->barSize();
-            primitive.addQuad(Rect(rect.origin.x + mInnerW, rect.origin.y + mInnerH, bar, bar), solid, scrollbarTrack);
+            primitive.addQuad(Rect(shape.left() + mInnerW, shape.top() + mInnerH, bar, bar), solid, scrollbarTrack);
         }
     }
 
@@ -392,19 +396,19 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
 
         Rect vp = this->viewport();
         primitive.pushClip(primitive.toScreen(vp));
-        Vector2 contentScale = primitive.scale() * mRoot->localScale;
-        primitive.pushTransform(primitive.toScreen(rect.origin + mRoot->rect.origin), contentScale);
+        Vector2 contentScale = primitive.scale() * mRoot->shape.scale;
+        primitive.pushTransform(primitive.toScreen(Vector2(shape.left(), shape.top()) + Vector2(mRoot->shape.left(), mRoot->shape.top())), contentScale);
         for (auto& child : mRoot->children)
         {
-            if (child && !child->floating && !primitive.outsideClip(child->finalRect()))
+            if (child && !child->floating && !primitive.outsideClip(child->visualRect()))
             {
                 child->render(primitive);
             }
@@ -430,13 +434,11 @@ namespace eokas
         }
         float lx = x;
         float ly = y;
-        if (localScale.x != 0.0f)
+        if (shape.scale.x != 0.0f && shape.scale.y != 0.0f)
         {
-            lx = rect.origin.x + (x - rect.origin.x) / localScale.x;
-        }
-        if (localScale.y != 0.0f)
-        {
-            ly = rect.origin.y + (y - rect.origin.y) / localScale.y;
+            Vector2 layoutPoint = shape.toUnscaled(Vector2(x, y));
+            lx = layoutPoint.x;
+            ly = layoutPoint.y;
         }
         Vector2 point(lx, ly);
         if (mDrag == BarDrag::None)

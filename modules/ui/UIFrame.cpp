@@ -26,9 +26,7 @@ namespace eokas
 
         Vector2 layoutPoint(const UIWidget* widget, const Vector2& parentLocal)
         {
-            return widget->rect.origin + Vector2(
-                (parentLocal.x - widget->rect.origin.x) / widget->localScale.x,
-                (parentLocal.y - widget->rect.origin.y) / widget->localScale.y);
+            return widget->shape.toUnscaled(parentLocal);
         }
     }
 
@@ -121,7 +119,7 @@ namespace eokas
         mPrimitive->begin();
         if (mRoot)
         {
-            mRoot->layout(mRoot->rect);
+            mRoot->layout(Rect(mRoot->shape.left(), mRoot->shape.top(), mRoot->shape.size.x, mRoot->shape.size.y));
             mRoot->render(*mPrimitive);
         }
         mPrimitive->end();
@@ -138,7 +136,7 @@ namespace eokas
         {
             return nullptr;
         }
-        mRoot->layout(mRoot->rect);
+        mRoot->layout(Rect(mRoot->shape.left(), mRoot->shape.top(), mRoot->shape.size.x, mRoot->shape.size.y));
         return mRoot->pick(Vector2(x, y));
     }
 
@@ -373,12 +371,12 @@ namespace eokas
             outScale = scale;
             return true;
         }
-        Vector2 nextOrigin = origin + scale * node->rect.origin;
-        Vector2 nextScale = scale * node->localScale;
+        Vector2 nextOrigin = origin + scale * node->shape.toParent(Vector2(node->shape.left(), node->shape.top()));
+        Vector2 nextScale = scale * node->shape.scale;
         if (UIView* view = dynamic_cast<UIView*>(node))
         {
-            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->rect.origin;
-            Vector2 contentScale = nextScale * view->root()->localScale;
+            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->shape.toParent(Vector2(view->root()->shape.left(), view->root()->shape.top()));
+            Vector2 contentScale = nextScale * view->root()->shape.scale;
             for (auto& child : view->root()->children)
             {
                 if (this->findWidget(child.get(), target, contentOrigin, contentScale, outOrigin, outScale))
@@ -406,8 +404,8 @@ namespace eokas
         }
         if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
         {
-            Vector2 nextOrigin = origin + scale * canvas->rect.origin;
-            Vector2 nextScale = scale * canvas->localScale;
+            Vector2 nextOrigin = origin + scale * canvas->shape.toParent(Vector2(canvas->shape.left(), canvas->shape.top()));
+            Vector2 nextScale = scale * canvas->shape.scale;
             for (auto it = canvas->children.rbegin(); it != canvas->children.rend(); ++it)
             {
                 if (*it && this->routeNestedCanvas(it->get(), point, nextOrigin, nextScale, delta))
@@ -415,13 +413,13 @@ namespace eokas
                     return true;
                 }
             }
-            if (!liveScale(canvas->localScale))
+            if (!liveScale(canvas->shape.scale))
             {
                 return false;
             }
             Vector2 parentLocal = parentPoint(point, origin, scale);
             Vector2 layout = layoutPoint(canvas, parentLocal);
-            if (!canvas->rect.contains(layout))
+            if (!Rect(canvas->shape.left(), canvas->shape.top(), canvas->shape.size.x, canvas->shape.size.y).contains(layout))
             {
                 return false;
             }
@@ -432,13 +430,13 @@ namespace eokas
                 Vector2 chartScale(1.0f, 1.0f);
                 if (this->findWidget(mRoot.get(), chart, Vector2::ZERO, Vector2(1.0f, 1.0f), chartOrigin, chartScale) && liveScale(chartScale))
                 {
-                    float current = chart->localScale.x == 0.0f ? 1.0f : chart->localScale.x;
+                    float current = chart->shape.scale.x == 0.0f ? 1.0f : chart->shape.scale.x;
                     float factor = expf(-delta.y * chart->scaleSensitivity);
                     chart->scaleAt(parentPoint(point, chartOrigin, chartScale), current * factor);
                     return true;
                 }
             }
-            float current = canvas->localScale.x;
+            float current = canvas->shape.scale.x;
             if (current == 0.0f)
             {
                 current = 1.0f;
@@ -447,12 +445,12 @@ namespace eokas
             canvas->scaleAt(parentLocal, current * factor);
             return true;
         }
-        Vector2 nextOrigin = origin + scale * widget->rect.origin;
-        Vector2 nextScale = scale * widget->localScale;
+        Vector2 nextOrigin = origin + scale * widget->shape.toParent(Vector2(widget->shape.left(), widget->shape.top()));
+        Vector2 nextScale = scale * widget->shape.scale;
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
-            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->rect.origin;
-            Vector2 contentScale = nextScale * view->root()->localScale;
+            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->shape.toParent(Vector2(view->root()->shape.left(), view->root()->shape.top()));
+            Vector2 contentScale = nextScale * view->root()->shape.scale;
             const std::shared_ptr<UIWidget>& content = view->root();
             for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
             {
@@ -468,12 +466,12 @@ namespace eokas
                     return true;
                 }
             }
-            if (!liveScale(widget->localScale))
+            if (!liveScale(widget->shape.scale))
             {
                 return false;
             }
             Vector2 layout = layoutPoint(widget, parentPoint(point, origin, scale));
-            if (!view->rect.contains(layout))
+            if (!Rect(view->shape.left(), view->shape.top(), view->shape.size.x, view->shape.size.y).contains(layout))
             {
                 return false;
             }
@@ -508,14 +506,14 @@ namespace eokas
         }
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
-            if (!liveScale(view->localScale))
+            if (!liveScale(view->shape.scale))
             {
                 return false;
             }
-            Vector2 nextOrigin = origin + scale * view->rect.origin;
-            Vector2 nextScale = scale * view->localScale;
-            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->rect.origin;
-            Vector2 contentScale = nextScale * view->root()->localScale;
+            Vector2 nextOrigin = origin + scale * view->shape.toParent(Vector2(view->shape.left(), view->shape.top()));
+            Vector2 nextScale = scale * view->shape.scale;
+            Vector2 contentOrigin = nextOrigin + nextScale * view->root()->shape.toParent(Vector2(view->root()->shape.left(), view->root()->shape.top()));
+            Vector2 contentScale = nextScale * view->root()->shape.scale;
             for (auto it = view->root()->children.rbegin(); it != view->root()->children.rend(); ++it)
             {
                 if (*it && this->routeNestedCanvas(it->get(), point, contentOrigin, contentScale, delta))
@@ -525,8 +523,8 @@ namespace eokas
             }
             return false;
         }
-        Vector2 nextOrigin = origin + scale * widget->rect.origin;
-        Vector2 nextScale = scale * widget->localScale;
+        Vector2 nextOrigin = origin + scale * widget->shape.toParent(Vector2(widget->shape.left(), widget->shape.top()));
+        Vector2 nextScale = scale * widget->shape.scale;
         for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
         {
             if (*it && this->routeNestedCanvas(it->get(), point, nextOrigin, nextScale, delta))

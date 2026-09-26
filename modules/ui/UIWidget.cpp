@@ -2,26 +2,25 @@
 
 namespace eokas
 {
-    Rect UIWidget::finalRect() const
+    Rect UIWidget::visualRect() const
     {
-        return Rect(rect.origin, rect.size * localScale);
+        return shape.visualRect();
     }
 
     bool UIWidget::contains(const Vector2& point) const
     {
-        return rect.contains(point);
+        Rect box(shape.left(), shape.top(), shape.size.x, shape.size.y);
+        return box.contains(point);
     }
 
     UIWidget* UIWidget::pick(const Vector2& point)
     {
-        if (!visible || localScale.x == 0.0f || localScale.y == 0.0f)
+        if (!visible || shape.scale.x == 0.0f || shape.scale.y == 0.0f)
         {
             return nullptr;
         }
-        Vector2 local(
-            (point.x - rect.origin.x) / localScale.x,
-            (point.y - rect.origin.y) / localScale.y);
-        bool inside = this->contains(rect.origin + local);
+        Vector2 local = shape.toLocal(point);
+        bool inside = this->contains(Vector2(shape.left(), shape.top()) + local);
         for (auto it = children.rbegin(); it != children.rend(); ++it)
         {
             if (*it && (*it)->floating)
@@ -51,14 +50,15 @@ namespace eokas
 
     void UIWidget::layout(const Rect& rect)
     {
-        this->rect = rect;
+        shape.size = rect.size;
+        shape.origin = rect.origin + shape.pivot * shape.size;
         for (auto& child : children)
         {
             if (!child)
             {
                 continue;
             }
-            child->layout(child->rect);
+            child->layout(Rect(child->shape.left(), child->shape.top(), child->shape.size.x, child->shape.size.y));
         }
     }
 
@@ -68,12 +68,12 @@ namespace eokas
         {
             return;
         }
-        Vector2 childOrigin = primitive.origin() + primitive.scale() * rect.origin;
-        Vector2 childScale = primitive.scale() * localScale;
+        Vector2 childOrigin = primitive.origin() + primitive.scale() * shape.toParent(Vector2(shape.left(), shape.top()));
+        Vector2 childScale = primitive.scale() * shape.scale;
         primitive.pushTransform(childOrigin, childScale);
         for (auto& child : children)
         {
-            if (child && !child->floating && !primitive.outsideClip(child->finalRect()))
+            if (child && !child->floating && !primitive.outsideClip(child->visualRect()))
             {
                 child->render(primitive);
             }

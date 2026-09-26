@@ -11,7 +11,11 @@ namespace eokas
 
     void UIList::layout(const Rect& rect)
     {
-        this->rect = rect;
+        {
+            Rect _box = rect;
+            shape.size = _box.size;
+            shape.origin = _box.origin + shape.pivot * shape.size;
+        }
         Vector2 cursor(padding, padding);
         bool first = true;
         for (auto& child : children)
@@ -32,14 +36,14 @@ namespace eokas
                 }
             }
             first = false;
-            child->layout(Rect(Vector2(floorf(cursor.x + 0.5f), floorf(cursor.y + 0.5f)), child->rect.size));
+            child->layout(Rect(Vector2(floorf(cursor.x + 0.5f), floorf(cursor.y + 0.5f)), child->shape.size));
             if (direction == UIDirection::Horizontal)
             {
-                cursor.x += child->rect.size.x;
+                cursor.x += child->shape.size.x;
             }
             else
             {
-                cursor.y += child->rect.size.y;
+                cursor.y += child->shape.size.y;
             }
         }
     }
@@ -61,21 +65,23 @@ namespace eokas
             any = true;
             if (direction == UIDirection::Horizontal)
             {
-                main += child->rect.size.x;
+                main += child->shape.size.x;
             }
             else
             {
-                main += child->rect.size.y;
+                main += child->shape.size.y;
             }
         }
         main += padding;
         if (direction == UIDirection::Horizontal)
         {
-            rect.size.x = main;
+            shape.origin.x += shape.pivot.x * ((main) - shape.size.x);
+            shape.size.x = main;
         }
         else
         {
-            rect.size.y = main;
+            shape.origin.y += shape.pivot.y * ((main) - shape.size.y);
+            shape.size.y = main;
         }
     }
 
@@ -85,10 +91,10 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         primitive.popOrigin();
         UIWidget::render(primitive);

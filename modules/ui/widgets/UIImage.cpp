@@ -55,17 +55,17 @@ namespace eokas
             float destT = srcT;
             float destR = srcR;
             float destB = srcB;
-            clampPair(destL, destR, image.rect.size.x);
-            clampPair(destT, destB, image.rect.size.y);
+            clampPair(destL, destR, image.shape.size.x);
+            clampPair(destT, destB, image.shape.size.y);
 
-            grid.x[0] = image.rect.origin.x;
-            grid.x[1] = image.rect.origin.x + destL;
-            grid.x[2] = image.rect.origin.x + image.rect.size.x - destR;
-            grid.x[3] = image.rect.origin.x + image.rect.size.x;
-            grid.y[0] = image.rect.origin.y;
-            grid.y[1] = image.rect.origin.y + destT;
-            grid.y[2] = image.rect.origin.y + image.rect.size.y - destB;
-            grid.y[3] = image.rect.origin.y + image.rect.size.y;
+            grid.x[0] = image.shape.left();
+            grid.x[1] = image.shape.left() + destL;
+            grid.x[2] = image.shape.left() + image.shape.size.x - destR;
+            grid.x[3] = image.shape.left() + image.shape.size.x;
+            grid.y[0] = image.shape.top();
+            grid.y[1] = image.shape.top() + destT;
+            grid.y[2] = image.shape.top() + image.shape.size.y - destB;
+            grid.y[3] = image.shape.top() + image.shape.size.y;
 
             float uL = srcL / atlasW;
             float uR = srcR / atlasW;
@@ -137,11 +137,11 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         SliceGrid grid;
         if (type == UIImageType::Simple || !buildSliceGrid(*this, primitive, grid))
         {
-            primitive.addQuad(rect, uv, color);
+            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), uv, color);
         }
         else
         {

@@ -29,7 +29,7 @@ namespace eokas
         UIWidget* pick(const Vector2& point) override;
         void addChart(const std::shared_ptr<UIChart>& chart);
         void removeChart(UIChart* chart);
-        void scaleAt(const Vector2& pivot, float value);
+        void scaleAt(const Vector2& focal, float value);
         void setText(const String& value);
         UIText* label() const { return mLabel.get(); }
         void render(UIPrimitive& primitive) override;

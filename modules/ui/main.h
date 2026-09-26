@@ -1,7 +1,9 @@
 #ifndef _EOKAS_UI_MAIN_H_
 #define _EOKAS_UI_MAIN_H_
 
+#include "UIKey.h"
 #include "UIPrimitive.h"
+#include "UIShape.h"
 #include "UIWidget.h"
 #include "UIFrame.h"
 #include "widgets/UIImage.h"

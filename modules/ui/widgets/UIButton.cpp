@@ -38,7 +38,11 @@ namespace eokas
 
     void UIButton::layout(const Rect& rect)
     {
-        this->rect = rect;
+        {
+            Rect _box = rect;
+            shape.size = _box.size;
+            shape.origin = _box.origin + shape.pivot * shape.size;
+        }
         if (!content)
         {
             return;
@@ -55,9 +59,11 @@ namespace eokas
                 {
                     width += font->glyph(t->text.at(i)).advance * scale;
                 }
-                t->rect.size.x = floorf(width + 0.5f);
+                t->shape.origin.x += t->shape.pivot.x * ((floorf(width + 0.5f)) - t->shape.size.x);
+                t->shape.size.x = floorf(width + 0.5f);
                 float tight = font->ascender() - font->descender();
-                t->rect.size.y = floorf(tight * scale + 0.5f);
+                t->shape.origin.y += t->shape.pivot.y * ((floorf(tight * scale + 0.5f)) - t->shape.size.y);
+                t->shape.size.y = floorf(tight * scale + 0.5f);
             }
         }
 
@@ -72,9 +78,9 @@ namespace eokas
             innerH = 0.0f;
         }
         Vector2 pos(
-            paddingX + (innerW - content->rect.size.x) * 0.5f,
-            paddingY + (innerH - content->rect.size.y) * 0.5f);
-        content->layout(Rect(Vector2(floorf(pos.x + 0.5f), floorf(pos.y + 0.5f)), content->rect.size));
+            paddingX + (innerW - content->shape.size.x) * 0.5f,
+            paddingY + (innerH - content->shape.size.y) * 0.5f);
+        content->layout(Rect(Vector2(floorf(pos.x + 0.5f), floorf(pos.y + 0.5f)), content->shape.size));
     }
 
     void UIButton::render(UIPrimitive& primitive)
@@ -84,7 +90,7 @@ namespace eokas
             return;
         }
 
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         Color bg = background;
         if (pressed)
         {
@@ -94,7 +100,7 @@ namespace eokas
         {
             bg = hoverFill;
         }
-        primitive.addQuad(rect, UIFont::solidUV(), bg);
+        primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         primitive.popOrigin();
         UIWidget::render(primitive);
     }

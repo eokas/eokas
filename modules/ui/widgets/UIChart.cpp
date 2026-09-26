@@ -43,10 +43,6 @@ namespace eokas
             return value;
         }
 
-        float axisScale(float value)
-        {
-            return value == 0.0f ? 1.0f : value;
-        }
 
         float cross(const Vector2& a, const Vector2& b, const Vector2& c)
         {
@@ -191,8 +187,8 @@ namespace eokas
         {
             return;
         }
-        float textW = t->rect.size.x;
-        float textH = t->rect.size.y;
+        float textW = t->shape.size.x;
+        float textH = t->shape.size.y;
         UIFont* font = UIFont::find(t->style.fontPath);
         if (font != nullptr && font->isOpen())
         {
@@ -214,8 +210,8 @@ namespace eokas
             textW = floorf(textW + 0.5f);
             textH = floorf((ascender - descender) + 0.5f);
         }
-        float innerW = rect.size.x - labelPadding * 2.0f;
-        float innerH = rect.size.y - labelPadding * 2.0f;
+        float innerW = shape.size.x - labelPadding * 2.0f;
+        float innerH = shape.size.y - labelPadding * 2.0f;
         if (innerW < 0.0f)
         {
             innerW = 0.0f;
@@ -226,7 +222,11 @@ namespace eokas
         }
         float x = labelPadding + (innerW - textW) * 0.5f;
         float y = labelPadding + (innerH - textH) * 0.5f;
-        t->rect = Rect(Vector2(floorf(x + 0.5f), floorf(y + 0.5f)), Vector2(textW, textH));
+        {
+            Rect _box = Rect(Vector2(floorf(x + 0.5f), floorf(y + 0.5f)), Vector2(textW, textH));
+            t->shape.size = _box.size;
+            t->shape.origin = _box.origin + t->shape.pivot * t->shape.size;
+        }
     }
 
     void UIChart::setContour(const std::vector<Vector2>& points)
@@ -234,7 +234,8 @@ namespace eokas
         mContour.clear();
         if (points.empty())
         {
-            rect.size = Vector2::ZERO;
+            shape.origin += shape.pivot * ((Vector2::ZERO) - shape.size);
+            shape.size = Vector2::ZERO;
             return;
         }
         float minX = points[0].x;
@@ -248,8 +249,9 @@ namespace eokas
             maxX = greater(maxX, point.x);
             maxY = greater(maxY, point.y);
         }
-        rect.origin = Vector2(minX, minY);
-        rect.size = Vector2(maxX - minX, maxY - minY);
+        shape.origin = (Vector2(minX, minY)) + shape.pivot * shape.size;
+        shape.origin += shape.pivot * ((Vector2(maxX - minX, maxY - minY)) - shape.size);
+        shape.size = Vector2(maxX - minX, maxY - minY);
         mContour.reserve(points.size());
         for (const Vector2& point : points)
         {
@@ -263,7 +265,7 @@ namespace eokas
         {
             return false;
         }
-        Vector2 local(point.x - rect.origin.x, point.y - rect.origin.y);
+        Vector2 local(point.x - shape.left(), point.y - shape.top());
         bool inside = false;
         for (size_t i = 0, j = mContour.size() - 1; i < mContour.size(); j = i++)
         {
@@ -298,14 +300,12 @@ namespace eokas
 
     UIWidget* UIChart::pick(const Vector2& point)
     {
-        if (!visible || localScale.x == 0.0f || localScale.y == 0.0f)
+        if (!visible || shape.scale.x == 0.0f || shape.scale.y == 0.0f)
         {
             return nullptr;
         }
-        Vector2 local(
-            (point.x - rect.origin.x) / localScale.x,
-            (point.y - rect.origin.y) / localScale.y);
-        if (!this->contains(rect.origin + local))
+        Vector2 local = shape.toLocal(point);
+        if (!this->contains(Vector2(shape.left(), shape.top()) + local))
         {
             return nullptr;
         }
@@ -332,18 +332,14 @@ namespace eokas
         }
     }
 
-    void UIChart::scaleAt(const Vector2& pivot, float value)
+    void UIChart::scaleAt(const Vector2& focal, float value)
     {
-        float previous = localScale.x;
+        float previous = shape.scale.x;
         float next = clampScale(value, minScale, maxScale);
-        float kx = next / axisScale(localScale.x);
-        float ky = next / axisScale(localScale.y);
-        rect.origin.x = pivot.x - (pivot.x - rect.origin.x) * kx;
-        rect.origin.y = pivot.y - (pivot.y - rect.origin.y) * ky;
-        localScale = Vector2(next, next);
+        shape.scaleAround(focal, Vector2(next, next));
         if (next != previous && onZoom)
         {
-            onZoom(value - previous, pivot.x, pivot.y);
+            onZoom(value - previous, focal.x, focal.y);
         }
     }
 
@@ -357,7 +353,7 @@ namespace eokas
         parent.reserve(localPoints.size());
         for (const Vector2& point : localPoints)
         {
-            parent.push_back(rect.origin + point);
+            parent.push_back(Vector2(shape.left(), shape.top()) + point);
         }
         UIStroke::path(primitive, parent, true, stroke);
     }
@@ -368,7 +364,7 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         Color fill = this->activeFill();
         std::vector<Vector2> triangles;
         if (triangulate(mContour, triangles))
@@ -377,7 +373,7 @@ namespace eokas
             vertices.reserve(triangles.size());
             for (const Vector2& point : triangles)
             {
-                vertices.push_back(rect.origin + point);
+                vertices.push_back(Vector2(shape.left(), shape.top()) + point);
             }
             primitive.addTriangles(vertices.data(), (uint32_t)(vertices.size() / 3), UIFont::solidUV(), fill);
         }

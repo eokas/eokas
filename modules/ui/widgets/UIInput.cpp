@@ -254,8 +254,8 @@ namespace eokas
     {
         float insetX = paddingX + border.thickness;
         float insetY = paddingY + border.thickness;
-        float w = rect.size.x - insetX * 2.0f;
-        float h = rect.size.y - insetY * 2.0f;
+        float w = shape.size.x - insetX * 2.0f;
+        float h = shape.size.y - insetY * 2.0f;
         if (w < 0.0f)
         {
             w = 0.0f;
@@ -264,7 +264,7 @@ namespace eokas
         {
             h = 0.0f;
         }
-        return Rect(rect.origin.x + insetX, rect.origin.y + insetY, w, h);
+        return Rect(shape.left() + insetX, shape.top() + insetY, w, h);
     }
 
     String UIInput::sanitize(const String& value) const
@@ -695,11 +695,11 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         this->clampCaret();
         this->ensureCaretVisible();
         Color bg = hovered ? hoverFill : background;
-        primitive.addQuad(rect, UIFont::solidUV(), bg);
+        primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         if (focused)
         {
             this->drawBorder(primitive);
@@ -727,7 +727,7 @@ namespace eokas
 
     void UIInput::drawBorder(UIPrimitive& primitive) const
     {
-        UIStroke::border(primitive, rect, border);
+        UIStroke::border(primitive, Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), border);
     }
 
     void UIInput::drawSelection(UIPrimitive& primitive, const Rect& content) const

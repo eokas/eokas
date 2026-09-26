@@ -28,16 +28,16 @@ namespace eokas
 
     bool UIDiamond::contains(const Vector2& point) const
     {
-        if (rect.size.x <= 0.0f || rect.size.y <= 0.0f)
+        if (shape.size.x <= 0.0f || shape.size.y <= 0.0f)
         {
             return false;
         }
-        Vector2 local(point.x - rect.origin.x, point.y - rect.origin.y);
+        Vector2 local(point.x - shape.left(), point.y - shape.top());
         Vector2 vertex[4] = {
-            Vector2(rect.size.x * 0.5f, 0.0f),
-            Vector2(rect.size.x, rect.size.y * 0.5f),
-            Vector2(rect.size.x * 0.5f, rect.size.y),
-            Vector2(0.0f, rect.size.y * 0.5f)
+            Vector2(shape.size.x * 0.5f, 0.0f),
+            Vector2(shape.size.x, shape.size.y * 0.5f),
+            Vector2(shape.size.x * 0.5f, shape.size.y),
+            Vector2(0.0f, shape.size.y * 0.5f)
         };
         float sign = 0.0f;
         for (int i = 0; i < 4; ++i)
@@ -67,11 +67,11 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
-        if (rect.size.x > 0.0f && rect.size.y > 0.0f)
+        primitive.pushScaleAround(shape.origin, shape.scale);
+        if (shape.size.x > 0.0f && shape.size.y > 0.0f)
         {
             std::vector<Vector2> loop;
-            diamondPoints(rect, 0.0f, loop);
+            diamondPoints(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), 0.0f, loop);
             Vector2 vertices[6] = {
                 loop[0], loop[1], loop[2],
                 loop[0], loop[2], loop[3]
@@ -85,7 +85,7 @@ namespace eokas
             {
                 float pad = (border.thickness + stroke.thickness) * 0.5f;
                 std::vector<Vector2> outer;
-                diamondPoints(rect, pad, outer);
+                diamondPoints(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), pad, outer);
                 UIStroke::path(primitive, outer, true, stroke);
             }
         }

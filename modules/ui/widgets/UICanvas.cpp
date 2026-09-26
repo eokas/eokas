@@ -74,10 +74,6 @@ namespace eokas
             return value;
         }
 
-        float axisScale(float value)
-        {
-            return value == 0.0f ? 1.0f : value;
-        }
     }
 
     UICanvas::UICanvas()
@@ -86,14 +82,10 @@ namespace eokas
         dragable = true;
     }
 
-    void UICanvas::scaleAt(const Vector2& pivot, float value)
+    void UICanvas::scaleAt(const Vector2& focal, float value)
     {
         float next = clampScale(value, minScale, maxScale);
-        float kx = next / axisScale(localScale.x);
-        float ky = next / axisScale(localScale.y);
-        rect.origin.x = pivot.x - (pivot.x - rect.origin.x) * kx;
-        rect.origin.y = pivot.y - (pivot.y - rect.origin.y) * ky;
-        localScale = Vector2(next, next);
+        shape.scaleAround(focal, Vector2(next, next));
         this->refit();
     }
 
@@ -104,12 +96,12 @@ namespace eokas
 
     void UICanvas::layout(const Rect& given)
     {
-        rect.origin = given.origin;
+        shape.origin = (given.origin) + shape.pivot * shape.size;
         for (auto& child : children)
         {
             if (child)
             {
-                child->layout(child->rect);
+                child->layout(Rect(child->shape.left(), child->shape.top(), child->shape.size.x, child->shape.size.y));
             }
         }
         this->refit();
@@ -121,10 +113,10 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         primitive.popOrigin();
         UIWidget::render(primitive);
@@ -143,28 +135,30 @@ namespace eokas
             {
                 continue;
             }
-            expand(minX, minY, maxX, maxY, any, child->finalRect());
+            expand(minX, minY, maxX, maxY, any, child->visualRect());
         }
         if (!any)
         {
-            rect.size = Vector2::ZERO;
+            shape.origin += shape.pivot * ((Vector2::ZERO) - shape.size);
+            shape.size = Vector2::ZERO;
             return;
         }
         if (minX != 0.0f || minY != 0.0f)
         {
-            rect.origin += Vector2(minX, minY) * localScale;
+            shape.origin += Vector2(minX, minY) * shape.scale;
             Vector2 shift(minX, minY);
             for (auto& child : children)
             {
                 if (child)
                 {
-                    child->rect.origin -= shift;
+                    child->shape.origin -= shift;
                 }
             }
             maxX -= minX;
             maxY -= minY;
         }
-        rect.size = Vector2(maxX, maxY);
+        shape.origin += shape.pivot * ((Vector2(maxX, maxY)) - shape.size);
+        shape.size = Vector2(maxX, maxY);
     }
 
     void UICanvas::dragChild(UIWidget* widget, float localX, float localY)
@@ -177,10 +171,10 @@ namespace eokas
         if (mDragWidget != widget)
         {
             mDragWidget = widget;
-            mGrab = local - widget->rect.origin;
+            mGrab = local - Vector2(widget->shape.left(), widget->shape.top());
             return;
         }
-        widget->rect.origin = local - mGrab;
+        widget->shape.origin = (local - mGrab) + widget->shape.pivot * widget->shape.size;
         this->refit();
     }
 
@@ -246,7 +240,7 @@ namespace eokas
             UIWidget::triggerPointerDrag(x, y, button);
             return;
         }
-        rect.origin += local - mGrab;
+        shape.origin += local - mGrab;
         mGrab = local;
         this->refit();
         UIWidget::triggerPointerDrag(x, y, button);

@@ -70,7 +70,11 @@ namespace eokas
 
     void UIDropdownItem::layout(const Rect& rect)
     {
-        this->rect = rect;
+        {
+            Rect _box = rect;
+            shape.size = _box.size;
+            shape.origin = _box.origin + shape.pivot * shape.size;
+        }
         placeLabel(mLabel.get(), Rect(Vector2::ZERO, rect.size), paddingX, paddingY);
     }
 
@@ -80,7 +84,7 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         Color bg = background;
         if (pressed)
         {
@@ -94,7 +98,7 @@ namespace eokas
         {
             bg = selectedFill;
         }
-        primitive.addQuad(rect, UIFont::solidUV(), bg);
+        primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         primitive.popOrigin();
         UIWidget::render(primitive);
     }
@@ -307,7 +311,7 @@ namespace eokas
         {
             return;
         }
-        float rowH = rect.size.y;
+        float rowH = shape.size.y;
         if (rowH < 1.0f)
         {
             rowH = 1.0f;
@@ -315,7 +319,7 @@ namespace eokas
         float y = 0.0f;
         dropdown->visible = expanded && visible;
         dropdown->pickable = pickable;
-        float panelY = snap(rect.size.y);
+        float panelY = snap(shape.size.y);
         for (auto& item : mItems)
         {
             if (!item)
@@ -332,10 +336,10 @@ namespace eokas
             item->pressedFill = itemPressed;
             item->selectedFill = itemSelected;
             this->copyFont(item->label());
-            item->layout(Rect(Vector2(0.0f, snap(y)), Vector2(rect.size.x, rowH)));
+            item->layout(Rect(Vector2(0.0f, snap(y)), Vector2(shape.size.x, rowH)));
             y += rowH;
         }
-        dropdown->layout(Rect(Vector2(0.0f, panelY), Vector2(rect.size.x, rowH * (float)mItems.size())));
+        dropdown->layout(Rect(Vector2(0.0f, panelY), Vector2(shape.size.x, rowH * (float)mItems.size())));
     }
 
     int UIDropdown::neighbor(int direction) const
@@ -371,7 +375,7 @@ namespace eokas
 
     void UIDropdown::layoutCaption()
     {
-        placeLabel(mCaption.get(), Rect(Vector2::ZERO, rect.size), paddingX, paddingY);
+        placeLabel(mCaption.get(), Rect(Vector2::ZERO, shape.size), paddingX, paddingY);
     }
 
     void UIDropdown::drawBorder(UIPrimitive& primitive, const Rect& area) const
@@ -381,13 +385,13 @@ namespace eokas
 
     void UIDropdown::drawChevron(UIPrimitive& primitive) const
     {
-        float s = snap(Math::min_s(rect.size.y * 0.28f, 8.0f));
+        float s = snap(Math::min_s(shape.size.y * 0.28f, 8.0f));
         if (s < 4.0f)
         {
             s = 4.0f;
         }
-        float cx = snap(rect.origin.x + rect.size.x - paddingX - s * 0.5f);
-        float cy = snap(rect.origin.y + rect.size.y * 0.5f);
+        float cx = snap(shape.left() + shape.size.x - paddingX - s * 0.5f);
+        float cy = snap(shape.top() + shape.size.y * 0.5f);
         Rect uv = UIFont::solidUV();
         if (expanded)
         {
@@ -411,7 +415,11 @@ namespace eokas
 
     void UIDropdown::layout(const Rect& rect)
     {
-        this->rect = rect;
+        {
+            Rect _box = rect;
+            shape.size = _box.size;
+            shape.origin = _box.origin + shape.pivot * shape.size;
+        }
         this->syncCaption();
         this->layoutCaption();
         this->syncPopup();
@@ -423,7 +431,7 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         Color bg = background;
         if (pickable && pressed)
         {
@@ -433,8 +441,8 @@ namespace eokas
         {
             bg = hoverFill;
         }
-        primitive.addQuad(rect, UIFont::solidUV(), bg);
-        this->drawBorder(primitive, rect);
+        primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        this->drawBorder(primitive, Rect(shape.left(), shape.top(), shape.size.x, shape.size.y));
         this->drawChevron(primitive);
         primitive.popOrigin();
         UIWidget::render(primitive);

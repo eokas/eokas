@@ -12,7 +12,11 @@ namespace eokas
 
     void UIGrid::layout(const Rect& rect)
     {
-        this->rect = rect;
+        {
+            Rect _box = rect;
+            shape.size = _box.size;
+            shape.origin = _box.origin + shape.pivot * shape.size;
+        }
         int cols = columns < 1 ? 1 : columns;
         float gapX = spacing;
         float gapY = rowSpacing < 0.0f ? spacing : rowSpacing;
@@ -27,9 +31,9 @@ namespace eokas
                 continue;
             }
             items.push_back(child.get());
-            if (child->rect.size.x > maxW)
+            if (child->shape.size.x > maxW)
             {
-                maxW = child->rect.size.x;
+                maxW = child->shape.size.x;
             }
         }
 
@@ -71,10 +75,10 @@ namespace eokas
                 }
                 UIWidget* item = items[index];
                 Vector2 cell(pad + (cellW + gapX) * (float)col, y);
-                item->layout(Rect(Vector2(floorf(cell.x + 0.5f), floorf(cell.y + 0.5f)), item->rect.size));
-                if (cellHeight <= 0.0f && item->rect.size.y > rowH)
+                item->layout(Rect(Vector2(floorf(cell.x + 0.5f), floorf(cell.y + 0.5f)), item->shape.size));
+                if (cellHeight <= 0.0f && item->shape.size.y > rowH)
                 {
-                    rowH = item->rect.size.y;
+                    rowH = item->shape.size.y;
                 }
             }
             y += rowH;
@@ -83,11 +87,13 @@ namespace eokas
         if (rect.size.x <= 0.0f)
         {
             float gaps = cols > 1 ? gapX * (float)(cols - 1) : 0.0f;
-            this->rect.size.x = pad * 2.0f + cellW * (float)cols + gaps;
+            shape.origin.x += shape.pivot.x * ((pad * 2.0f + cellW * (float)cols + gaps) - shape.size.x);
+            shape.size.x = pad * 2.0f + cellW * (float)cols + gaps;
         }
         if (rect.size.y <= 0.0f)
         {
-            this->rect.size.y = y + pad;
+            shape.origin.y += shape.pivot.y * ((y + pad) - shape.size.y);
+            shape.size.y = y + pad;
         }
     }
 
@@ -107,17 +113,17 @@ namespace eokas
                 continue;
             }
             items.push_back(child.get());
-            if (child->rect.size.x > maxW)
+            if (child->shape.size.x > maxW)
             {
-                maxW = child->rect.size.x;
+                maxW = child->shape.size.x;
             }
         }
 
         float cellW = cellWidth;
-        bool writeWidth = cellW > 0.0f || rect.size.x <= 0.0f;
+        bool writeWidth = cellW > 0.0f || shape.size.x <= 0.0f;
         if (cellW <= 0.0f)
         {
-            float innerW = rect.size.x - pad * 2.0f;
+            float innerW = shape.size.x - pad * 2.0f;
             if (innerW > 0.0f)
             {
                 float gaps = gapX * (float)(cols - 1);
@@ -152,21 +158,23 @@ namespace eokas
                     {
                         break;
                     }
-                    if (items[index]->rect.size.y > rowH)
+                    if (items[index]->shape.size.y > rowH)
                     {
-                        rowH = items[index]->rect.size.y;
+                        rowH = items[index]->shape.size.y;
                     }
                 }
             }
             contentH += rowH;
         }
         contentH += pad;
-        rect.size.y = contentH;
+        shape.origin.y += shape.pivot.y * ((contentH) - shape.size.y);
+        shape.size.y = contentH;
 
         if (writeWidth)
         {
             float gaps = cols > 1 ? gapX * (float)(cols - 1) : 0.0f;
-            rect.size.x = pad * 2.0f + cellW * (float)cols + gaps;
+            shape.origin.x += shape.pivot.x * ((pad * 2.0f + cellW * (float)cols + gaps) - shape.size.x);
+            shape.size.x = pad * 2.0f + cellW * (float)cols + gaps;
         }
     }
 
@@ -176,10 +184,10 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         if (color.a > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), color);
+            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         primitive.popOrigin();
         UIWidget::render(primitive);

@@ -22,15 +22,15 @@ namespace eokas
         {
             return;
         }
-        primitive.pushScaleAround(rect.origin, localScale);
-        if (rect.size.x > 0.0f && rect.size.y > 0.0f)
+        primitive.pushScaleAround(shape.origin, shape.scale);
+        if (shape.size.x > 0.0f && shape.size.y > 0.0f)
         {
-            primitive.addQuad(rect, UIFont::solidUV(), this->activeFill());
+            primitive.addQuad(Rect(shape.left(), shape.top(), shape.size.x, shape.size.y), UIFont::solidUV(), this->activeFill());
             std::vector<Vector2> loop;
-            loop.push_back(rect.origin);
-            loop.push_back(rect.origin + Vector2(rect.size.x, 0.0f));
-            loop.push_back(rect.origin + rect.size);
-            loop.push_back(rect.origin + Vector2(0.0f, rect.size.y));
+            loop.push_back(Vector2(shape.left(), shape.top()));
+            loop.push_back(Vector2(shape.left(), shape.top()) + Vector2(shape.size.x, 0.0f));
+            loop.push_back(Vector2(shape.left(), shape.top()) + shape.size);
+            loop.push_back(Vector2(shape.left(), shape.top()) + Vector2(0.0f, shape.size.y));
             if (border.thickness > 0.0f)
             {
                 UIStroke::path(primitive, loop, true, border);
@@ -39,10 +39,10 @@ namespace eokas
             {
                 float pad = (border.thickness + stroke.thickness) * 0.5f;
                 std::vector<Vector2> outer;
-                outer.push_back(rect.origin + Vector2(-pad, -pad));
-                outer.push_back(rect.origin + Vector2(rect.size.x + pad, -pad));
-                outer.push_back(rect.origin + Vector2(rect.size.x + pad, rect.size.y + pad));
-                outer.push_back(rect.origin + Vector2(-pad, rect.size.y + pad));
+                outer.push_back(Vector2(shape.left(), shape.top()) + Vector2(-pad, -pad));
+                outer.push_back(Vector2(shape.left(), shape.top()) + Vector2(shape.size.x + pad, -pad));
+                outer.push_back(Vector2(shape.left(), shape.top()) + Vector2(shape.size.x + pad, shape.size.y + pad));
+                outer.push_back(Vector2(shape.left(), shape.top()) + Vector2(-pad, shape.size.y + pad));
                 UIStroke::path(primitive, outer, true, stroke);
             }
         }

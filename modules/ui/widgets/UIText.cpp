@@ -12,13 +12,13 @@ namespace eokas
             return;
         }
 
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         float scale = 1.0f;
         float ascender = 0.0f;
         float descender = 0.0f;
         font->drawMetrics(style.fontSize, scale, ascender, descender);
-        float baseline = floorf(rect.origin.y + ascender + 0.5f);
-        float cursorX = floorf(rect.origin.x + 0.5f);
+        float baseline = floorf(shape.top() + ascender + 0.5f);
+        float cursorX = floorf(shape.left() + 0.5f);
         size_t index = 0;
         while (index < text.length())
         {

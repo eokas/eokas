@@ -20,7 +20,7 @@ namespace eokas
 
         Vector2 chartCenter(const UIChart* chart)
         {
-            return chart->rect.origin + chart->rect.size * 0.5f;
+            return Vector2(chart->shape.left(), chart->shape.top()) + chart->shape.size * 0.5f;
         }
 
         UIAnchor resolvedAnchor(const UIChart* chart, UIAnchor anchor, const Vector2& other)
@@ -62,7 +62,7 @@ namespace eokas
 
         Vector2 anchorPoint(const UIChart* chart, UIAnchor anchor, const Vector2& other)
         {
-            Rect area = chart->rect;
+            Rect area = Rect(chart->shape.left(), chart->shape.top(), chart->shape.size.x, chart->shape.size.y);
             Vector2 center = chartCenter(chart);
             UIAnchor side = resolvedAnchor(chart, anchor, other);
             if (side == UIAnchor::Top)
@@ -241,7 +241,8 @@ namespace eokas
         mLocal.clear();
         if (parentPoints.empty())
         {
-            rect.size = Vector2::ZERO;
+            shape.origin += shape.pivot * ((Vector2::ZERO) - shape.size);
+            shape.size = Vector2::ZERO;
             return;
         }
         float minX = parentPoints[0].x;
@@ -255,8 +256,9 @@ namespace eokas
             maxX = greater(maxX, point.x);
             maxY = greater(maxY, point.y);
         }
-        rect.origin = Vector2(minX, minY);
-        rect.size = Vector2(maxX - minX, maxY - minY);
+        shape.origin = (Vector2(minX, minY)) + shape.pivot * shape.size;
+        shape.origin += shape.pivot * ((Vector2(maxX - minX, maxY - minY)) - shape.size);
+        shape.size = Vector2(maxX - minX, maxY - minY);
         mLocal.reserve(parentPoints.size());
         for (const Vector2& point : parentPoints)
         {
@@ -271,7 +273,7 @@ namespace eokas
         raw.reserve(mLocal.size());
         for (const Vector2& point : mLocal)
         {
-            raw.push_back(rect.origin + point);
+            raw.push_back(Vector2(shape.left(), shape.top()) + point);
         }
         if (kind == UIPathKind::Straight)
         {
@@ -289,7 +291,7 @@ namespace eokas
             parent = raw;
         }
 
-        Vector2 startOther = parent.empty() ? rect.origin : parent.back();
+        Vector2 startOther = parent.empty() ? Vector2(shape.left(), shape.top()) : parent.back();
         if (end.target != nullptr)
         {
             startOther = chartCenter(end.target);
@@ -306,7 +308,7 @@ namespace eokas
                 parent.front() = point;
             }
         }
-        Vector2 endOther = parent.empty() ? rect.origin : parent.front();
+        Vector2 endOther = parent.empty() ? Vector2(shape.left(), shape.top()) : parent.front();
         if (end.target != nullptr)
         {
             Vector2 point = anchorPoint(end.target, end.anchor, endOther);
@@ -366,13 +368,14 @@ namespace eokas
             maxY = greater(maxY, point.y);
         }
         Vector2 newOrigin(minX, minY);
-        Vector2 delta = rect.origin - newOrigin;
+        Vector2 delta = Vector2(shape.left(), shape.top()) - newOrigin;
         for (Vector2& point : mLocal)
         {
             point += delta;
         }
-        rect.origin = newOrigin;
-        rect.size = Vector2(maxX - minX, maxY - minY);
+        shape.origin = (newOrigin) + shape.pivot * shape.size;
+        shape.origin += shape.pivot * ((Vector2(maxX - minX, maxY - minY)) - shape.size);
+        shape.size = Vector2(maxX - minX, maxY - minY);
     }
 
     bool UILink::contains(const Vector2& point) const
@@ -404,7 +407,7 @@ namespace eokas
         std::vector<Vector2> parent;
         this->resolve(parent);
         this->syncBounds(parent);
-        primitive.pushScaleAround(rect.origin, localScale);
+        primitive.pushScaleAround(shape.origin, shape.scale);
         if (parent.size() >= 2)
         {
             std::vector<Vector2> stroked = parent;
