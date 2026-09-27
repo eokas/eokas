@@ -408,7 +408,7 @@ namespace eokas
         std::vector<Vector2> parent;
         this->resolve(parent);
         this->syncBounds(parent);
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         Matrix3 inverse = shape.localTrans().inverse();
         if (parent.size() >= 2)
         {

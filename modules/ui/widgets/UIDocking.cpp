@@ -75,12 +75,6 @@ namespace eokas
             else primitive.addQuad(world, Rect(sx, sy, span, 1.0f), solid, color);
         }
 
-        Matrix3 layoutWorld(const UIShape& shape)
-        {
-            Matrix3 shift = Matrix3::translation(Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y));
-            return Matrix3::transform(shift, shape.worldTrans());
-        }
-
         Vector2 layoutCorner(const UIShape& shape)
         {
             return shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
@@ -245,12 +239,18 @@ namespace eokas
         if (!mHead) return;
         mHead->pickable = true;
         mHead->onPointerPress = [this]() { this->mSuppressClick = false; this->mDragging = false; };
-        mHead->onPointerDrag = [this](float, float, int button)
+        mHead->onDrag = [this](const Vector2& position, const Vector2&)
         {
-            if (button != 0 || !this->mHead) return;
+            if (!this->mHead) return;
             this->mDragging = true;
             bool engaged = false;
-            if (this->onDrag) engaged = this->onDrag(*this, this->mHead->framePointer.x, this->mHead->framePointer.y, button);
+            Matrix3 parent = Matrix3::IDENTITY;
+            if (this->mHead->parent != nullptr)
+            {
+                parent = this->mHead->parent->pivotToScreen();
+            }
+            Vector2 screen = UIShape::transformPoint(parent, position);
+            if (this->onDrag) engaged = this->onDrag(*this, screen.x, screen.y, 0);
             if (engaged) this->mSuppressClick = true;
         };
         mHead->onPointerRelease = [this]()
@@ -274,7 +274,7 @@ namespace eokas
     {
         if (!mHead) return;
         mHead->onPointerPress = nullptr;
-        mHead->onPointerDrag = nullptr;
+        mHead->onDrag = nullptr;
         mHead->onPointerRelease = nullptr;
         mHead->onClick = nullptr;
     }
@@ -335,7 +335,7 @@ namespace eokas
         if (!visible) return;
         if (mSpace == nullptr)
         {
-            shape.parent = nullptr;
+            parent = nullptr;
             float headH = 28.0f;
             if (mHead && mHead->shape.size.y > 0.0f) headH = snap(mHead->shape.size.y);
             float w = snap(shape.size.x);
@@ -356,24 +356,24 @@ namespace eokas
             mHead->color = activeFill;
             recolor = true;
         }
-        if (mHead) mHead->shape.parent = &shape;
-        if (mBody) mBody->shape.parent = &shape;
-        primitive.pushClip(shape.bounds(shape.worldTrans()));
+        if (mHead) mHead->parent = this;
+        if (mBody) mBody->parent = this;
+        primitive.pushClip(shape.bounds(worldTrans()));
         if (mBody && mBody->visible && color.a > 0.0f)
         {
-            primitive.addQuad(mBody->shape.worldTrans(), Rect(0.0f, 0.0f, mBody->shape.size.x, mBody->shape.size.y), solid, color);
+            primitive.addQuad(mBody->worldTrans(), Rect(0.0f, 0.0f, mBody->shape.size.x, mBody->shape.size.y), solid, color);
         }
         if (mHead && mHead->visible && mHead->color.a > 0.0f)
         {
-            primitive.addQuad(mHead->shape.worldTrans(), Rect(0.0f, 0.0f, mHead->shape.size.x, mHead->shape.size.y), solid, mHead->color);
+            primitive.addQuad(mHead->worldTrans(), Rect(0.0f, 0.0f, mHead->shape.size.x, mHead->shape.size.y), solid, mHead->color);
         }
         if (mBody && mBody->visible)
         {
-            if (!primitive.outsideClip(mBody->shape.bounds(mBody->shape.worldTrans()))) mBody->render(primitive);
+            if (!primitive.outsideClip(mBody->shape.bounds(mBody->worldTrans()))) mBody->render(primitive);
         }
         if (mHead && mHead->visible)
         {
-            primitive.pushClip(mHead->shape.bounds(mHead->shape.worldTrans()));
+            primitive.pushClip(mHead->shape.bounds(mHead->worldTrans()));
             mHead->UIWidget::render(primitive);
             primitive.popClip();
             float hw = snap(mHead->shape.size.x);
@@ -382,7 +382,7 @@ namespace eokas
             if (hh < 0.0f) hh = 0.0f;
             if (mSpace == nullptr && hh >= 1.0f)
             {
-                hairline(primitive, mHead->shape.worldTrans(), 0.0f, hh - 1.0f, hw, false, Color(0.55f, 0.58f, 0.66f, 1.0f));
+                hairline(primitive, mHead->worldTrans(), 0.0f, hh - 1.0f, hw, false, Color(0.55f, 0.58f, 0.66f, 1.0f));
             }
         }
         primitive.popClip();
@@ -408,7 +408,7 @@ namespace eokas
 
     Rect UIDockSpace::toScreen(const Rect& layout) const
     {
-        Rect client = layoutBounds(layoutWorld(shape), layout);
+        Rect client = layoutBounds(pivotToScreen(), layout);
         if (mScreenMapper) return mScreenMapper(client);
         return client;
     }
@@ -626,7 +626,7 @@ namespace eokas
     Vector2 UIDockSpace::pointerLocal(float x, float y) const
     {
         if (shape.scale.x == 0.0f || shape.scale.y == 0.0f) return Vector2::ZERO;
-        return UIShape::transformPoint(layoutWorld(shape).inverse(), Vector2(x, y));
+        return UIShape::transformPoint(pivotToScreen().inverse(), Vector2(x, y));
     }
 
     Vector2 UIDockSpace::layoutFromScreen(float screenX, float screenY) const
@@ -969,7 +969,7 @@ namespace eokas
     void UIDockSpace::renderNode(Node* node, UIPrimitive& primitive)
     {
         if (!node) return;
-        Matrix3 world = layoutWorld(shape);
+        Matrix3 world = pivotToScreen();
         if (node->split)
         {
             this->renderNode(node->first.get(), primitive);
@@ -1007,13 +1007,13 @@ namespace eokas
             if (i == node->active) continue;
             if (node->pages[i])
             {
-                node->pages[i]->shape.parent = &shape;
+                node->pages[i]->parent = this;
                 node->pages[i]->render(primitive);
             }
         }
         if (node->active >= 0 && node->active < (int)node->pages.size() && node->pages[node->active])
         {
-            node->pages[node->active]->shape.parent = &shape;
+            node->pages[node->active]->parent = this;
             node->pages[node->active]->render(primitive);
         }
         if (!node->pages.empty())
@@ -1055,7 +1055,7 @@ namespace eokas
     {
         if (!visible) return;
         this->layoutTree();
-        Matrix3 world = layoutWorld(shape);
+        Matrix3 world = pivotToScreen();
         Rect layout(-shape.pivot.x * shape.size.x, -shape.pivot.y * shape.size.y, shape.size.x, shape.size.y);
         primitive.pushClip(layoutBounds(world, layout));
         this->renderNode(mRoot.get(), primitive);
@@ -1067,10 +1067,15 @@ namespace eokas
         primitive.popClip();
     }
 
-    void UIDockSpace::triggerPointerDrag(float x, float y, int button)
+    void UIDockSpace::triggerPointerMove(const Vector2& position, const Vector2& delta)
     {
-        if (button != 0) return;
-        Vector2 local = this->pointerLocal(x, y);
+        (void)delta;
+        UIWidget::triggerPointerMove(position, delta);
+        if (!pressed)
+        {
+            return;
+        }
+        Vector2 local = this->pointerLocal(position.x, position.y);
         if (!mSplitterTracking)
         {
             mDragSplitter = this->findSplitter(mRoot.get(), local, 0.0f);

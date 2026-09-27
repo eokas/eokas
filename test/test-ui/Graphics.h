@@ -37,7 +37,7 @@ namespace eokas::ui {
         std::vector<std::unique_ptr<FloatWindow>> mClosingFloatWindows;
         std::unique_ptr<UIApp> mHost;
         Space mSpace;
-        UIFrame* mFrame = nullptr;
+        UIWindow* mWindow = nullptr;
         std::shared_ptr<UIMenu> mMenu;
         std::shared_ptr<UIView> mView;
         std::shared_ptr<UIDockSpace> mDock;
@@ -47,7 +47,7 @@ namespace eokas::ui {
         float mClientHeight = 0.0f;
 
     public:
-        UIFrame& frame() { return *mFrame; }
+        UIWindow& window() { return *mWindow; }
 
         bool splitterCursor(HWND hwnd, float x, float y, bool& vertical) const
         {
@@ -81,7 +81,7 @@ namespace eokas::ui {
                     if (item && item->hwnd == handle) item->screenRect = screenRect;
                 }
             };
-            mFrame = &mHost->open(windowHandle, (uint32_t)windowWidth, (uint32_t)windowHeight);
+            mWindow = &mHost->open(windowHandle, (uint32_t)windowWidth, (uint32_t)windowHeight);
             const char* fallbacks[] = {
                 "C:/Windows/Fonts/msyh.ttc",
                 "C:/Windows/Fonts/msyh.ttf",
@@ -695,7 +695,7 @@ namespace eokas::ui {
             page->refit();
             view->addChild(page);
 
-            mFrame->setRoot(root);
+            mWindow->setRoot(root);
             mHost->prepare();
 
             fileItem->syncSize();
@@ -1189,7 +1189,7 @@ namespace eokas::ui {
             mSpace.clearColor = canvas;
             mSpace.add(camera);
             mSpace.activeCamera = camera;
-            mSpace.add(mFrame->primitive());
+            mSpace.add(mWindow->primitive());
         }
 
         void* createFloatingWindow(const Rect& screenRect)
@@ -1260,7 +1260,7 @@ namespace eokas::ui {
             return false;
         }
 
-        UIFrame* floatingFrame(HWND hwnd)
+        UIWindow* floatingWindow(HWND hwnd)
         {
             if (!mHost) return nullptr;
             for (auto& item : mFloatWindows)
@@ -1291,8 +1291,8 @@ namespace eokas::ui {
             for (auto& item : mFloatWindows)
             {
                 if (!item || !item->surface || !item->camera || !item->hwnd) continue;
-                UIFrame* frame = mHost->find(item->hwnd);
-                if (!frame || !frame->root()) continue;
+                UIWindow* uiWindow = mHost->find(item->hwnd);
+                if (!uiWindow || !uiWindow->root()) continue;
                 RECT client = {};
                 GetClientRect(item->hwnd, &client);
                 float w = (float)(client.right - client.left);
@@ -1304,10 +1304,10 @@ namespace eokas::ui {
                 item->camera->viewport.bottom = h;
                 if (!item->shapeReady)
                 {
-                    item->space.add(frame->primitive());
+                    item->space.add(uiWindow->primitive());
                     item->shapeReady = true;
                 }
-                frame->flush();
+                uiWindow->flush();
             }
         }
 
@@ -1317,8 +1317,8 @@ namespace eokas::ui {
             for (auto& item : mFloatWindows)
             {
                 if (!item || !item->surface || !item->camera || !item->hwnd) continue;
-                UIFrame* frame = mHost->find(item->hwnd);
-                if (!frame || !frame->root()) continue;
+                UIWindow* uiWindow = mHost->find(item->hwnd);
+                if (!uiWindow || !uiWindow->root()) continue;
                 if (!item->shown)
                 {
                     mRenderer.render(item->surface, item->space);
@@ -1337,7 +1337,7 @@ namespace eokas::ui {
                 this->flushClosingFloatWindows();
                 mHost->flushClosing();
                 mHost->close(mHostWindow);
-                mFrame = nullptr;
+                mWindow = nullptr;
             }
             mRenderer.detach(mSurface);
         }
@@ -1360,7 +1360,7 @@ namespace eokas::ui {
                 setBox(mDock, Rect(0.0f, top, mClientWidth, mClientHeight - top));
             }
 
-            if (mFrame) mFrame->flush();
+            if (mWindow) mWindow->flush();
             this->flushFloatingWindows();
             if (mHost) mHost->publishAtlas();
             mRenderer.render(mSurface, mSpace);

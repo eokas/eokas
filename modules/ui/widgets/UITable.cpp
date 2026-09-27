@@ -226,7 +226,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         if (color.a > 0.0f)
         {
             primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
@@ -497,13 +497,13 @@ namespace eokas
         return item->content();
     }
 
-    void UITableRow::triggerClick()
+    void UITableRow::triggerPointerRelease()
     {
-        if (this->rowCount() > 0)
+        if (pressed && this->rowCount() > 0)
         {
             this->setExpanded(!this->expanded());
         }
-        UIWidget::triggerClick();
+        UIWidget::triggerPointerRelease();
     }
 
     UITable::UITable()
@@ -953,7 +953,7 @@ namespace eokas
         this->arrange();
         if (color.a > 0.0f)
         {
-            primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

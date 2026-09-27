@@ -1,5 +1,5 @@
-#ifndef _EOKAS_UI_FRAME_H_
-#define _EOKAS_UI_FRAME_H_
+#ifndef _EOKAS_UI_WINDOW_H_
+#define _EOKAS_UI_WINDOW_H_
 
 #include "UIWidget.h"
 #include "UIPrimitive.h"
@@ -10,7 +10,7 @@ namespace eokas
 {
     class UICanvas;
 
-    class UIFrame
+    class UIWindow
     {
     public:
         void init(uint32_t width, uint32_t height);
@@ -36,6 +36,7 @@ namespace eokas
         bool collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const;
         UIWidget* dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const;
         void dispatchDrag(float x, float y);
+        void dispatchPointer(UIWidget* widget, float x, float y);
         bool routeWheel(UIWidget* widget, const Vector2& point, const Vector2& delta);
         bool routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& delta);
         void endCanvasDrag(UIWidget* widget);
@@ -55,8 +56,11 @@ namespace eokas
         float mPressX = 0.0f;
         float mPressY = 0.0f;
         bool mDragged = false;
+        Vector2 mLastLocal { 0.0f, 0.0f };
+        UIWidget* mLastWidget = nullptr;
+        bool mHasLocal = false;
         UIWidget* mFocused = nullptr;
     };
 }
 
-#endif//_EOKAS_UI_FRAME_H_
+#endif//_EOKAS_UI_WINDOW_H_

@@ -1,7 +1,7 @@
 #ifndef _EOKAS_UI_APP_H_
 #define _EOKAS_UI_APP_H_
 
-#include "UIFrame.h"
+#include "UIWindow.h"
 #include "widgets/UIDocking.h"
 #include "UIFont.h"
 #include <functional>
@@ -19,16 +19,16 @@ namespace eokas
         ~UIApp();
 
         std::function<void*(const Rect& rect)> onCreateWindow;
-        std::function<void(void* window, const Rect& rect)> onPlaceWindow;
-        std::function<void(void* window)> onDestroyWindow;
+        std::function<void(void* nativeWindow, const Rect& rect)> onPlaceWindow;
+        std::function<void(void* nativeWindow)> onDestroyWindow;
 
-        UIFrame& open(void* window, uint32_t width, uint32_t height);
-        void close(void* window);
-        UIFrame* find(void* window);
+        UIWindow& open(void* nativeWindow, uint32_t width, uint32_t height);
+        void close(void* nativeWindow);
+        UIWindow* find(void* nativeWindow);
         void setFallbackFontPath(const char* path);
         void prepare();
         void publishAtlas();
-        void layout(void* window, float width, float height);
+        void layout(void* nativeWindow, float width, float height);
         void flushClosing();
 
         void registerSpace(UIDockSpace* space);
@@ -39,15 +39,15 @@ namespace eokas
     private:
         struct Slot
         {
-            void* window = nullptr;
-            std::unique_ptr<UIFrame> frame;
+            void* nativeWindow = nullptr;
+            std::unique_ptr<UIWindow> uiWindow;
             std::shared_ptr<UIDockPage> page;
             Rect screenRect;
         };
 
         std::vector<Slot> mWindows;
         std::vector<Slot> mFloating;
-        std::vector<std::unique_ptr<UIFrame>> mClosing;
+        std::vector<std::unique_ptr<UIWindow>> mClosing;
         std::vector<UIDockSpace*> mSpaces;
         std::vector<std::unique_ptr<UIFont>> mFonts;
         String mFallbackFontPath;
@@ -62,10 +62,11 @@ namespace eokas
         float mDragSlop = 4.0f;
         UIDockSpace* mPreviewSpace = nullptr;
         bool mHostDrag = false;
+        bool mReleasing = false;
 
-        std::vector<UIFrame*> liveFrames();
+        std::vector<UIWindow*> liveWindows();
         Slot* slotOf(UIDockPage* page);
-        void destroySlot(Slot& slot, bool deferFrame);
+        void destroySlot(Slot& slot, bool deferWindow);
         void closeFonts();
         void toScreenPoint(UIDockPage* page, float x, float y, float& screenX, float& screenY);
         void beginFloat(UIDockPage* page, float screenX, float screenY);

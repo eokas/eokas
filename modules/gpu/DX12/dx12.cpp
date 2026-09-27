@@ -960,6 +960,32 @@ namespace eokas
         _ThrowIfFailed(dxDevice->CreateCommandList(
             0, D3D12_COMMAND_LIST_TYPE_DIRECT, dxCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList)));
     }
+
+    DX12CommandBuffer::~DX12CommandBuffer()
+    {
+        if (mCommandList && !mClosed)
+        {
+            mCommandList->Close();
+            mClosed = true;
+        }
+    }
+
+    void DX12CommandBuffer::releaseResourceReferences()
+    {
+        mUploadResources.clear();
+        mCurrentPipeline.reset();
+        if (!mCommandList)
+            return;
+        if (!mClosed)
+        {
+            _ThrowIfFailed(mCommandList->Close());
+            mClosed = true;
+        }
+        auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameIndex];
+        _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), nullptr));
+        _ThrowIfFailed(mCommandList->Close());
+        mClosed = true;
+    }
     
     void DX12CommandBuffer::reset()
     {
@@ -971,6 +997,7 @@ namespace eokas
             pso = current->mPipelineState.Get();
         }
         _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), pso));
+        mClosed = false;
         if (mCurrentPipeline)
         {
             setPipelineObject(mCurrentPipeline);
@@ -1219,6 +1246,7 @@ namespace eokas
     void DX12CommandBuffer::finish()
     {
         _ThrowIfFailed(mCommandList->Close());
+        mClosed = true;
     }
     
     void DX12CommandBuffer::fillTexture(Texture::Ref target, const std::vector<uint8_t>& source)
@@ -1413,7 +1441,7 @@ namespace eokas
 
     DX12Surface::~DX12Surface()
     {
-        mDevice.waitForGPU();
+        mDevice.releaseSurfaceResources();
         for (uint32_t i = 0; i < kFrameCount; i++)
         {
             mRenderTargets[i].reset();
@@ -1528,7 +1556,7 @@ namespace eokas
 
     void DX12Surface::resize(uint32_t width, uint32_t height)
     {
-        mDevice.waitForGPU();
+        mDevice.releaseSurfaceResources();
         for (uint32_t i = 0; i < kFrameCount; i++)
         {
             mRenderTargets[i].reset();
@@ -1594,7 +1622,9 @@ namespace eokas
 
     CommandBuffer::Ref DX12Device::createCommandBuffer()
     {
-        return std::make_shared<DX12CommandBuffer>(*this);
+        auto commandBuffer = std::make_shared<DX12CommandBuffer>(*this);
+        mCommandBuffers.push_back(commandBuffer);
+        return commandBuffer;
     }
     
     void DX12Device::commitCommandBuffer(const CommandBuffer::Ref commandBuffer)
@@ -1604,6 +1634,36 @@ namespace eokas
         mCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
     }
     
+    void DX12Device::releaseSurfaceResources()
+    {
+        // Recorded command lists and allocators keep references to swapchain
+        // buffers until both are reset. Drop those references before the caller
+        // releases the back buffers.
+        const UINT64 waitValue = mFenceValues[mFrameIndex];
+        _ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), waitValue));
+        if (mFence->GetCompletedValue() < waitValue)
+        {
+            _ThrowIfFailed(mFence->SetEventOnCompletion(waitValue, mFenceEvent));
+            WaitForSingleObject(mFenceEvent, INFINITE);
+        }
+        mFenceValues[mFrameIndex] = waitValue + 1;
+
+        for (auto it = mCommandBuffers.begin(); it != mCommandBuffers.end();)
+        {
+            std::shared_ptr<DX12CommandBuffer> commandBuffer = it->lock();
+            if (!commandBuffer)
+            {
+                it = mCommandBuffers.erase(it);
+                continue;
+            }
+            commandBuffer->releaseResourceReferences();
+            ++it;
+        }
+
+        for (uint32_t i = 0; i < kFrameCount; ++i)
+            _ThrowIfFailed(mCommandAllocators[i]->Reset());
+    }
+
     void DX12Device::waitForGPU()
     {
         const UINT64 currentFenceValue = mFenceValues[mFrameIndex];

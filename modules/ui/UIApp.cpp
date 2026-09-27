@@ -5,6 +5,16 @@
 #include <map>
 #include <stdexcept>
 
+namespace
+{
+    struct ReleaseGuard
+    {
+        bool& flag;
+        explicit ReleaseGuard(bool& value) : flag(value) { flag = true; }
+        ~ReleaseGuard() { flag = false; }
+    };
+}
+
 namespace eokas
 {
     UIApp::~UIApp()
@@ -12,9 +22,9 @@ namespace eokas
         this->closeAll();
         for (auto& slot : mWindows)
         {
-            if (slot.frame)
+            if (slot.uiWindow)
             {
-                slot.frame->quit();
+                slot.uiWindow->quit();
             }
         }
         mWindows.clear();
@@ -22,47 +32,47 @@ namespace eokas
         this->closeFonts();
     }
 
-    UIFrame& UIApp::open(void* window, uint32_t width, uint32_t height)
+    UIWindow& UIApp::open(void* nativeWindow, uint32_t width, uint32_t height)
     {
         Slot slot;
-        slot.window = window;
-        slot.frame = std::make_unique<UIFrame>();
-        slot.frame->init(width, height);
+        slot.nativeWindow = nativeWindow;
+        slot.uiWindow = std::make_unique<UIWindow>();
+        slot.uiWindow->init(width, height);
         mWindows.push_back(std::move(slot));
-        return *mWindows.back().frame;
+        return *mWindows.back().uiWindow;
     }
 
-    void UIApp::close(void* window)
+    void UIApp::close(void* nativeWindow)
     {
         for (auto it = mWindows.begin(); it != mWindows.end(); ++it)
         {
-            if (it->window != window)
+            if (it->nativeWindow != nativeWindow)
             {
                 continue;
             }
-            if (it->frame)
+            if (it->uiWindow)
             {
-                it->frame->quit();
+                it->uiWindow->quit();
             }
             mWindows.erase(it);
             return;
         }
     }
 
-    UIFrame* UIApp::find(void* window)
+    UIWindow* UIApp::find(void* nativeWindow)
     {
         for (auto& slot : mWindows)
         {
-            if (slot.window == window && slot.frame)
+            if (slot.nativeWindow == nativeWindow && slot.uiWindow)
             {
-                return slot.frame.get();
+                return slot.uiWindow.get();
             }
         }
         for (auto& slot : mFloating)
         {
-            if (slot.window == window && slot.frame)
+            if (slot.nativeWindow == nativeWindow && slot.uiWindow)
             {
-                return slot.frame.get();
+                return slot.uiWindow.get();
             }
         }
         return nullptr;
@@ -78,13 +88,13 @@ namespace eokas
         this->closeFonts();
 
         std::vector<UIText*> texts;
-        for (UIFrame* frame : this->liveFrames())
+        for (UIWindow* uiWindow : this->liveWindows())
         {
-            if (frame == nullptr || !frame->root())
+            if (uiWindow == nullptr || !uiWindow->root())
             {
                 continue;
             }
-            this->collectTexts(frame->root().get(), texts);
+            this->collectTexts(uiWindow->root().get(), texts);
         }
 
         std::map<String, std::vector<UIText*>> groups;
@@ -119,13 +129,13 @@ namespace eokas
             return;
         }
         UIFont* font = mFonts.front().get();
-        for (UIFrame* frame : this->liveFrames())
+        for (UIWindow* uiWindow : this->liveWindows())
         {
-            if (frame == nullptr)
+            if (uiWindow == nullptr)
             {
                 continue;
             }
-            if (UIPrimitive::Ref primitive = frame->primitive())
+            if (UIPrimitive::Ref primitive = uiWindow->primitive())
             {
                 primitive->setPendingUpload(font->atlasRgba(), font->atlasSize());
             }
@@ -146,16 +156,16 @@ namespace eokas
         {
             return;
         }
-        std::vector<UIFrame*> frames = this->liveFrames();
+        std::vector<UIWindow*> uiWindows = this->liveWindows();
         for (UIFont* font : dirty)
         {
-            for (UIFrame* frame : frames)
+            for (UIWindow* uiWindow : uiWindows)
             {
-                if (frame == nullptr)
+                if (uiWindow == nullptr)
                 {
                     continue;
                 }
-                if (UIPrimitive::Ref primitive = frame->primitive())
+                if (UIPrimitive::Ref primitive = uiWindow->primitive())
                 {
                     primitive->setPendingUpload(font->atlasRgba(), font->atlasSize());
                 }
@@ -163,11 +173,11 @@ namespace eokas
         }
     }
 
-    void UIApp::layout(void* window, float width, float height)
+    void UIApp::layout(void* nativeWindow, float width, float height)
     {
         for (auto& slot : mFloating)
         {
-            if (slot.window != window || !slot.page)
+            if (slot.nativeWindow != nativeWindow || !slot.page)
             {
                 continue;
             }
@@ -180,11 +190,11 @@ namespace eokas
     {
         auto closing = std::move(mClosing);
         mClosing.clear();
-        for (auto& frame : closing)
+        for (auto& uiWindow : closing)
         {
-            if (frame)
+            if (uiWindow)
             {
-                frame->quit();
+                uiWindow->quit();
             }
         }
     }
@@ -226,22 +236,23 @@ namespace eokas
         mSourceSpace = nullptr;
         mPreviewSpace = nullptr;
         mHostDrag = false;
+        mReleasing = false;
         for (auto& slot : mFloating) this->destroySlot(slot, false);
         mFloating.clear();
     }
 
-    std::vector<UIFrame*> UIApp::liveFrames()
+    std::vector<UIWindow*> UIApp::liveWindows()
     {
-        std::vector<UIFrame*> frames;
+        std::vector<UIWindow*> uiWindows;
         for (auto& slot : mWindows)
         {
-            if (slot.frame) frames.push_back(slot.frame.get());
+            if (slot.uiWindow) uiWindows.push_back(slot.uiWindow.get());
         }
         for (auto& slot : mFloating)
         {
-            if (slot.frame) frames.push_back(slot.frame.get());
+            if (slot.uiWindow) uiWindows.push_back(slot.uiWindow.get());
         }
-        return frames;
+        return uiWindows;
     }
 
     UIApp::Slot* UIApp::slotOf(UIDockPage* page)
@@ -250,24 +261,24 @@ namespace eokas
         return nullptr;
     }
 
-    void UIApp::destroySlot(Slot& slot, bool deferFrame)
+    void UIApp::destroySlot(Slot& slot, bool deferWindow)
     {
-        void* window = slot.window;
-        slot.window = nullptr;
-        if (slot.frame)
+        void* nativeWindow = slot.nativeWindow;
+        slot.nativeWindow = nullptr;
+        if (slot.uiWindow)
         {
-            slot.frame->setRoot(nullptr);
-            if (deferFrame)
+            slot.uiWindow->setRoot(nullptr);
+            if (deferWindow)
             {
-                mClosing.push_back(std::move(slot.frame));
+                mClosing.push_back(std::move(slot.uiWindow));
             }
             else
             {
-                slot.frame->quit();
+                slot.uiWindow->quit();
             }
         }
         slot.page.reset();
-        if (window && onDestroyWindow) onDestroyWindow(window);
+        if (nativeWindow && onDestroyWindow) onDestroyWindow(nativeWindow);
     }
 
     void UIApp::closeFonts()
@@ -322,19 +333,19 @@ namespace eokas
         if (!held) return;
         void* windowHandle = nullptr;
         if (onCreateWindow) windowHandle = onCreateWindow(window);
-        auto frame = std::make_unique<UIFrame>();
+        auto uiWindow = std::make_unique<UIWindow>();
         uint32_t width = (uint32_t)window.size.x;
         uint32_t height = (uint32_t)window.size.y;
         if (width < 1) width = 1;
         if (height < 1) height = 1;
-        frame->init(width, height);
+        uiWindow->init(width, height);
         held->layoutInWindow((float)width, (float)height);
-        frame->setRoot(held);
+        uiWindow->setRoot(held);
         mGrabScreenX = screenX - window.origin.x;
         mGrabScreenY = screenY - window.origin.y;
         Slot created;
-        created.window = windowHandle;
-        created.frame = std::move(frame);
+        created.nativeWindow = windowHandle;
+        created.uiWindow = std::move(uiWindow);
         created.page = held;
         created.screenRect = window;
         mFloating.push_back(std::move(created));
@@ -348,7 +359,7 @@ namespace eokas
         if (!slot) return;
         slot->screenRect.origin.x = screenX - mGrabScreenX;
         slot->screenRect.origin.y = screenY - mGrabScreenY;
-        if (slot->window && onPlaceWindow) onPlaceWindow(slot->window, slot->screenRect);
+        if (slot->nativeWindow && onPlaceWindow) onPlaceWindow(slot->nativeWindow, slot->screenRect);
         UIDockSpace* hit = nullptr;
         for (auto* space : mSpaces)
         {
@@ -368,7 +379,7 @@ namespace eokas
 
     bool UIApp::dragPage(UIDockPage* page, float x, float y, int button)
     {
-        if (button != 0 || !page) return false;
+        if (mReleasing || button != 0 || !page) return false;
         if (!mDragging || mDragPage != page)
         {
             mDragging = true;
@@ -393,7 +404,8 @@ namespace eokas
 
     void UIApp::releasePage(UIDockPage* page)
     {
-        if (mDragPage != page) return;
+        if (mDragPage != page || mReleasing) return;
+        ReleaseGuard releasing(mReleasing);
         mDragging = false;
         mDragPage = nullptr;
         mSourceSpace = nullptr;
@@ -402,8 +414,8 @@ namespace eokas
         if (mDragMoved && mPreviewSpace && slot)
         {
             auto held = slot->page;
-            void* window = slot->window;
-            std::unique_ptr<UIFrame> frame = std::move(slot->frame);
+            void* nativeWindow = slot->nativeWindow;
+            std::unique_ptr<UIWindow> uiWindow = std::move(slot->uiWindow);
             UIDockSpace* space = mPreviewSpace;
             mPreviewSpace = nullptr;
             for (auto it = mFloating.begin(); it != mFloating.end(); ++it)
@@ -413,13 +425,13 @@ namespace eokas
                 break;
             }
             space->acceptDrop(held);
-            if (frame)
+            if (uiWindow)
             {
-                frame->setRoot(nullptr);
-                mClosing.push_back(std::move(frame));
+                uiWindow->setRoot(nullptr);
+                mClosing.push_back(std::move(uiWindow));
             }
             this->prepare();
-            if (window && onDestroyWindow) onDestroyWindow(window);
+            if (nativeWindow && onDestroyWindow) onDestroyWindow(nativeWindow);
         }
         else if (mPreviewSpace)
         {

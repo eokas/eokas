@@ -355,7 +355,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         Color fill = this->activeFill();
         std::vector<Vector2> triangles;
         if (triangulate(mContour, triangles))

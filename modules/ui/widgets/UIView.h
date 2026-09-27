@@ -27,7 +27,7 @@ namespace eokas
         UIWidget* pick(const Vector2& point) override;
         void bindChildren() override;
         void render(UIPrimitive& primitive) override;
-        void triggerPointerDrag(float x, float y, int button) override;
+        void triggerPointerMove(const Vector2& position, const Vector2& delta) override;
         void triggerPointerRelease() override;
 
     private:

@@ -32,9 +32,8 @@ namespace eokas
         void setValue(float v);
         void setRange(float minV, float maxV);
         void render(UIPrimitive& primitive) override;
-        void triggerPointerDrag(float x, float y, int button) override;
+        void triggerPointerMove(const Vector2& position, const Vector2& delta) override;
         void triggerPointerRelease() override;
-        void resetPointerState() override;
 
     private:
         bool mTracking = false;

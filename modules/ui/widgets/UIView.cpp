@@ -75,14 +75,14 @@ namespace eokas
         pickable = false;
         mRoot = std::make_shared<UIWidget>();
         mRoot->pickable = false;
-        mRoot->shape.parent = &shape;
+        mRoot->parent = this;
     }
 
     UIView::~UIView()
     {
-        if (mRoot && mRoot->shape.parent == &shape)
+        if (mRoot && mRoot->parent == this)
         {
-            mRoot->shape.parent = nullptr;
+            mRoot->parent = nullptr;
         }
     }
 
@@ -91,7 +91,7 @@ namespace eokas
         UIWidget::bindChildren();
         if (mRoot)
         {
-            mRoot->shape.parent = &shape;
+            mRoot->parent = this;
             mRoot->bindChildren();
         }
     }
@@ -102,7 +102,7 @@ namespace eokas
         {
             return;
         }
-        child->shape.parent = &mRoot->shape;
+        child->parent = mRoot.get();
         mRoot->children.push_back(child);
     }
 
@@ -214,7 +214,7 @@ namespace eokas
 
     void UIView::placeRoot()
     {
-        mRoot->shape.parent = &shape;
+        mRoot->parent = this;
         Vector2 topLeft(
             -shape.pivot.x * shape.size.x - mScrollX,
             -shape.pivot.y * shape.size.y - mScrollY);
@@ -241,12 +241,12 @@ namespace eokas
         };
         for (int i = 0; i < 4; ++i)
         {
-            const UIShape* node = widget->shape.parent;
+            const UIWidget* node = widget->parent;
             Vector2 point = corners[i];
-            while (node != nullptr && node != &mRoot->shape)
+            while (node != nullptr && node != mRoot.get())
             {
-                Vector2 local(point.x + node->pivot.x * node->size.x, point.y + node->pivot.y * node->size.y);
-                point = UIShape::transformPoint(node->localTrans(), local);
+                Vector2 local(point.x + node->shape.pivot.x * node->shape.size.x, point.y + node->shape.pivot.y * node->shape.size.y);
+                point = UIShape::transformPoint(node->shape.localTrans(), local);
                 node = node->parent;
             }
             Vector2 viewLocal(
@@ -437,7 +437,7 @@ namespace eokas
             return;
         }
         this->updateMetrics();
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         if (color.a > 0.0f)
         {
             primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
@@ -450,8 +450,8 @@ namespace eokas
             {
                 continue;
             }
-            child->shape.parent = &mRoot->shape;
-            if (!primitive.outsideClip(child->shape.bounds(child->shape.worldTrans())))
+            child->parent = mRoot.get();
+            if (!primitive.outsideClip(child->shape.bounds(child->worldTrans())))
             {
                 child->render(primitive);
             }
@@ -461,20 +461,22 @@ namespace eokas
         {
             if (child && child->floating)
             {
-                child->shape.parent = &mRoot->shape;
+                child->parent = mRoot.get();
                 child->render(primitive);
             }
         }
         this->drawScrollbars(primitive, world);
     }
 
-    void UIView::triggerPointerDrag(float x, float y, int button)
+    void UIView::triggerPointerMove(const Vector2& position, const Vector2& delta)
     {
-        if (button != 0)
+        (void)delta;
+        UIWidget::triggerPointerMove(position, delta);
+        if (!pressed)
         {
             return;
         }
-        Vector2 local = shape.toLocal(Vector2(x, y));
+        Vector2 local = shape.toLocal(position);
         float lx = local.x;
         float ly = local.y;
         Vector2 point(lx, ly);

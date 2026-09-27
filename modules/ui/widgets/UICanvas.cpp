@@ -91,7 +91,7 @@ namespace eokas
 
     void UICanvas::addChild(const std::shared_ptr<UIWidget>& child)
     {
-        child->shape.parent = &shape;
+        child->parent = this;
         children.push_back(child);
     }
 
@@ -104,7 +104,7 @@ namespace eokas
         this->refit();
         if (color.a > 0.0f)
         {
-            primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }
@@ -212,25 +212,26 @@ namespace eokas
         }
     }
 
-    void UICanvas::triggerPointerDrag(float x, float y, int button)
+    void UICanvas::triggerPointerMove(const Vector2& position, const Vector2& delta)
     {
-        if (button != 0 || !dragable)
+        (void)delta;
+        if (!pressed || !dragable)
         {
-            UIWidget::triggerPointerDrag(x, y, button);
+            UIWidget::triggerPointerMove(position, delta);
             return;
         }
-        Vector2 local(x, y);
+        Vector2 local = position;
         if (!mSelfDrag)
         {
             mSelfDrag = true;
             mGrab = local;
-            UIWidget::triggerPointerDrag(x, y, button);
+            UIWidget::triggerPointerMove(position, delta);
             return;
         }
         shape.origin += local - mGrab;
         mGrab = local;
         this->refit();
-        UIWidget::triggerPointerDrag(x, y, button);
+        UIWidget::triggerPointerMove(position, delta);
     }
 
     void UICanvas::triggerPointerRelease()

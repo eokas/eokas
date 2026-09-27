@@ -12,7 +12,7 @@ namespace eokas
             return;
         }
 
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         float scale = 1.0f;
         float ascender = 0.0f;
         float descender = 0.0f;

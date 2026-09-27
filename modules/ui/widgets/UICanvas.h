@@ -23,7 +23,7 @@ namespace eokas
         void endDrag();
         void dispatchDrop(UIChart* source, UIWidget* hit, float x, float y);
         void select(UIChart* chart);
-        void triggerPointerDrag(float x, float y, int button) override;
+        void triggerPointerMove(const Vector2& position, const Vector2& delta) override;
         void triggerPointerRelease() override;
 
     private:

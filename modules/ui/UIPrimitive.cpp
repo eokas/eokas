@@ -306,13 +306,79 @@ namespace eokas
         }
     }
 
+    void UIPrimitive::reserveGeometry()
+    {
+        uint32_t vertQuads = (uint32_t)((mVertices.size() + 3) / 4);
+        uint32_t indexQuads = (uint32_t)((mIndices.size() + 5) / 6);
+        uint32_t needed = vertQuads > indexQuads ? vertQuads : indexQuads;
+        if (needed <= mMaxQuads)
+        {
+            return;
+        }
+        uint32_t cap = mMaxQuads < 1 ? 1u : mMaxQuads;
+        while (cap < needed)
+        {
+            if (cap > 0x7fffffffu / 2u)
+            {
+                cap = needed;
+                break;
+            }
+            cap *= 2u;
+        }
+        mMaxQuads = cap;
+    }
+
+    void UIPrimitive::ensureGpuBuffers()
+    {
+        if (!mDevice)
+        {
+            return;
+        }
+        vertexStride = sizeof(UIVertex);
+        indexFormat = Format::R32_UINT;
+        uint64_t vertexBytes64 = (uint64_t)mMaxQuads * 4ull * (uint64_t)vertexStride;
+        uint64_t indexBytes64 = (uint64_t)mMaxQuads * 6ull * (uint64_t)sizeof(uint32_t);
+        if (vertexBytes64 > 0xffffffffull || indexBytes64 > 0xffffffffull)
+        {
+            throw std::runtime_error("UIPrimitive: geometry exceeds GPU buffer limits.");
+        }
+        uint32_t vertexBytes = (uint32_t)vertexBytes64;
+        uint32_t indexBytes = (uint32_t)indexBytes64;
+        if (!vertexBuffer || vertexBuffer->getLength() < vertexBytes)
+        {
+            if (vertexBuffer)
+            {
+                mRetired.push_back({ vertexBuffer, (int)kFrameCount });
+            }
+            vertexBuffer = mDevice->createDynamicBuffer(vertexBytes);
+        }
+        if (!indexBuffer || indexBuffer->getLength() < indexBytes)
+        {
+            if (indexBuffer)
+            {
+                mRetired.push_back({ indexBuffer, (int)kFrameCount });
+            }
+            indexBuffer = mDevice->createDynamicBuffer(indexBytes);
+        }
+    }
+
+    void UIPrimitive::flushRetired()
+    {
+        for (size_t i = 0; i < mRetired.size();)
+        {
+            mRetired[i].frames -= 1;
+            if (mRetired[i].frames <= 0)
+            {
+                mRetired.erase(mRetired.begin() + (ptrdiff_t)i);
+                continue;
+            }
+            i += 1;
+        }
+    }
+
     void UIPrimitive::end()
     {
-        if (mVertices.size() > mMaxQuads * 4)
-        {
-            throw std::runtime_error("UIPrimitive: vertex count exceeds maxQuads.");
-        }
-
+        this->reserveGeometry();
         indexCount = (uint32_t)mIndices.size();
         vertexLength = (uint32_t)(mVertices.size() * sizeof(UIVertex));
         indexLength = (uint32_t)(mIndices.size() * sizeof(uint32_t));
@@ -320,14 +386,8 @@ namespace eokas
 
     void UIPrimitive::createResources(Device::Ref device)
     {
-        vertexStride = sizeof(UIVertex);
-        indexFormat = Format::R32_UINT;
-        uint32_t vertexBytes = mMaxQuads * 4 * vertexStride;
-        uint32_t indexBytes = mMaxQuads * 6 * (uint32_t)sizeof(uint32_t);
-        if (!vertexBuffer)
-            vertexBuffer = device->createDynamicBuffer(vertexBytes);
-        if (!indexBuffer)
-            indexBuffer = device->createDynamicBuffer(indexBytes);
+        mDevice = device;
+        this->ensureGpuBuffers();
 
         if (!texture && mPendingAtlasSize > 0)
         {
@@ -356,6 +416,8 @@ namespace eokas
 
     void UIPrimitive::encode(CommandBuffer::Ref cmd)
     {
+        this->flushRetired();
+        this->ensureGpuBuffers();
         uint32_t vertexBytes = (uint32_t)(mVertices.size() * sizeof(UIVertex));
         uint32_t indexBytes = (uint32_t)(mIndices.size() * sizeof(uint32_t));
         if (vertexBuffer && vertexBytes > 0)

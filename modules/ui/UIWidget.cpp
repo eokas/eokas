@@ -6,9 +6,53 @@ namespace eokas
     {
         for (auto& child : children)
         {
-            if (child && child->shape.parent == &shape)
+            if (child && child->parent == this)
             {
-                child->shape.parent = nullptr;
+                child->parent = nullptr;
+            }
+        }
+    }
+
+    Matrix3 UIWidget::worldTrans() const
+    {
+        Matrix3 local = shape.localTrans();
+        if (parent == nullptr)
+        {
+            return local;
+        }
+        return Matrix3::transform(local, parent->pivotToScreen());
+    }
+
+    Matrix3 UIWidget::pivotToScreen() const
+    {
+        Matrix3 shift = Matrix3::translation(Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y));
+        return Matrix3::transform(shift, worldTrans());
+    }
+
+    void UIWidget::render(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
+        for (auto& child : children)
+        {
+            if (!child || child->floating)
+            {
+                continue;
+            }
+            child->parent = this;
+            if (!primitive.outsideClip(child->shape.bounds(child->worldTrans())))
+            {
+                child->render(primitive);
+            }
+        }
+        for (auto& child : children)
+        {
+            if (child && child->floating)
+            {
+                child->parent = this;
+                child->render(primitive);
             }
         }
     }
@@ -55,105 +99,6 @@ namespace eokas
         return nullptr;
     }
 
-    void UIWidget::placeChild(UIWidget& child, const Vector2& topLeftLocal)
-    {
-        child.shape.parent = &shape;
-        Vector2 topLeftPivot = topLeftLocal - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
-        child.shape.setBox(topLeftPivot, child.shape.size);
-    }
-
-    void UIWidget::placeChild(UIWidget& child, const Vector2& topLeftLocal, const Vector2& childSize)
-    {
-        child.shape.size = childSize;
-        this->placeChild(child, topLeftLocal);
-    }
-
-    void UIWidget::resize(const Vector2& newSize)
-    {
-        Vector2 shift = Vector2(
-            shape.pivot.x * (newSize.x - shape.size.x),
-            shape.pivot.y * (newSize.y - shape.size.y));
-        shape.origin += UIShape::transformVector(shape.localTrans(), shift);
-        shape.size = newSize;
-        for (auto& child : children)
-        {
-            if (child)
-            {
-                child->shape.origin -= shift;
-            }
-        }
-    }
-
-    void UIWidget::bindChildren()
-    {
-        for (auto& child : children)
-        {
-            if (!child)
-            {
-                continue;
-            }
-            child->shape.parent = &shape;
-            child->bindChildren();
-        }
-    }
-
-    void UIWidget::render(UIPrimitive& primitive)
-    {
-        if (!visible)
-        {
-            return;
-        }
-        for (auto& child : children)
-        {
-            if (!child || child->floating)
-            {
-                continue;
-            }
-            child->shape.parent = &shape;
-            if (!primitive.outsideClip(child->shape.bounds(child->shape.worldTrans())))
-            {
-                child->render(primitive);
-            }
-        }
-        for (auto& child : children)
-        {
-            if (child && child->floating)
-            {
-                child->shape.parent = &shape;
-                child->render(primitive);
-            }
-        }
-    }
-
-    void UIWidget::triggerPointerDrag(float x, float y, int button)
-    {
-        if (onPointerDrag)
-        {
-            onPointerDrag(x, y, button);
-        }
-    }
-
-    void UIWidget::triggerFocus()
-    {
-        focused = true;
-    }
-
-    void UIWidget::triggerBlur()
-    {
-        focused = false;
-    }
-
-    void UIWidget::triggerChar(uint32_t codepoint)
-    {
-        (void)codepoint;
-    }
-
-    void UIWidget::triggerKey(UIKey key, const UIKeyMods& mods)
-    {
-        (void)key;
-        (void)mods;
-    }
-
     void UIWidget::triggerPointerEnter()
     {
         hovered = true;
@@ -183,15 +128,17 @@ namespace eokas
 
     void UIWidget::triggerPointerRelease()
     {
+        const bool click = pressed;
         pressed = false;
         if (onPointerRelease)
         {
             onPointerRelease();
         }
-    }
+        if (!click)
+        {
+            return;
+        }
 
-    void UIWidget::triggerClick()
-    {
         if (onClick)
         {
             onClick();
@@ -211,10 +158,81 @@ namespace eokas
         mLastClickTime = now;
     }
 
-    void UIWidget::resetPointerState()
+    void UIWidget::triggerPointerMove(const Vector2& position, const Vector2& delta)
     {
-        hovered = false;
-        pressed = false;
-        mLastClickTime.reset();
+        if (onPointerMove)
+        {
+            onPointerMove(position, delta);
+        }
+        if (pressed && onDrag)
+        {
+            onDrag(position, delta);
+        }
+    }
+
+    void UIWidget::triggerWheel(const Vector2& position, f32_t delta)
+    {
+        if (onWheel)
+        {
+            onWheel(position, delta);
+        }
+    }
+
+    void UIWidget::triggerKeyPress(const UIKey& key, const UIKeyMods& mods)
+    {
+        if (onKeyPress)
+        {
+            onKeyPress(key, mods);
+        }
+    }
+
+    void UIWidget::triggerKeyRelease(const UIKey& key, const UIKeyMods& mods)
+    {
+        if (onKeyRelease)
+        {
+            onKeyRelease(key, mods);
+        }
+    }
+
+    void UIWidget::resize(const Vector2& newSize)
+    {
+        Vector2 shift = Vector2(
+            shape.pivot.x * (newSize.x - shape.size.x),
+            shape.pivot.y * (newSize.y - shape.size.y));
+        shape.origin += UIShape::transformVector(shape.localTrans(), shift);
+        shape.size = newSize;
+        for (auto& child : children)
+        {
+            if (child)
+            {
+                child->shape.origin -= shift;
+            }
+        }
+    }
+
+    void UIWidget::placeChild(UIWidget& child, const Vector2& topLeftLocal)
+    {
+        child.parent = this;
+        Vector2 topLeftPivot = topLeftLocal - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+        child.shape.setBox(topLeftPivot, child.shape.size);
+    }
+
+    void UIWidget::placeChild(UIWidget& child, const Vector2& topLeftLocal, const Vector2& childSize)
+    {
+        child.shape.size = childSize;
+        this->placeChild(child, topLeftLocal);
+    }
+
+    void UIWidget::bindChildren()
+    {
+        for (auto& child : children)
+        {
+            if (!child)
+            {
+                continue;
+            }
+            child->parent = this;
+            child->bindChildren();
+        }
     }
 }

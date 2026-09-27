@@ -35,14 +35,25 @@ namespace eokas
         void setPendingUpload(const std::vector<uint8_t>& rgba, uint32_t atlasSize = 0);
 
     private:
+        struct RetiredBuffer
+        {
+            DynamicBuffer::Ref buffer;
+            int frames = 0;
+        };
+
         void createResources(Device::Ref device) override;
         void upload(CommandBuffer::Ref cmd) override;
         void encode(CommandBuffer::Ref cmd) override;
+        void reserveGeometry();
+        void ensureGpuBuffers();
+        void flushRetired();
 
         std::vector<UIVertex> mVertices;
         std::vector<uint32_t> mIndices;
         std::vector<Rect> mClipStack;
         std::vector<uint8_t> mPendingUploadRgba;
+        std::vector<RetiredBuffer> mRetired;
+        Device::Ref mDevice;
         uint32_t mMaxQuads = 2048;
         uint32_t mPendingAtlasSize = 0;
         bool mTextureDirty = false;

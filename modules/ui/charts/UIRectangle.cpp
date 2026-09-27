@@ -22,7 +22,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         if (shape.size.x > 0.0f && shape.size.y > 0.0f)
         {
             primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), this->activeFill());

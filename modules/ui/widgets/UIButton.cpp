@@ -86,7 +86,7 @@ namespace eokas
         {
             bg = hoverFill;
         }
-        primitive.addQuad(shape.worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         UIWidget::render(primitive);
     }
 }

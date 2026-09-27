@@ -23,7 +23,7 @@ namespace eokas
         void setLabel(const String& text);
         UIText* label() const;
         void render(UIPrimitive& primitive) override;
-        void triggerClick() override;
+        void triggerPointerRelease() override;
 
     private:
         UIDropdown* owner = nullptr;
@@ -63,11 +63,9 @@ namespace eokas
         void setExpanded(bool next);
         String labelOf(int index) const;
         UIText* caption() const;
-        bool acceptsKeyFocus() const override { return true; }
         void render(UIPrimitive& primitive) override;
-        void triggerClick() override;
-        void triggerBlur() override;
-        void triggerKey(UIKey key, const UIKeyMods& mods) override;
+        void triggerPointerRelease() override;
+        void triggerKeyPress(const UIKey& key, const UIKeyMods& mods) override;
 
     private:
         std::shared_ptr<UIText> mCaption;

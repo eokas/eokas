@@ -71,15 +71,11 @@ namespace eokas
         UIWidget::triggerPointerRelease();
     }
 
-    void UISlider::resetPointerState()
+    void UISlider::triggerPointerMove(const Vector2& position, const Vector2& delta)
     {
-        mTracking = false;
-        UIWidget::resetPointerState();
-    }
-
-    void UISlider::triggerPointerDrag(float x, float y, int button)
-    {
-        if (button != 0 || !pickable)
+        (void)delta;
+        UIWidget::triggerPointerMove(position, delta);
+        if (!pressed || !pickable)
         {
             return;
         }
@@ -95,7 +91,7 @@ namespace eokas
         float t = 0.0f;
         if (this->ring())
         {
-            t = this->ringT(x, y, begin);
+            t = this->ringT(position.x, position.y, begin);
         }
         else if (type == SliderType::Vertical)
         {
@@ -103,7 +99,7 @@ namespace eokas
             float span = shape.size.y - thumbSize;
             Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
             float origin = corner.y + shape.size.y - half;
-            t = (span > 0.0f) ? Math::clamp((origin - y) / span, 0.0f, 1.0f) : 0.0f;
+            t = (span > 0.0f) ? Math::clamp((origin - position.y) / span, 0.0f, 1.0f) : 0.0f;
         }
         else
         {
@@ -111,7 +107,7 @@ namespace eokas
             float span = shape.size.x - thumbSize;
             Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
             float origin = corner.x + half;
-            t = (span > 0.0f) ? Math::clamp((x - origin) / span, 0.0f, 1.0f) : 0.0f;
+            t = (span > 0.0f) ? Math::clamp((position.x - origin) / span, 0.0f, 1.0f) : 0.0f;
         }
         this->commitValue(minValue + (maxValue - minValue) * t);
     }
@@ -211,7 +207,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         if (this->ring())
         {
             this->renderRing(primitive, world);

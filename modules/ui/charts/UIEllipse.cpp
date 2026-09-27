@@ -37,7 +37,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         float rx = shape.size.x * 0.5f;
         float ry = shape.size.y * 0.5f;
         if (rx != 0.0f && ry != 0.0f)

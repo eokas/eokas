@@ -29,16 +29,11 @@ namespace eokas
         UIInput();
         void setText(const String& value);
         UIText* label() const;
-        bool acceptsKeyFocus() const override { return true; }
         void render(UIPrimitive& primitive) override;
         void triggerPointerPress() override;
-        void triggerPointerDrag(float x, float y, int button) override;
+        void triggerPointerMove(const Vector2& position, const Vector2& delta) override;
         void triggerPointerRelease() override;
-        void triggerFocus() override;
-        void triggerBlur() override;
-        void triggerChar(uint32_t codepoint) override;
-        void triggerKey(UIKey key, const UIKeyMods& mods) override;
-        void resetPointerState() override;
+        void triggerKeyPress(const UIKey& key, const UIKeyMods& mods) override;
 
     private:
         std::shared_ptr<UIText> mLabel;

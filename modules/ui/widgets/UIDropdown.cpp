@@ -75,7 +75,7 @@ namespace eokas
             return;
         }
         placeLabel(*this, mLabel.get(), shape.size, paddingX, paddingY);
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         Color bg = background;
         if (pressed)
         {
@@ -93,10 +93,11 @@ namespace eokas
         UIWidget::render(primitive);
     }
 
-    void UIDropdownItem::triggerClick()
+    void UIDropdownItem::triggerPointerRelease()
     {
-        UIWidget::triggerClick();
-        if (owner != nullptr)
+        const bool activate = pressed;
+        UIWidget::triggerPointerRelease();
+        if (activate && owner != nullptr)
         {
             owner->setValue(index);
             owner->setExpanded(false);
@@ -114,6 +115,8 @@ namespace eokas
         dropdown = panel.get();
         children.push_back(panel);
         this->syncCaption();
+        onGotFocus = []() {};
+        onLostFocus = [this]() { this->setExpanded(false); };
     }
 
     UIDropdown::~UIDropdown()
@@ -413,7 +416,7 @@ namespace eokas
         this->syncCaption();
         this->layoutCaption();
         this->syncPopup();
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         Color bg = background;
         if (pickable && pressed)
         {
@@ -429,31 +432,27 @@ namespace eokas
         UIWidget::render(primitive);
     }
 
-    void UIDropdown::triggerClick()
+    void UIDropdown::triggerPointerRelease()
     {
-        if (pickable)
+        if (pressed && pickable)
         {
             this->setExpanded(!expanded);
         }
-        UIWidget::triggerClick();
+        UIWidget::triggerPointerRelease();
     }
 
-    void UIDropdown::triggerBlur()
-    {
-        this->setExpanded(false);
-        UIWidget::triggerBlur();
-    }
-
-    void UIDropdown::triggerKey(UIKey key, const UIKeyMods& mods)
+    void UIDropdown::triggerKeyPress(const UIKey& key, const UIKeyMods& mods)
     {
         (void)mods;
         if (!pickable)
         {
+            UIWidget::triggerKeyPress(key, mods);
             return;
         }
         if (key == UIKey::Enter)
         {
             this->setExpanded(!expanded);
+            UIWidget::triggerKeyPress(key, mods);
             return;
         }
         if (key == UIKey::Up || key == UIKey::Down)
@@ -461,5 +460,6 @@ namespace eokas
             int next = this->neighbor(key == UIKey::Up ? -1 : 1);
             this->setValue(next);
         }
+        UIWidget::triggerKeyPress(key, mods);
     }
 }

@@ -1,4 +1,4 @@
-#include "UIFrame.h"
+#include "UIWindow.h"
 #include "widgets/UICanvas.h"
 #include "widgets/UIChart.h"
 #include "widgets/UIView.h"
@@ -17,18 +17,104 @@ namespace eokas
             return scale.x != 0.0f && scale.y != 0.0f;
         }
 
-        Matrix3 parentSpaceOf(const UIShape& shape)
+        Matrix3 parentSpaceOf(const UIWidget& widget)
         {
-            if (shape.parent == nullptr)
+            if (widget.parent == nullptr)
             {
                 return Matrix3::IDENTITY;
             }
-            return shape.parent->pivotToScreen();
+            return widget.parent->pivotToScreen();
         }
 
-        Vector2 screenToPivot(const UIShape& shape, const Vector2& screen)
+        Vector2 screenToPivot(const UIWidget& widget, const Vector2& screen)
         {
-            return UIShape::transformPoint(parentSpaceOf(shape).inverse(), screen);
+            return UIShape::transformPoint(parentSpaceOf(widget).inverse(), screen);
+        }
+
+        bool keyFromCodepoint(uint32_t codepoint, UIKey& key, UIKeyMods& mods)
+        {
+            mods = UIKeyMods();
+            if (codepoint >= 'a' && codepoint <= 'z')
+            {
+                key = static_cast<UIKey>(static_cast<int>(UIKey::A) + static_cast<int>(codepoint - 'a'));
+                return true;
+            }
+            if (codepoint >= 'A' && codepoint <= 'Z')
+            {
+                key = static_cast<UIKey>(static_cast<int>(UIKey::A) + static_cast<int>(codepoint - 'A'));
+                mods.shift = true;
+                return true;
+            }
+            if (codepoint >= '0' && codepoint <= '9')
+            {
+                key = static_cast<UIKey>(static_cast<int>(UIKey::Digit0) + static_cast<int>(codepoint - '0'));
+                return true;
+            }
+            if (codepoint == ' ')
+            {
+                key = UIKey::Space;
+                return true;
+            }
+            struct Punct
+            {
+                uint32_t plain;
+                uint32_t shifted;
+                UIKey key;
+            };
+            static const Punct punct[] = {
+                {'\'', '"', UIKey::Apostrophe},
+                {',', '<', UIKey::Comma},
+                {'-', '_', UIKey::Minus},
+                {'.', '>', UIKey::Period},
+                {'/', '?', UIKey::Slash},
+                {';', ':', UIKey::Semicolon},
+                {'=', '+', UIKey::Equal},
+                {'[', '{', UIKey::LeftBracket},
+                {'\\', '|', UIKey::Backslash},
+                {']', '}', UIKey::RightBracket},
+                {'`', '~', UIKey::GraveAccent},
+            };
+            for (const Punct& item : punct)
+            {
+                if (codepoint == item.plain)
+                {
+                    key = item.key;
+                    return true;
+                }
+                if (codepoint == item.shifted)
+                {
+                    key = item.key;
+                    mods.shift = true;
+                    return true;
+                }
+            }
+            struct Digit
+            {
+                uint32_t shifted;
+                UIKey key;
+            };
+            static const Digit digits[] = {
+                {')', UIKey::Digit0},
+                {'!', UIKey::Digit1},
+                {'@', UIKey::Digit2},
+                {'#', UIKey::Digit3},
+                {'$', UIKey::Digit4},
+                {'%', UIKey::Digit5},
+                {'^', UIKey::Digit6},
+                {'&', UIKey::Digit7},
+                {'*', UIKey::Digit8},
+                {'(', UIKey::Digit9},
+            };
+            for (const Digit& item : digits)
+            {
+                if (codepoint == item.shifted)
+                {
+                    key = item.key;
+                    mods.shift = true;
+                    return true;
+                }
+            }
+            return false;
         }
 
         void prepareTree(const std::shared_ptr<UIWidget>& root)
@@ -37,12 +123,12 @@ namespace eokas
             {
                 return;
             }
-            root->shape.parent = nullptr;
+            root->parent = nullptr;
             root->bindChildren();
         }
     }
 
-    void UIFrame::init(uint32_t width, uint32_t height)
+    void UIWindow::init(uint32_t width, uint32_t height)
     {
         mWidth = (float)width;
         mHeight = (float)height;
@@ -52,6 +138,9 @@ namespace eokas
         mPressX = 0.0f;
         mPressY = 0.0f;
         mDragged = false;
+        mLastLocal = Vector2(0.0f, 0.0f);
+        mLastWidget = nullptr;
+        mHasLocal = false;
         mFocused = nullptr;
 
         if (!mRoot)
@@ -85,7 +174,7 @@ namespace eokas
         mPrimitive->material->setBlendState(blend);
     }
 
-    void UIFrame::quit()
+    void UIWindow::quit()
     {
         this->setFocus(nullptr);
         this->resetPointerState(mRoot.get());
@@ -95,6 +184,9 @@ namespace eokas
         mPressX = 0.0f;
         mPressY = 0.0f;
         mDragged = false;
+        mLastLocal = Vector2(0.0f, 0.0f);
+        mLastWidget = nullptr;
+        mHasLocal = false;
         mRoot.reset();
         if (mPrimitive)
         {
@@ -103,12 +195,12 @@ namespace eokas
         mPrimitive.reset();
     }
 
-    const std::shared_ptr<UIWidget>& UIFrame::root() const
+    const std::shared_ptr<UIWidget>& UIWindow::root() const
     {
         return mRoot;
     }
 
-    void UIFrame::setRoot(const std::shared_ptr<UIWidget>& widget)
+    void UIWindow::setRoot(const std::shared_ptr<UIWidget>& widget)
     {
         this->setFocus(nullptr);
         this->resetPointerState(mRoot.get());
@@ -118,11 +210,14 @@ namespace eokas
         mPressX = 0.0f;
         mPressY = 0.0f;
         mDragged = false;
+        mLastLocal = Vector2(0.0f, 0.0f);
+        mLastWidget = nullptr;
+        mHasLocal = false;
         mRoot = widget;
         prepareTree(mRoot);
     }
 
-    void UIFrame::flush()
+    void UIWindow::flush()
     {
         if (!mPrimitive)
         {
@@ -138,12 +233,12 @@ namespace eokas
         mPrimitive->end();
     }
 
-    UIPrimitive::Ref UIFrame::primitive() const
+    UIPrimitive::Ref UIWindow::primitive() const
     {
         return mPrimitive;
     }
 
-    UIWidget* UIFrame::hitTest(float x, float y)
+    UIWidget* UIWindow::hitTest(float x, float y)
     {
         if (!mRoot)
         {
@@ -153,7 +248,7 @@ namespace eokas
         return mRoot->pick(Vector2(x, y));
     }
 
-    void UIFrame::onMouseMove(float x, float y)
+    void UIWindow::onMouseMove(float x, float y)
     {
         if (mPressed != nullptr)
         {
@@ -167,22 +262,25 @@ namespace eokas
         }
 
         UIWidget* hit = this->hitTest(x, y);
-        if (hit == mHovered)
+        if (hit != mHovered)
         {
-            return;
+            if (mHovered != nullptr)
+            {
+                mHovered->triggerPointerLeave();
+            }
+            mHovered = hit;
+            if (mHovered != nullptr)
+            {
+                mHovered->triggerPointerEnter();
+            }
         }
-        if (mHovered != nullptr)
+        if (mPressed == nullptr)
         {
-            mHovered->triggerPointerLeave();
-        }
-        mHovered = hit;
-        if (mHovered != nullptr)
-        {
-            mHovered->triggerPointerEnter();
+            this->dispatchPointer(mHovered, x, y);
         }
     }
 
-    void UIFrame::onMouseDown(float x, float y, int button)
+    void UIWindow::onMouseDown(float x, float y, int button)
     {
         this->onMouseMove(x, y);
         if (mPressed != nullptr || mHovered == nullptr)
@@ -198,7 +296,7 @@ namespace eokas
         if (button == 0)
         {
             bool insideFocus = mFocused != nullptr && this->containsWidget(mFocused, mPressed);
-            if (mPressed->acceptsKeyFocus())
+            if (mPressed->onKeyPress != nullptr || mPressed->onGotFocus != nullptr)
             {
                 this->setFocus(mPressed);
             }
@@ -214,19 +312,28 @@ namespace eokas
         this->dispatchDrag(x, y);
     }
 
-    void UIFrame::onMouseUp(float x, float y, int button)
+    void UIWindow::onMouseUp(float x, float y, int button)
     {
         UIWidget* hit = this->hitTest(x, y);
         UIWidget* pressed = mPressed;
-        if (pressed != nullptr && button == mPressedButton)
+        const int pressedButton = mPressedButton;
+        const bool dragged = mDragged;
+        mPressed = nullptr;
+        mPressedButton = -1;
+        mDragged = false;
+        if (pressed != nullptr && button == pressedButton)
         {
             this->endCanvasDrag(mRoot.get());
-            pressed->triggerPointerRelease();
+            const bool click = !dragged && hit == pressed && button == 0;
             UICanvas* canvas = nullptr;
             this->dragTargetOf(pressed, canvas);
-            if (!mDragged && hit == pressed && button == 0)
+            if (!click)
             {
-                pressed->triggerClick();
+                pressed->pressed = false;
+            }
+            pressed->triggerPointerRelease();
+            if (click)
+            {
                 if (canvas != nullptr)
                 {
                     if (UIChart* chart = dynamic_cast<UIChart*>(pressed))
@@ -235,48 +342,66 @@ namespace eokas
                     }
                 }
             }
-            else if (mDragged && canvas != nullptr)
+            else if (dragged && canvas != nullptr)
             {
                 if (UIChart* chart = dynamic_cast<UIChart*>(pressed))
                 {
-                    Vector2 drop = screenToPivot(canvas->shape, Vector2(x, y));
+                    Vector2 drop = screenToPivot(*canvas, Vector2(x, y));
                     canvas->dispatchDrop(chart, hit, drop.x, drop.y);
                 }
             }
         }
-        mPressed = nullptr;
-        mPressedButton = -1;
-        mDragged = false;
         this->onMouseMove(x, y);
     }
 
-    void UIFrame::onMouseWheel(float x, float y, float deltaX, float deltaY)
+    void UIWindow::onMouseWheel(float x, float y, float deltaX, float deltaY)
     {
         prepareTree(mRoot);
         this->routeWheel(mRoot.get(), Vector2(x, y), Vector2(deltaX, deltaY));
+        if (UIWidget* hit = this->hitTest(x, y))
+        {
+            Vector2 local = screenToPivot(*hit, Vector2(x, y));
+            hit->triggerWheel(local, deltaY);
+        }
     }
 
-    void UIFrame::dispatchDrag(float x, float y)
+    void UIWindow::dispatchDrag(float x, float y)
     {
         if (mPressed == nullptr)
         {
             return;
         }
-        mPressed->framePointer = Vector2(x, y);
         UICanvas* canvas = nullptr;
         UIWidget* target = this->dragTargetOf(mPressed, canvas);
         prepareTree(mRoot);
         if (canvas != nullptr && target != nullptr && target != canvas)
         {
-            Vector2 local = screenToPivot(target->shape, Vector2(x, y));
+            Vector2 local = screenToPivot(*target, Vector2(x, y));
             canvas->dragChild(target, local.x, local.y);
             return;
         }
-        Vector2 local = screenToPivot(mPressed->shape, Vector2(x, y));
-        mPressed->triggerPointerDrag(local.x, local.y, mPressedButton);
+        if (mPressedButton != 0)
+        {
+            return;
+        }
+        this->dispatchPointer(mPressed, x, y);
     }
 
-    bool UIFrame::collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const
+    void UIWindow::dispatchPointer(UIWidget* widget, float x, float y)
+    {
+        if (widget == nullptr)
+        {
+            return;
+        }
+        Vector2 local = screenToPivot(*widget, Vector2(x, y));
+        Vector2 delta = (mHasLocal && mLastWidget == widget) ? (local - mLastLocal) : Vector2::ZERO;
+        mLastLocal = local;
+        mLastWidget = widget;
+        mHasLocal = true;
+        widget->triggerPointerMove(local, delta);
+    }
+
+    bool UIWindow::collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const
     {
         if (node == nullptr)
         {
@@ -310,7 +435,7 @@ namespace eokas
         return false;
     }
 
-    UIWidget* UIFrame::dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const
+    UIWidget* UIWindow::dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const
     {
         canvas = nullptr;
         std::vector<UIWidget*> path;
@@ -354,7 +479,7 @@ namespace eokas
         return nullptr;
     }
 
-    bool UIFrame::routeWheel(UIWidget* widget, const Vector2& point, const Vector2& delta)
+    bool UIWindow::routeWheel(UIWidget* widget, const Vector2& point, const Vector2& delta)
     {
         if (widget == nullptr || !widget->visible || !liveScale(widget->shape.scale))
         {
@@ -369,7 +494,7 @@ namespace eokas
                     return true;
                 }
             }
-            Vector2 parentLocal = screenToPivot(canvas->shape, point);
+            Vector2 parentLocal = screenToPivot(*canvas, point);
             Vector2 local = canvas->shape.toLocal(parentLocal);
             if (!Rect(0.0f, 0.0f, canvas->shape.size.x, canvas->shape.size.y).contains(local))
             {
@@ -382,7 +507,7 @@ namespace eokas
                 {
                     float current = chart->shape.scale.x == 0.0f ? 1.0f : chart->shape.scale.x;
                     float factor = expf(-delta.y * chart->scaleSensitivity);
-                    chart->scaleAt(screenToPivot(chart->shape, point), current * factor);
+                    chart->scaleAt(screenToPivot(*chart, point), current * factor);
                     return true;
                 }
             }
@@ -412,7 +537,7 @@ namespace eokas
                     return true;
                 }
             }
-            Vector2 local = view->shape.toLocal(screenToPivot(view->shape, point));
+            Vector2 local = view->shape.toLocal(screenToPivot(*view, point));
             if (!Rect(0.0f, 0.0f, view->shape.size.x, view->shape.size.y).contains(local))
             {
                 return false;
@@ -436,7 +561,7 @@ namespace eokas
         return false;
     }
 
-    bool UIFrame::routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& delta)
+    bool UIWindow::routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& delta)
     {
         if (widget == nullptr || !widget->visible || !liveScale(widget->shape.scale))
         {
@@ -467,7 +592,7 @@ namespace eokas
         return false;
     }
 
-    void UIFrame::endCanvasDrag(UIWidget* widget)
+    void UIWindow::endCanvasDrag(UIWidget* widget)
     {
         if (widget == nullptr)
         {
@@ -491,16 +616,22 @@ namespace eokas
         }
     }
 
-    void UIFrame::onChar(uint32_t codepoint)
+    void UIWindow::onChar(uint32_t codepoint)
     {
         if (!this->focusAlive())
         {
             return;
         }
-        mFocused->triggerChar(codepoint);
+        UIKey key = UIKey::Space;
+        UIKeyMods mods;
+        if (!keyFromCodepoint(codepoint, key, mods))
+        {
+            return;
+        }
+        mFocused->triggerKeyPress(key, mods);
     }
 
-    void UIFrame::onKeyDown(UIKey key, const UIKeyMods& mods)
+    void UIWindow::onKeyDown(UIKey key, const UIKeyMods& mods)
     {
         if (key == UIKey::Escape)
         {
@@ -511,10 +642,10 @@ namespace eokas
         {
             return;
         }
-        mFocused->triggerKey(key, mods);
+        mFocused->triggerKeyPress(key, mods);
     }
 
-    void UIFrame::setFocus(UIWidget* widget)
+    void UIWindow::setFocus(UIWidget* widget)
     {
         if (mFocused == widget)
         {
@@ -522,27 +653,41 @@ namespace eokas
         }
         if (mFocused != nullptr)
         {
-            mFocused->triggerBlur();
+            mFocused->focused = false;
+            if (mFocused->onLostFocus)
+            {
+                mFocused->onLostFocus();
+            }
         }
         mFocused = widget;
         if (mFocused != nullptr)
         {
-            mFocused->triggerFocus();
+            mFocused->focused = true;
+            if (mFocused->onGotFocus)
+            {
+                mFocused->onGotFocus();
+            }
         }
     }
 
-    UIWidget* UIFrame::focus() const
+    UIWidget* UIWindow::focus() const
     {
         return mFocused;
     }
 
-    void UIFrame::resetPointerState(UIWidget* widget)
+    void UIWindow::resetPointerState(UIWidget* widget)
     {
         if (widget == nullptr)
         {
             return;
         }
-        widget->resetPointerState();
+        const bool active = widget->hovered || widget->pressed;
+        widget->hovered = false;
+        widget->pressed = false;
+        if (active)
+        {
+            widget->triggerPointerRelease();
+        }
         if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
         {
             canvas->endDrag();
@@ -561,7 +706,7 @@ namespace eokas
         }
     }
 
-    bool UIFrame::containsWidget(UIWidget* node, UIWidget* target) const
+    bool UIWindow::containsWidget(UIWidget* node, UIWidget* target) const
     {
         if (node == nullptr || target == nullptr)
         {
@@ -592,7 +737,7 @@ namespace eokas
         return false;
     }
 
-    bool UIFrame::focusAlive()
+    bool UIWindow::focusAlive()
     {
         if (mFocused == nullptr)
         {
@@ -602,7 +747,11 @@ namespace eokas
         {
             return true;
         }
-        mFocused->triggerBlur();
+        mFocused->focused = false;
+        if (mFocused->onLostFocus)
+        {
+            mFocused->onLostFocus();
+        }
         mFocused = nullptr;
         return false;
     }

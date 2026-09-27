@@ -84,7 +84,7 @@ namespace eokas
         void removeCell(int index);
         void collect(bool visibleOnly, std::vector<std::shared_ptr<UITableRow>>& out) const;
 
-        void triggerClick() override;
+        void triggerPointerRelease() override;
 
     private:
         void syncCells();

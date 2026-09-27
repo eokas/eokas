@@ -14,6 +14,58 @@ namespace eokas
             return floorf(v + 0.5f);
         }
 
+        bool textOfKey(UIKey key, const UIKeyMods& mods, String& out)
+        {
+            if (mods.ctrl || mods.alt)
+            {
+                return false;
+            }
+            int value = static_cast<int>(key);
+            if (value >= static_cast<int>(UIKey::A) && value <= static_cast<int>(UIKey::Z))
+            {
+                char base = mods.shift ? 'A' : 'a';
+                out = String(static_cast<char>(base + (value - static_cast<int>(UIKey::A))));
+                return true;
+            }
+            if (value >= static_cast<int>(UIKey::Digit0) && value <= static_cast<int>(UIKey::Digit9))
+            {
+                static const char plain[] = "0123456789";
+                static const char shifted[] = ")!@#$%^&*(";
+                int index = value - static_cast<int>(UIKey::Digit0);
+                out = String(mods.shift ? shifted[index] : plain[index]);
+                return true;
+            }
+            if (key == UIKey::Space)
+            {
+                out = String(' ');
+                return true;
+            }
+            if (value >= static_cast<int>(UIKey::Apostrophe) && value <= static_cast<int>(UIKey::GraveAccent))
+            {
+                static const char plain[] = "\',-./;=[\\]`";
+                static const char shifted[] = "\"<_>?:+{|}~";
+                int index = value - static_cast<int>(UIKey::Apostrophe);
+                out = String(mods.shift ? shifted[index] : plain[index]);
+                return true;
+            }
+            if (value >= static_cast<int>(UIKey::Keypad0) && value <= static_cast<int>(UIKey::Keypad9))
+            {
+                out = String(static_cast<char>('0' + (value - static_cast<int>(UIKey::Keypad0))));
+                return true;
+            }
+            switch (key)
+            {
+            case UIKey::KeypadDecimal: out = String('.'); return true;
+            case UIKey::KeypadDivide: out = String('/'); return true;
+            case UIKey::KeypadMultiply: out = String('*'); return true;
+            case UIKey::KeypadSubtract: out = String('-'); return true;
+            case UIKey::KeypadAdd: out = String('+'); return true;
+            case UIKey::KeypadEqual: out = String('='); return true;
+            default: break;
+            }
+            return false;
+        }
+
         size_t codepointCount(const String& value)
         {
             size_t index = 0;
@@ -115,6 +167,12 @@ namespace eokas
         mLabel = created;
         children.push_back(created);
         mCaretBlinkAnchor = std::chrono::steady_clock::now();
+        onGotFocus = [this]() { this->resetCaretBlink(); };
+        onLostFocus = [this]()
+        {
+            mPointerSelecting = false;
+            mCaretPlaced = false;
+        };
     }
 
     void UIInput::setText(const String& value)
@@ -695,7 +753,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         this->clampCaret();
         this->ensureCaretVisible();
         Color bg = hovered ? hoverFill : background;
@@ -936,13 +994,15 @@ namespace eokas
         mCaretPlaced = false;
     }
 
-    void UIInput::triggerPointerDrag(float x, float y, int button)
+    void UIInput::triggerPointerMove(const Vector2& position, const Vector2& delta)
     {
-        if (button != 0 || !mPointerSelecting)
+        (void)delta;
+        UIWidget::triggerPointerMove(position, delta);
+        if (!pressed || !mPointerSelecting)
         {
             return;
         }
-        Vector2 local = shape.toLocal(Vector2(x, y));
+        Vector2 local = shape.toLocal(position);
         size_t index = this->indexAt(local.x, local.y);
         mPreferredX = -1.0f;
         if (!mCaretPlaced)
@@ -962,29 +1022,7 @@ namespace eokas
         UIWidget::triggerPointerRelease();
     }
 
-    void UIInput::triggerFocus()
-    {
-        UIWidget::triggerFocus();
-        this->resetCaretBlink();
-    }
-
-    void UIInput::triggerBlur()
-    {
-        mPointerSelecting = false;
-        mCaretPlaced = false;
-        UIWidget::triggerBlur();
-    }
-
-    void UIInput::triggerChar(uint32_t codepoint)
-    {
-        if (codepoint < 32 || codepoint == 127)
-        {
-            return;
-        }
-        this->insertText(UIFont::encodeUtf8(codepoint));
-    }
-
-    void UIInput::triggerKey(UIKey key, const UIKeyMods& mods)
+    void UIInput::triggerKeyPress(const UIKey& key, const UIKeyMods& mods)
     {
         switch (key)
         {
@@ -1070,12 +1108,11 @@ namespace eokas
         case UIKey::Escape:
             break;
         }
-    }
-
-    void UIInput::resetPointerState()
-    {
-        mPointerSelecting = false;
-        mCaretPlaced = false;
-        UIWidget::resetPointerState();
+        String typed;
+        if (textOfKey(key, mods, typed))
+        {
+            this->insertText(typed);
+        }
+        UIWidget::triggerKeyPress(key, mods);
     }
 }

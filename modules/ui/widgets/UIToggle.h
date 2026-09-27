@@ -20,7 +20,7 @@ namespace eokas
 
         void setValue(bool v);
         void render(UIPrimitive& primitive) override;
-        void triggerClick() override;
+        void triggerPointerRelease() override;
 
     private:
         Color capsuleColor() const;

@@ -5,7 +5,7 @@
 #include "UIPrimitive.h"
 #include "UIShape.h"
 #include "UIWidget.h"
-#include "UIFrame.h"
+#include "UIWindow.h"
 #include "widgets/UIImage.h"
 #include "widgets/UIText.h"
 #include "widgets/UIList.h"

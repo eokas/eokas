@@ -137,7 +137,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
         SliceGrid grid;
         if (type == UIImageType::Simple || !buildSliceGrid(*this, primitive, grid))
         {

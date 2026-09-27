@@ -229,8 +229,11 @@ namespace eokas
         
         std::vector<ComPtr<ID3D12Resource>> mUploadResources;
         PipelineObject::Ref mCurrentPipeline;
-        
+        bool mClosed = false;
+
         DX12CommandBuffer(const DX12Device& device);
+        ~DX12CommandBuffer();
+        void releaseResourceReferences();
         
         virtual void reset() override;
         virtual void setPipelineObject(PipelineObject::Ref pipeline) override;
@@ -264,7 +267,10 @@ namespace eokas
         UINT64 mFenceValues[kFrameCount];
         HANDLE mFenceEvent = nullptr;
         uint32_t mFrameIndex = 0;
+        std::vector<std::weak_ptr<DX12CommandBuffer>> mCommandBuffers;
         std::vector<DX12Surface*> mSurfaces;
+
+        void releaseSurfaceResources();
         
         DX12Device();
         virtual ~DX12Device();

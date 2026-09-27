@@ -27,10 +27,13 @@ namespace eokas
         }
     }
 
-    void UIToggle::triggerClick()
+    void UIToggle::triggerPointerRelease()
     {
-        this->setValue(!value);
-        UIWidget::triggerClick();
+        if (pressed)
+        {
+            this->setValue(!value);
+        }
+        UIWidget::triggerPointerRelease();
     }
 
     Color UIToggle::capsuleColor() const
@@ -59,7 +62,7 @@ namespace eokas
             UIWidget::render(primitive);
             return;
         }
-        Matrix3 world = shape.worldTrans();
+        Matrix3 world = worldTrans();
 
         float radius = thick * 0.5f;
         float cy = snap(shape.size.y * 0.5f);

@@ -8,11 +8,6 @@ namespace eokas
     class UIShape
     {
     public:
-        UIShape() = default;
-        UIShape(const UIShape& other);
-        UIShape& operator=(const UIShape& other);
-
-        UIShape* parent = nullptr;
         Vector2 origin { 0.0f, 0.0f };
         f32_t angle = 0.0f;
         Vector2 scale { 1.0f, 1.0f };
@@ -20,8 +15,6 @@ namespace eokas
         Vector2 size { 0.0f, 0.0f };
 
         Matrix3 localTrans() const;
-        Matrix3 worldTrans() const;
-        Matrix3 pivotToScreen() const;
 
         static Vector2 transformPoint(const Matrix3& matrix, const Vector2& point);
         static Vector2 transformVector(const Matrix3& matrix, const Vector2& vector);
