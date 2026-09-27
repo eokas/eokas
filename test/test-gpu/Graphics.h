@@ -119,6 +119,7 @@ namespace eokas::gpu {
             mPipelineBindings->end();
             
             mCommandBuffer = mDevice->createCommandBuffer();
+            mCommandBuffer->open();
             
             GeoMesh mesh;
             GeoMeshFactory::createBox(mesh, 1.0f, 1.0f, 1.0f);
@@ -145,7 +146,7 @@ namespace eokas::gpu {
                 mCommandBuffer->fillTexture(mTexture, image);
             }
             
-            mCommandBuffer->finish();
+            mCommandBuffer->close();
             mDevice->commitCommandBuffer(mCommandBuffer);
             mDevice->waitForGPU();
         }
@@ -174,7 +175,7 @@ namespace eokas::gpu {
             
             // fill command buffer
             {
-                mCommandBuffer->reset();
+                mCommandBuffer->open();
                 mCommandBuffer->setPipelineObject(mPipelineObject);
                 mCommandBuffer->setPipelineBindings(mPipelineBindings);
                 mCommandBuffer->setViewport(mViewport);
@@ -203,7 +204,7 @@ namespace eokas::gpu {
                 end.after = ResourceState::Present;
                 mCommandBuffer->barrier({end});
                 
-                mCommandBuffer->finish();
+                mCommandBuffer->close();
             }
             
             mDevice->commitCommandBuffer(mCommandBuffer);

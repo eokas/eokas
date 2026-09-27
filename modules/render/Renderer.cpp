@@ -117,8 +117,7 @@ namespace eokas
 
         if (!mCommandBuffer)
             mCommandBuffer = mDevice->createCommandBuffer();
-        else
-            mCommandBuffer->reset();
+        mCommandBuffer->open();
 
         mCommandBuffer->setViewport(cam->viewport);
         RenderTarget::Ref rt = surface->getActiveRenderTarget();
@@ -142,7 +141,7 @@ namespace eokas
 
         Barrier end{rt, ResourceState::RenderTarget, ResourceState::Present};
         mCommandBuffer->barrier({end});
-        mCommandBuffer->finish();
+        mCommandBuffer->close();
         mDevice->commitCommandBuffer(mCommandBuffer);
         surface->present();
         mDevice->waitForNextFrame();

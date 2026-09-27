@@ -224,18 +224,19 @@ namespace eokas
     
     struct DX12CommandBuffer : public CommandBuffer
     {
-        const DX12Device& mDevice;
+        DX12Device& mDevice;
         ComPtr <ID3D12GraphicsCommandList> mCommandList;
+        ComPtr<ID3D12CommandAllocator> mCommandAllocator;
         
         std::vector<ComPtr<ID3D12Resource>> mUploadResources;
         PipelineObject::Ref mCurrentPipeline;
         bool mClosed = false;
 
-        DX12CommandBuffer(const DX12Device& device);
+        DX12CommandBuffer(DX12Device& device);
         ~DX12CommandBuffer();
         void releaseResourceReferences();
         
-        virtual void reset() override;
+        virtual void open() override;
         virtual void setPipelineObject(PipelineObject::Ref pipeline) override;
         virtual void setPipelineBindings(PipelineBindings::Ref bindings) override;
         virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets, RenderTarget::Ref depthStencil) override;
@@ -249,7 +250,13 @@ namespace eokas
         virtual void fillBuffer(StaticBuffer::Ref target, const void* data, uint32_t size) override;
         virtual void fillTexture(Texture::Ref target, const std::vector<uint8_t>& source) override;
         virtual void barrier(const std::vector<Barrier>& barriers) override;
-        virtual void finish() override;
+        virtual void close() override;
+    };
+
+    struct DX12CommandAllocator
+    {
+        ComPtr<ID3D12CommandAllocator> dxCommandAllocator;
+        UINT64 dxExecuteFenceValue = 0;
     };
     
     struct DX12Device : public Device
@@ -261,16 +268,20 @@ namespace eokas
         ComPtr <ID3D12Device4> mDevice;
         ComPtr <ID3D12DebugDevice> mDebugDevice;
         ComPtr <ID3D12CommandQueue> mCommandQueue;
-        ComPtr <ID3D12CommandAllocator> mCommandAllocators[kFrameCount];
+        std::vector<DX12CommandAllocator> commandAllocatorPool;
         
         ComPtr <ID3D12Fence> mFence;
         UINT64 mFenceValues[kFrameCount];
+        UINT64 mLastQueuedFence = 0;
         HANDLE mFenceEvent = nullptr;
         uint32_t mFrameIndex = 0;
         std::vector<std::weak_ptr<DX12CommandBuffer>> mCommandBuffers;
         std::vector<DX12Surface*> mSurfaces;
 
         void releaseSurfaceResources();
+        UINT64 SignalFence();
+        ComPtr<ID3D12CommandAllocator> AcquireCommandAllocator();
+        void ReleaseCommandAllocator(ComPtr<ID3D12CommandAllocator> dxCommandAllocator, UINT64 dxExecuteFenceValue);
         
         DX12Device();
         virtual ~DX12Device();

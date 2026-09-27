@@ -334,8 +334,9 @@ namespace eokas
         using Ref = std::shared_ptr<CommandBuffer>;
 
         virtual ~CommandBuffer() = default;
-        
-        virtual void reset() = 0;
+
+        // 创建后处于关闭状态。每帧调用顺序：open、录制、close。
+        virtual void open() = 0;
         virtual void setPipelineObject(PipelineObject::Ref pipeline) = 0;
         virtual void setPipelineBindings(PipelineBindings::Ref bindings) = 0;
         virtual void setRenderTargets(const std::vector<RenderTarget::Ref>& renderTargets, RenderTarget::Ref depthStencil = nullptr) = 0;
@@ -349,7 +350,7 @@ namespace eokas
         virtual void fillBuffer(StaticBuffer::Ref target, const void* data, uint32_t size) = 0;
         virtual void fillTexture(Texture::Ref target, const std::vector<uint8_t>& source) = 0;
         virtual void barrier(const std::vector<Barrier>& barriers) = 0;
-        virtual void finish() = 0;
+        virtual void close() = 0;
     };
     
     constexpr uint32_t kFrameCount = 2;

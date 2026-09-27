@@ -9,6 +9,7 @@
 #include <string>
 #include <exception>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 #include <map>
 #include <codecvt>
@@ -952,13 +953,17 @@ namespace eokas
         }
     }
 
-    DX12CommandBuffer::DX12CommandBuffer(const DX12Device& device)
+    DX12CommandBuffer::DX12CommandBuffer(DX12Device& device)
         : mDevice(device)
     {
-        auto& dxDevice = device.mDevice;
-        auto& dxCommandAllocator = device.mCommandAllocators[device.mFrameIndex];
-        _ThrowIfFailed(dxDevice->CreateCommandList(
+        ComPtr<ID3D12CommandAllocator> dxCommandAllocator = device.AcquireCommandAllocator();
+        _ThrowIfFailed(device.mDevice->CreateCommandList(
             0, D3D12_COMMAND_LIST_TYPE_DIRECT, dxCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList)));
+        // CreateCommandList leaves the list recording. Close it so every frame is open/record/close.
+        // This empty recording is never executed, so the allocator can return with fence 0.
+        _ThrowIfFailed(mCommandList->Close());
+        mClosed = true;
+        device.ReleaseCommandAllocator(std::move(dxCommandAllocator), 0);
     }
 
     DX12CommandBuffer::~DX12CommandBuffer()
@@ -968,6 +973,8 @@ namespace eokas
             mCommandList->Close();
             mClosed = true;
         }
+        if (mCommandAllocator)
+            mDevice.ReleaseCommandAllocator(std::move(mCommandAllocator), 0);
     }
 
     void DX12CommandBuffer::releaseResourceReferences()
@@ -981,22 +988,25 @@ namespace eokas
             _ThrowIfFailed(mCommandList->Close());
             mClosed = true;
         }
-        auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameIndex];
+        if (mCommandAllocator)
+            mDevice.ReleaseCommandAllocator(std::move(mCommandAllocator), 0);
+        ComPtr<ID3D12CommandAllocator> dxCommandAllocator = mDevice.AcquireCommandAllocator();
         _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), nullptr));
         _ThrowIfFailed(mCommandList->Close());
         mClosed = true;
+        mDevice.ReleaseCommandAllocator(std::move(dxCommandAllocator), 0);
     }
     
-    void DX12CommandBuffer::reset()
+    void DX12CommandBuffer::open()
     {
         mUploadResources.clear();
-        auto& dxCommandAllocator = mDevice.mCommandAllocators[mDevice.mFrameIndex];
+        mCommandAllocator = mDevice.AcquireCommandAllocator();
         ID3D12PipelineState* pso = nullptr;
         if (auto* current = dynamic_cast<DX12PipelineObject*>(mCurrentPipeline.get()))
         {
             pso = current->mPipelineState.Get();
         }
-        _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), pso));
+        _ThrowIfFailed(mCommandList->Reset(mCommandAllocator.Get(), pso));
         mClosed = false;
         if (mCurrentPipeline)
         {
@@ -1243,7 +1253,7 @@ namespace eokas
         mCommandList->ResourceBarrier((UINT) dxBarriers.size(), dxBarriers.data());
     }
     
-    void DX12CommandBuffer::finish()
+    void DX12CommandBuffer::close()
     {
         _ThrowIfFailed(mCommandList->Close());
         mClosed = true;
@@ -1337,6 +1347,39 @@ namespace eokas
 
         mUploadResources.push_back(upload);
     }
+
+    UINT64 DX12Device::SignalFence()
+    {
+        const UINT64 value = ++mLastQueuedFence;
+        _ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), value));
+        return value;
+    }
+
+    ComPtr<ID3D12CommandAllocator> DX12Device::AcquireCommandAllocator()
+    {
+        const UINT64 completed = mFence->GetCompletedValue();
+        for (auto it = commandAllocatorPool.begin(); it != commandAllocatorPool.end(); ++it)
+        {
+            if (it->dxExecuteFenceValue != 0 && completed < it->dxExecuteFenceValue)
+                continue;
+            _ThrowIfFailed(it->dxCommandAllocator->Reset());
+            ComPtr<ID3D12CommandAllocator> dxCommandAllocator = std::move(it->dxCommandAllocator);
+            commandAllocatorPool.erase(it);
+            return dxCommandAllocator;
+        }
+
+        ComPtr<ID3D12CommandAllocator> dxCommandAllocator;
+        _ThrowIfFailed(mDevice->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&dxCommandAllocator)));
+        return dxCommandAllocator;
+    }
+
+    void DX12Device::ReleaseCommandAllocator(ComPtr<ID3D12CommandAllocator> dxCommandAllocator, UINT64 dxExecuteFenceValue)
+    {
+        if (!dxCommandAllocator)
+            return;
+        commandAllocatorPool.push_back(DX12CommandAllocator{ std::move(dxCommandAllocator), dxExecuteFenceValue });
+    }
     
     DX12Device::DX12Device()
     {
@@ -1391,14 +1434,8 @@ namespace eokas
         queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
         _ThrowIfFailed(mDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&mCommandQueue)));
         
-        for (UINT i = 0; i < kFrameCount; i++)
-        {
-            _ThrowIfFailed(mDevice->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&mCommandAllocators[i])));
-        }
-        
         memset(mFenceValues, 0, sizeof(UINT64) * kFrameCount);
-        _ThrowIfFailed(mDevice->CreateFence(mFenceValues[mFrameIndex], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)));
-        mFenceValues[mFrameIndex]++;
+        _ThrowIfFailed(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)));
         mFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
         if (mFenceEvent == nullptr)
         {
@@ -1629,24 +1666,24 @@ namespace eokas
     
     void DX12Device::commitCommandBuffer(const CommandBuffer::Ref commandBuffer)
     {
-        const DX12CommandBuffer* dxCommandBuffer = dynamic_cast<const DX12CommandBuffer*>(commandBuffer.get());
+        DX12CommandBuffer* dxCommandBuffer = dynamic_cast<DX12CommandBuffer*>(commandBuffer.get());
         ID3D12CommandList* commandLists[] = {dxCommandBuffer->mCommandList.Get()};
         mCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
+        const UINT64 executeFence = SignalFence();
+        ReleaseCommandAllocator(std::move(dxCommandBuffer->mCommandAllocator), executeFence);
     }
     
     void DX12Device::releaseSurfaceResources()
     {
-        // Recorded command lists and allocators keep references to swapchain
-        // buffers until both are reset. Drop those references before the caller
-        // releases the back buffers.
-        const UINT64 waitValue = mFenceValues[mFrameIndex];
-        _ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), waitValue));
+        // Recorded command lists keep references to swapchain buffers until the
+        // list is reset. Drain the queue, then drop those references before the
+        // caller releases the back buffers.
+        const UINT64 waitValue = SignalFence();
         if (mFence->GetCompletedValue() < waitValue)
         {
             _ThrowIfFailed(mFence->SetEventOnCompletion(waitValue, mFenceEvent));
             WaitForSingleObject(mFenceEvent, INFINITE);
         }
-        mFenceValues[mFrameIndex] = waitValue + 1;
 
         for (auto it = mCommandBuffers.begin(); it != mCommandBuffers.end();)
         {
@@ -1659,29 +1696,18 @@ namespace eokas
             commandBuffer->releaseResourceReferences();
             ++it;
         }
-
-        for (uint32_t i = 0; i < kFrameCount; ++i)
-            _ThrowIfFailed(mCommandAllocators[i]->Reset());
     }
 
     void DX12Device::waitForGPU()
     {
-        const UINT64 currentFenceValue = mFenceValues[mFrameIndex];
-        
-        _ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), currentFenceValue));
-        
-        _ThrowIfFailed(mFence->SetEventOnCompletion(currentFenceValue, mFenceEvent));
+        const UINT64 waitValue = SignalFence();
+        _ThrowIfFailed(mFence->SetEventOnCompletion(waitValue, mFenceEvent));
         WaitForSingleObject(mFenceEvent, INFINITE);
-        
-        mFenceValues[mFrameIndex] = currentFenceValue + 1;
-        _ThrowIfFailed(mCommandAllocators[mFrameIndex]->Reset());
     }
     
     void DX12Device::waitForNextFrame()
     {
-        const UINT64 currentFenceValue = mFenceValues[mFrameIndex];
-        _ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), currentFenceValue));
-
+        mFenceValues[mFrameIndex] = SignalFence();
         mFrameIndex = (mFrameIndex + 1) % kFrameCount;
 
         const UINT64 completed = mFence->GetCompletedValue();
@@ -1690,9 +1716,6 @@ namespace eokas
             _ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValues[mFrameIndex], mFenceEvent));
             WaitForSingleObject(mFenceEvent, INFINITE);
         }
-
-        mFenceValues[mFrameIndex] = currentFenceValue + 1;
-        _ThrowIfFailed(mCommandAllocators[mFrameIndex]->Reset());
     }
 
     Surface::Ref DX12Device::createSurface(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
