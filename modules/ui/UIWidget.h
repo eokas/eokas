@@ -18,11 +18,10 @@ namespace eokas
     public:
         using Ref = std::shared_ptr<UIWidget>;
         
-        // parent is the widget whose pivot space this widget is placed in.
+        // parent() is the widget whose pivot space this widget is placed in.
         // Null means the parent space is the screen.
         // shape.origin is this widget's pivot relative to the parent pivot.
         // Geometry is rasterized in local space with the origin at the top-left, then multiplied by worldTrans().
-        UIWidget* parent = nullptr;
         UIShape shape;
 
         Color color { Color(1.0f, 1.0f, 1.0f, 1.0f) };
@@ -35,8 +34,6 @@ namespace eokas
         bool hovered = false;
         bool pressed = false;
         bool focused = false;
-
-        std::vector<UIWidget::Ref> children;
 
         std::function<void()> onPointerEnter;
         std::function<void()> onPointerLeave;
@@ -56,6 +53,11 @@ namespace eokas
         std::function<void()> onLostFocus;
 
         virtual ~UIWidget();
+        UIWidget* parent() const { return mParent; }
+        const std::vector<Ref>& children() const { return mChildren; }
+        Ref attachChild(Ref child);
+        Ref detachChild(UIWidget* child);
+        void detachChildren();
         Matrix3 worldTrans() const;
         Matrix3 pivotToScreen() const;
         virtual void render(UIPrimitive& primitive);
@@ -74,9 +76,11 @@ namespace eokas
         void resize(const Vector2& newSize);    
         void placeChild(UIWidget& child, const Vector2& topLeftLocal);
         void placeChild(UIWidget& child, const Vector2& topLeftLocal, const Vector2& childSize);
-        virtual void bindChildren();
-    
+
     private:
+        bool isUnder(const UIWidget* ancestor) const;
+        UIWidget* mParent = nullptr;
+        std::vector<Ref> mChildren;
         std::optional<std::chrono::steady_clock::time_point> mLastClickTime;
     };
 }

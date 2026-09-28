@@ -57,8 +57,8 @@ namespace eokas
         if (!mLabel)
         {
             mLabel = std::make_shared<UIText>();
-            children.clear();
-            children.push_back(mLabel);
+            this->detachChildren();
+            this->attachChild(mLabel);
         }
         mLabel->text = text;
     }
@@ -107,13 +107,13 @@ namespace eokas
     UIDropdown::UIDropdown()
     {
         mCaption = std::make_shared<UIText>();
-        children.push_back(mCaption);
+        this->attachChild(mCaption);
         auto panel = std::make_shared<UIWidget>();
         panel->floating = true;
         panel->visible = false;
         panel->pickable = true;
         dropdown = panel.get();
-        children.push_back(panel);
+        this->attachChild(panel);
         this->syncCaption();
         onGotFocus = []() {};
         onLostFocus = [this]() { this->setExpanded(false); };
@@ -164,7 +164,7 @@ namespace eokas
         mItems.push_back(item);
         if (dropdown)
         {
-            dropdown->children.push_back(item);
+            dropdown->attachChild(item);
         }
         this->syncCaption();
     }
@@ -188,14 +188,7 @@ namespace eokas
         mItems.erase(iter);
         if (dropdown)
         {
-            for (auto child = dropdown->children.begin(); child != dropdown->children.end(); ++child)
-            {
-                if (child->get() == raw)
-                {
-                    dropdown->children.erase(child);
-                    break;
-                }
-            }
+            dropdown->detachChild(raw);
         }
         if (value == index)
         {
@@ -215,7 +208,7 @@ namespace eokas
         mItems.clear();
         if (dropdown)
         {
-            dropdown->children.clear();
+            dropdown->detachChildren();
         }
         this->setExpanded(false);
         if (value != -1)

@@ -7,7 +7,7 @@ namespace eokas
 {
     void UIGrid::addChild(const std::shared_ptr<UIWidget>& child)
     {
-        children.push_back(child);
+        this->attachChild(child);
     }
 
     void UIGrid::render(UIPrimitive& primitive)
@@ -23,7 +23,7 @@ namespace eokas
 
         std::vector<UIWidget*> items;
         float maxW = 0.0f;
-        for (auto& child : children)
+        for (auto& child : children())
         {
             if (!child || !child->visible)
             {
@@ -108,7 +108,7 @@ namespace eokas
 
         std::vector<UIWidget*> items;
         float maxW = 0.0f;
-        for (auto& child : children)
+        for (auto& child : children())
         {
             if (!child || !child->visible)
             {

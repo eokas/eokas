@@ -6,15 +6,14 @@ namespace eokas
 {
     void UIList::addChild(const std::shared_ptr<UIWidget>& child)
     {
-        child->parent = this;
-        children.push_back(child);
+        this->attachChild(child);
     }
 
     void UIList::refit()
     {
         float main = padding;
         bool any = false;
-        for (auto& child : children)
+        for (auto& child : children())
         {
             if (!child || !child->visible)
             {
@@ -53,7 +52,7 @@ namespace eokas
         }
         Vector2 cursor(padding, padding);
         bool first = true;
-        for (auto& child : children)
+        for (auto& child : children())
         {
             if (!child || !child->visible)
             {

@@ -4,23 +4,88 @@ namespace eokas
 {
     UIWidget::~UIWidget()
     {
-        for (auto& child : children)
+        for (auto& child : mChildren)
         {
-            if (child && child->parent == this)
+            if (child && child->mParent == this)
             {
-                child->parent = nullptr;
+                child->mParent = nullptr;
             }
         }
+    }
+
+    bool UIWidget::isUnder(const UIWidget* ancestor) const
+    {
+        for (const UIWidget* cursor = this; cursor != nullptr; cursor = cursor->mParent)
+        {
+            if (cursor == ancestor)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    UIWidget::Ref UIWidget::attachChild(UIWidget::Ref child)
+    {
+        if (!child || this->isUnder(child.get()))
+        {
+            return nullptr;
+        }
+        if (child->mParent == this)
+        {
+            return child;
+        }
+        if (child->mParent != nullptr)
+        {
+            child->mParent->detachChild(child.get());
+        }
+        child->mParent = this;
+        mChildren.push_back(child);
+        return child;
+    }
+
+    UIWidget::Ref UIWidget::detachChild(UIWidget* child)
+    {
+        if (child == nullptr)
+        {
+            return nullptr;
+        }
+        for (auto it = mChildren.begin(); it != mChildren.end(); ++it)
+        {
+            if (it->get() == child)
+            {
+                Ref held = *it;
+                mChildren.erase(it);
+                if (held->mParent == this)
+                {
+                    held->mParent = nullptr;
+                }
+                return held;
+            }
+        }
+        return nullptr;
+    }
+
+    void UIWidget::detachChildren()
+    {
+        for (auto& child : mChildren)
+        {
+            if (child && child->mParent == this)
+            {
+                child->mParent = nullptr;
+            }
+        }
+        mChildren.clear();
     }
 
     Matrix3 UIWidget::worldTrans() const
     {
         Matrix3 local = shape.localTrans();
-        if (parent == nullptr)
+        if (mParent == nullptr)
         {
             return local;
         }
-        return Matrix3::transform(local, parent->pivotToScreen());
+        return Matrix3::transform(local, mParent->pivotToScreen());
     }
 
     Matrix3 UIWidget::pivotToScreen() const
@@ -35,23 +100,21 @@ namespace eokas
         {
             return;
         }
-        for (auto& child : children)
+        for (auto& child : mChildren)
         {
             if (!child || child->floating)
             {
                 continue;
             }
-            child->parent = this;
             if (!primitive.outsideClip(child->shape.bounds(child->worldTrans())))
             {
                 child->render(primitive);
             }
         }
-        for (auto& child : children)
+        for (auto& child : mChildren)
         {
             if (child && child->floating)
             {
-                child->parent = this;
                 child->render(primitive);
             }
         }
@@ -72,7 +135,7 @@ namespace eokas
         Vector2 local = shape.toLocal(point);
         bool inside = this->contains(local);
         Vector2 childPoint = local - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
-        for (auto it = children.rbegin(); it != children.rend(); ++it)
+        for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)
         {
             if (*it && (*it)->floating)
             {
@@ -82,7 +145,7 @@ namespace eokas
                 }
             }
         }
-        for (auto it = children.rbegin(); it != children.rend(); ++it)
+        for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)
         {
             if (*it && !(*it)->floating)
             {
@@ -201,7 +264,7 @@ namespace eokas
             shape.pivot.y * (newSize.y - shape.size.y));
         shape.origin += UIShape::transformVector(shape.localTrans(), shift);
         shape.size = newSize;
-        for (auto& child : children)
+        for (auto& child : mChildren)
         {
             if (child)
             {
@@ -212,7 +275,6 @@ namespace eokas
 
     void UIWidget::placeChild(UIWidget& child, const Vector2& topLeftLocal)
     {
-        child.parent = this;
         Vector2 topLeftPivot = topLeftLocal - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
         child.shape.setBox(topLeftPivot, child.shape.size);
     }
@@ -221,18 +283,5 @@ namespace eokas
     {
         child.shape.size = childSize;
         this->placeChild(child, topLeftLocal);
-    }
-
-    void UIWidget::bindChildren()
-    {
-        for (auto& child : children)
-        {
-            if (!child)
-            {
-                continue;
-            }
-            child->parent = this;
-            child->bindChildren();
-        }
     }
 }

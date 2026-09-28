@@ -91,8 +91,7 @@ namespace eokas
 
     void UICanvas::addChild(const std::shared_ptr<UIWidget>& child)
     {
-        child->parent = this;
-        children.push_back(child);
+        this->attachChild(child);
     }
 
     void UICanvas::render(UIPrimitive& primitive)
@@ -116,7 +115,7 @@ namespace eokas
         float minY = 0.0f;
         float maxX = 0.0f;
         float maxY = 0.0f;
-        for (auto& child : children)
+        for (auto& child : children())
         {
             if (!child || !child->visible)
             {
@@ -134,7 +133,7 @@ namespace eokas
         if (delta.x != 0.0f || delta.y != 0.0f)
         {
             shape.origin -= UIShape::transformVector(shape.localTrans(), delta);
-            for (auto& child : children)
+            for (auto& child : children())
             {
                 if (child)
                 {
@@ -197,7 +196,7 @@ namespace eokas
             {
                 item->selected = item == chart;
             }
-            for (auto& child : node->children)
+            for (auto& child : node->children())
             {
                 applySelect(child.get(), chart);
             }
@@ -206,7 +205,7 @@ namespace eokas
 
     void UICanvas::select(UIChart* chart)
     {
-        for (auto& child : children)
+        for (auto& child : children())
         {
             applySelect(child.get(), chart);
         }

@@ -19,11 +19,11 @@ namespace eokas
 
         Matrix3 parentSpaceOf(const UIWidget& widget)
         {
-            if (widget.parent == nullptr)
+            if (widget.parent() == nullptr)
             {
                 return Matrix3::IDENTITY;
             }
-            return widget.parent->pivotToScreen();
+            return widget.parent()->pivotToScreen();
         }
 
         Vector2 screenToPivot(const UIWidget& widget, const Vector2& screen)
@@ -116,16 +116,6 @@ namespace eokas
             }
             return false;
         }
-
-        void prepareTree(const std::shared_ptr<UIWidget>& root)
-        {
-            if (!root)
-            {
-                return;
-            }
-            root->parent = nullptr;
-            root->bindChildren();
-        }
     }
 
     void UIWindow::init(uint32_t width, uint32_t height)
@@ -213,8 +203,11 @@ namespace eokas
         mLastLocal = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
         mHasLocal = false;
+        if (widget && widget->parent() != nullptr)
+        {
+            widget->parent()->detachChild(widget.get());
+        }
         mRoot = widget;
-        prepareTree(mRoot);
     }
 
     void UIWindow::flush()
@@ -227,7 +220,6 @@ namespace eokas
         mPrimitive->begin();
         if (mRoot)
         {
-            prepareTree(mRoot);
             mRoot->render(*mPrimitive);
         }
         mPrimitive->end();
@@ -244,7 +236,6 @@ namespace eokas
         {
             return nullptr;
         }
-        prepareTree(mRoot);
         return mRoot->pick(Vector2(x, y));
     }
 
@@ -356,7 +347,6 @@ namespace eokas
 
     void UIWindow::onMouseWheel(float x, float y, float deltaX, float deltaY)
     {
-        prepareTree(mRoot);
         this->routeWheel(mRoot.get(), Vector2(x, y), Vector2(deltaX, deltaY));
         if (UIWidget* hit = this->hitTest(x, y))
         {
@@ -373,7 +363,6 @@ namespace eokas
         }
         UICanvas* canvas = nullptr;
         UIWidget* target = this->dragTargetOf(mPressed, canvas);
-        prepareTree(mRoot);
         if (canvas != nullptr && target != nullptr && target != canvas)
         {
             Vector2 local = screenToPivot(*target, Vector2(x, y));
@@ -414,7 +403,7 @@ namespace eokas
         }
         if (UIView* view = dynamic_cast<UIView*>(node))
         {
-            for (auto& child : view->root()->children)
+            for (auto& child : view->root()->children())
             {
                 if (this->collectPath(child.get(), target, path))
                 {
@@ -424,7 +413,7 @@ namespace eokas
             path.pop_back();
             return false;
         }
-        for (auto& child : node->children)
+        for (auto& child : node->children())
         {
             if (this->collectPath(child.get(), target, path))
             {
@@ -487,7 +476,7 @@ namespace eokas
         }
         if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
         {
-            for (auto it = canvas->children.rbegin(); it != canvas->children.rend(); ++it)
+            for (auto it = canvas->children().rbegin(); it != canvas->children().rend(); ++it)
             {
                 if (*it && this->routeNestedCanvas(it->get(), point, delta))
                 {
@@ -523,14 +512,14 @@ namespace eokas
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
             const std::shared_ptr<UIWidget>& content = view->root();
-            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            for (auto it = content->children().rbegin(); it != content->children().rend(); ++it)
             {
                 if (*it && (*it)->floating && this->routeWheel(it->get(), point, delta))
                 {
                     return true;
                 }
             }
-            for (auto it = content->children.rbegin(); it != content->children.rend(); ++it)
+            for (auto it = content->children().rbegin(); it != content->children().rend(); ++it)
             {
                 if (*it && !(*it)->floating && this->routeWheel(it->get(), point, delta))
                 {
@@ -544,14 +533,14 @@ namespace eokas
             }
             return view->scrollBy(delta.x, delta.y);
         }
-        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
+        for (auto it = widget->children().rbegin(); it != widget->children().rend(); ++it)
         {
             if (*it && (*it)->floating && this->routeWheel(it->get(), point, delta))
             {
                 return true;
             }
         }
-        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
+        for (auto it = widget->children().rbegin(); it != widget->children().rend(); ++it)
         {
             if (*it && !(*it)->floating && this->routeWheel(it->get(), point, delta))
             {
@@ -573,7 +562,7 @@ namespace eokas
         }
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
-            for (auto it = view->root()->children.rbegin(); it != view->root()->children.rend(); ++it)
+            for (auto it = view->root()->children().rbegin(); it != view->root()->children().rend(); ++it)
             {
                 if (*it && this->routeNestedCanvas(it->get(), point, delta))
                 {
@@ -582,7 +571,7 @@ namespace eokas
             }
             return false;
         }
-        for (auto it = widget->children.rbegin(); it != widget->children.rend(); ++it)
+        for (auto it = widget->children().rbegin(); it != widget->children().rend(); ++it)
         {
             if (*it && this->routeNestedCanvas(it->get(), point, delta))
             {
@@ -604,13 +593,13 @@ namespace eokas
         }
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
-            for (auto& child : view->root()->children)
+            for (auto& child : view->root()->children())
             {
                 this->endCanvasDrag(child.get());
             }
             return;
         }
-        for (auto& child : widget->children)
+        for (auto& child : widget->children())
         {
             this->endCanvasDrag(child.get());
         }
@@ -694,13 +683,13 @@ namespace eokas
         }
         if (UIView* view = dynamic_cast<UIView*>(widget))
         {
-            for (auto& child : view->root()->children)
+            for (auto& child : view->root()->children())
             {
                 this->resetPointerState(child.get());
             }
             return;
         }
-        for (auto& child : widget->children)
+        for (auto& child : widget->children())
         {
             this->resetPointerState(child.get());
         }
@@ -718,7 +707,7 @@ namespace eokas
         }
         if (UIView* view = dynamic_cast<UIView*>(node))
         {
-            for (auto& child : view->root()->children)
+            for (auto& child : view->root()->children())
             {
                 if (this->containsWidget(child.get(), target))
                 {
@@ -727,7 +716,7 @@ namespace eokas
             }
             return false;
         }
-        for (auto& child : node->children)
+        for (auto& child : node->children())
         {
             if (this->containsWidget(child.get(), target))
             {

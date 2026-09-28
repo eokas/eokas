@@ -60,7 +60,6 @@ namespace eokas
     {
     public:
         float splitterSize = 4.0f;
-        float dropBand = 28.0f;
         float minPane = 48.0f;
         float dragSlop = 4.0f;
         Color empty { Color(0.12f, 0.12f, 0.14f, 1.0f) };
@@ -125,7 +124,6 @@ namespace eokas
         Node* nearestLeaf(Node* node, const Vector2& point);
         Node* firstLeaf(Node* node);
         float tabStrip(const Node& node) const;
-        float bandOf(const Rect& area) const;
         float fitRatio(float ratio, float inner) const;
         UIDockMode zoneAt(const Rect& area, const Vector2& point) const;
         Rect previewRectFor(const Rect& area, UIDockMode mode) const;

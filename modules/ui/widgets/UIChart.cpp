@@ -175,7 +175,7 @@ namespace eokas
         if (!mLabel)
         {
             mLabel = std::make_shared<UIText>();
-            children.push_back(mLabel);
+            this->attachChild(mLabel);
         }
         mLabel->text = value;
     }
@@ -313,20 +313,13 @@ namespace eokas
     {
         if (chart)
         {
-            children.push_back(chart);
+            this->attachChild(chart);
         }
     }
 
     void UIChart::removeChart(UIChart* chart)
     {
-        for (auto it = children.begin(); it != children.end(); ++it)
-        {
-            if (it->get() == chart)
-            {
-                children.erase(it);
-                return;
-            }
-        }
+        this->detachChild(chart);
     }
 
     void UIChart::scaleAt(const Vector2& focal, float value)

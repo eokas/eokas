@@ -12,10 +12,10 @@ namespace eokas
     void UIButton::setContent(const std::shared_ptr<UIWidget>& widget)
     {
         content = widget;
-        children.clear();
+        this->detachChildren();
         if (content)
         {
-            children.push_back(content);
+            this->attachChild(content);
         }
     }
 

@@ -176,10 +176,10 @@ namespace eokas
     void UITableCell::setContent(const std::shared_ptr<UIWidget>& widget)
     {
         mContent = widget;
-        children.clear();
+        this->detachChildren();
         if (mContent)
         {
-            children.push_back(mContent);
+            this->attachChild(mContent);
         }
     }
 
@@ -311,12 +311,12 @@ namespace eokas
 
     void UITableRow::syncCells()
     {
-        children.clear();
+        this->detachChildren();
         for (auto& item : mCells)
         {
             if (item)
             {
-                children.push_back(item);
+                this->attachChild(item);
             }
         }
     }
@@ -523,7 +523,7 @@ namespace eokas
 
     void UITable::syncChildren()
     {
-        children.clear();
+        this->detachChildren();
         std::vector<std::shared_ptr<UITableRow>> rows;
         for (const auto& row : mRows)
         {
@@ -531,7 +531,7 @@ namespace eokas
         }
         for (const auto& row : rows)
         {
-            children.push_back(row);
+            this->attachChild(row);
         }
     }
 

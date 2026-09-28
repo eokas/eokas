@@ -64,14 +64,14 @@ namespace eokas
 
     void UIRegion::syncChildren()
     {
-        children.clear();
+        this->detachChildren();
         if (mHead)
         {
-            children.push_back(mHead);
+            this->attachChild(mHead);
         }
         if (mBody)
         {
-            children.push_back(mBody);
+            this->attachChild(mBody);
         }
     }
 

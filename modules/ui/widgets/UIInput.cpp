@@ -165,7 +165,7 @@ namespace eokas
         auto created = std::make_shared<UIText>();
         created->visible = false;
         mLabel = created;
-        children.push_back(created);
+        this->attachChild(created);
         mCaretBlinkAnchor = std::chrono::steady_clock::now();
         onGotFocus = [this]() { this->resetCaretBlink(); };
         onLostFocus = [this]()

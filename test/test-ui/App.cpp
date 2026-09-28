@@ -4,12 +4,14 @@
 
 #include "./Graphics.h"
 #include <dbghelp.h>
+#include <dwmapi.h>
 #include <cstdio>
 #include <cstring>
 #include <exception>
 #include <string>
 
 #pragma comment(lib, "dbghelp.lib")
+#pragma comment(lib, "dwmapi.lib")
 
 const wchar_t* windowTitle = L"test-ui";
 const wchar_t* windowClass = L"test-ui";
@@ -547,6 +549,12 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
         {
             return FALSE;
         }
+        BOOL useDarkCaption = TRUE;
+        DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkCaption, sizeof(useDarkCaption));
+        COLORREF captionColor = RGB(0, 0, 0);
+        DwmSetWindowAttribute(hWnd, DWMWA_CAPTION_COLOR, &captionColor, sizeof(captionColor));
+        COLORREF captionText = RGB(255, 255, 255);
+        DwmSetWindowAttribute(hWnd, DWMWA_TEXT_COLOR, &captionText, sizeof(captionText));
         ShowWindow(hWnd, nCmdShow);
         UpdateWindow(hWnd);
 

@@ -18,6 +18,9 @@ namespace eokas
         float minf(float a, float b) { return a < b ? a : b; }
         float maxf(float a, float b) { return a > b ? a : b; }
 
+        // Dock drop zones: each edge is 30% of that axis, the center fill is the remaining 40%.
+        constexpr float kDockEdge = 0.3f;
+
         float snap(float value)
         {
             return floorf(value + 0.5f);
@@ -116,7 +119,7 @@ namespace eokas
             Vector2 pen(snap(padX), 0.0f);
             float right = snap(head->shape.size.x) - padX;
             bool first = true;
-            for (auto& child : head->children)
+            for (auto& child : head->children())
             {
                 if (!child || !child->visible) continue;
                 if (!first) pen.x += spacing;
@@ -144,7 +147,7 @@ namespace eokas
             {
                 float content = 0.0f;
                 bool first = true;
-                for (auto& child : layout->children)
+                for (auto& child : layout->children())
                 {
                     if (!child || !child->visible) continue;
                     if (!first) content += layout->spacing;
@@ -245,9 +248,9 @@ namespace eokas
             this->mDragging = true;
             bool engaged = false;
             Matrix3 parent = Matrix3::IDENTITY;
-            if (this->mHead->parent != nullptr)
+            if (this->mHead->parent() != nullptr)
             {
-                parent = this->mHead->parent->pivotToScreen();
+                parent = this->mHead->parent()->pivotToScreen();
             }
             Vector2 screen = UIShape::transformPoint(parent, position);
             if (this->onDrag) engaged = this->onDrag(*this, screen.x, screen.y, 0);
@@ -281,9 +284,9 @@ namespace eokas
 
     void UIDockPage::syncChildren()
     {
-        children.clear();
-        if (mHead) children.push_back(mHead);
-        if (mBody) children.push_back(mBody);
+        this->detachChildren();
+        if (mHead) this->attachChild(mHead);
+        if (mBody) this->attachChild(mBody);
     }
 
     void UIDockPage::place(const Rect& headRect, const Rect& bodyRect, bool showBody, bool tabActive)
@@ -335,7 +338,6 @@ namespace eokas
         if (!visible) return;
         if (mSpace == nullptr)
         {
-            parent = nullptr;
             float headH = 28.0f;
             if (mHead && mHead->shape.size.y > 0.0f) headH = snap(mHead->shape.size.y);
             float w = snap(shape.size.x);
@@ -356,8 +358,6 @@ namespace eokas
             mHead->color = activeFill;
             recolor = true;
         }
-        if (mHead) mHead->parent = this;
-        if (mBody) mBody->parent = this;
         primitive.pushClip(shape.bounds(worldTrans()));
         if (mBody && mBody->visible && color.a > 0.0f)
         {
@@ -435,7 +435,7 @@ namespace eokas
 
     std::shared_ptr<UIDockPage> UIDockSpace::findShared(UIDockPage* page) const
     {
-        for (auto& child : children)
+        for (auto& child : children())
         {
             if (child.get() == page) return std::static_pointer_cast<UIDockPage>(child);
         }
@@ -450,14 +450,9 @@ namespace eokas
         if (page == nullptr || page->space() != this) return held;
         this->extract(mRoot, page);
         if (!mRoot) mRoot = std::make_unique<Node>();
-        for (auto it = children.begin(); it != children.end(); ++it)
+        if (UIWidget::Ref removed = this->detachChild(page))
         {
-            if (it->get() == page)
-            {
-                if (!held) held = std::static_pointer_cast<UIDockPage>(*it);
-                children.erase(it);
-                break;
-            }
+            held = std::static_pointer_cast<UIDockPage>(removed);
         }
         page->setDock(nullptr, UIDockMode::None);
         page->floating = false;
@@ -540,9 +535,7 @@ namespace eokas
         leaf->active = (int)leaf->pages.size() - 1;
         page->setDock(this, UIDockMode::Fill);
         page->floating = false;
-        bool found = false;
-        for (auto& child : children) if (child == page) found = true;
-        if (!found) children.push_back(page);
+        this->attachChild(page);
     }
 
     void UIDockSpace::splitLeaf(Node* leaf, const std::shared_ptr<UIDockPage>& page, UIDockMode mode)
@@ -556,9 +549,7 @@ namespace eokas
         incoming->active = 0;
         page->setDock(this, mode);
         page->floating = false;
-        bool found = false;
-        for (auto& child : children) if (child == page) found = true;
-        if (!found) children.push_back(page);
+        this->attachChild(page);
         bool incomingFirst = mode == UIDockMode::Left || mode == UIDockMode::Top;
         leaf->split = true;
         leaf->vertical = mode == UIDockMode::Top || mode == UIDockMode::Bottom;
@@ -586,9 +577,7 @@ namespace eokas
         incoming->active = 0;
         page->setDock(this, mode);
         page->floating = false;
-        bool found = false;
-        for (auto& child : children) if (child == page) found = true;
-        if (!found) children.push_back(page);
+        this->attachChild(page);
         mRoot = std::make_unique<Node>();
         mRoot->split = true;
         mRoot->vertical = mode == UIDockMode::Top || mode == UIDockMode::Bottom;
@@ -675,12 +664,6 @@ namespace eokas
         return this->firstLeaf(node->second.get());
     }
 
-    float UIDockSpace::bandOf(const Rect& area) const
-    {
-        float side = minf(area.size.x, area.size.y);
-        return minf(dropBand, side * 0.5f);
-    }
-
     float UIDockSpace::fitRatio(float ratio, float inner) const
     {
         if (inner <= splitterSize + minPane * 2.0f) return 0.5f;
@@ -692,21 +675,24 @@ namespace eokas
 
     UIDockMode UIDockSpace::zoneAt(const Rect& area, const Vector2& point) const
     {
-        float band = this->bandOf(area);
-        Vector2 innerMin = area.origin + Vector2(band, band);
-        Vector2 innerMax = area.origin + area.size - Vector2(band, band);
-        if (point.x >= innerMin.x && point.x < innerMax.x && point.y >= innerMin.y && point.y < innerMax.y) return UIDockMode::Fill;
-        float left = point.x - area.origin.x;
-        float right = area.origin.x + area.size.x - point.x;
-        float top = point.y - area.origin.y;
-        float bottom = area.origin.y + area.size.y - point.y;
-        float best = left;
-        UIDockMode mode = UIDockMode::Left;
-        if (right < best) { best = right; mode = UIDockMode::Right; }
-        if (top < best) { best = top; mode = UIDockMode::Top; }
-        if (bottom < best) { best = bottom; mode = UIDockMode::Bottom; }
-        (void)best;
-        return mode;
+        float w = area.size.x;
+        float h = area.size.y;
+        if (w <= 0.0f || h <= 0.0f) return UIDockMode::Fill;
+        float hx = (point.x - area.origin.x) / w;
+        float hy = (point.y - area.origin.y) / h;
+        bool left = hx < kDockEdge;
+        bool right = hx >= 1.0f - kDockEdge;
+        bool top = hy < kDockEdge;
+        bool bottom = hy >= 1.0f - kDockEdge;
+        bool edgeX = left || right;
+        bool edgeY = top || bottom;
+        if (!edgeX && !edgeY) return UIDockMode::Fill;
+        if (edgeX && !edgeY) return left ? UIDockMode::Left : UIDockMode::Right;
+        if (!edgeX && edgeY) return top ? UIDockMode::Top : UIDockMode::Bottom;
+        float dx = left ? hx : 1.0f - hx;
+        float dy = top ? hy : 1.0f - hy;
+        if (dx <= dy) return left ? UIDockMode::Left : UIDockMode::Right;
+        return top ? UIDockMode::Top : UIDockMode::Bottom;
     }
 
     Rect UIDockSpace::previewRectFor(const Rect& area, UIDockMode mode) const
@@ -1007,13 +993,11 @@ namespace eokas
             if (i == node->active) continue;
             if (node->pages[i])
             {
-                node->pages[i]->parent = this;
                 node->pages[i]->render(primitive);
             }
         }
         if (node->active >= 0 && node->active < (int)node->pages.size() && node->pages[node->active])
         {
-            node->pages[node->active]->parent = this;
             node->pages[node->active]->render(primitive);
         }
         if (!node->pages.empty())

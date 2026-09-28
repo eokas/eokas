@@ -75,35 +75,12 @@ namespace eokas
         pickable = false;
         mRoot = std::make_shared<UIWidget>();
         mRoot->pickable = false;
-        mRoot->parent = this;
-    }
-
-    UIView::~UIView()
-    {
-        if (mRoot && mRoot->parent == this)
-        {
-            mRoot->parent = nullptr;
-        }
-    }
-
-    void UIView::bindChildren()
-    {
-        UIWidget::bindChildren();
-        if (mRoot)
-        {
-            mRoot->parent = this;
-            mRoot->bindChildren();
-        }
+        this->attachChild(mRoot);
     }
 
     void UIView::addChild(const std::shared_ptr<UIWidget>& child)
     {
-        if (!child)
-        {
-            return;
-        }
-        child->parent = mRoot.get();
-        mRoot->children.push_back(child);
+        mRoot->attachChild(child);
     }
 
     void UIView::setScroll(float x, float y)
@@ -169,7 +146,7 @@ namespace eokas
             Vector2 inViewPivot = viewLocal - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
             Vector2 rootLocal = mRoot->shape.toLocal(inViewPivot);
             content = rootLocal - Vector2(mRoot->shape.pivot.x * mRoot->shape.size.x, mRoot->shape.pivot.y * mRoot->shape.size.y);
-            for (auto it = mRoot->children.rbegin(); it != mRoot->children.rend(); ++it)
+            for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
             {
                 if (*it && (*it)->floating)
                 {
@@ -194,7 +171,7 @@ namespace eokas
         }
         if (contentScale)
         {
-            for (auto it = mRoot->children.rbegin(); it != mRoot->children.rend(); ++it)
+            for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
             {
                 if (*it && !(*it)->floating)
                 {
@@ -214,7 +191,6 @@ namespace eokas
 
     void UIView::placeRoot()
     {
-        mRoot->parent = this;
         Vector2 topLeft(
             -shape.pivot.x * shape.size.x - mScrollX,
             -shape.pivot.y * shape.size.y - mScrollY);
@@ -241,13 +217,13 @@ namespace eokas
         };
         for (int i = 0; i < 4; ++i)
         {
-            const UIWidget* node = widget->parent;
+            const UIWidget* node = widget->parent();
             Vector2 point = corners[i];
             while (node != nullptr && node != mRoot.get())
             {
                 Vector2 local(point.x + node->shape.pivot.x * node->shape.size.x, point.y + node->shape.pivot.y * node->shape.size.y);
                 point = UIShape::transformPoint(node->shape.localTrans(), local);
-                node = node->parent;
+                node = node->parent();
             }
             Vector2 viewLocal(
                 point.x + mRoot->shape.pivot.x * mRoot->shape.size.x,
@@ -270,7 +246,7 @@ namespace eokas
         {
             return;
         }
-        for (auto& child : widget->children)
+        for (auto& child : widget->children())
         {
             this->expandContent(child.get(), minX, minY, maxX, maxY, any);
         }
@@ -283,7 +259,7 @@ namespace eokas
         float minY = 0.0f;
         float maxX = 0.0f;
         float maxY = 0.0f;
-        for (auto& child : mRoot->children)
+        for (auto& child : mRoot->children())
         {
             this->expandContent(child.get(), minX, minY, maxX, maxY, any);
         }
@@ -444,24 +420,22 @@ namespace eokas
         }
 
         primitive.pushClip(screenBounds(world, this->viewport()));
-        for (auto& child : mRoot->children)
+        for (auto& child : mRoot->children())
         {
             if (!child || child->floating)
             {
                 continue;
             }
-            child->parent = mRoot.get();
             if (!primitive.outsideClip(child->shape.bounds(child->worldTrans())))
             {
                 child->render(primitive);
             }
         }
         primitive.popClip();
-        for (auto& child : mRoot->children)
+        for (auto& child : mRoot->children())
         {
             if (child && child->floating)
             {
-                child->parent = mRoot.get();
                 child->render(primitive);
             }
         }

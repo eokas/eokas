@@ -275,8 +275,8 @@ namespace eokas::ui {
                 note("test-ui");
             };
 
-            root->children.push_back(menu);
-            root->children.push_back(fileMenu);
+            root->attachChild(menu);
+            root->attachChild(fileMenu);
 
             auto view = std::make_shared<UIView>();
             setBox(view, Rect(0.0f, 0.0f, (float)windowWidth, (float)windowHeight));
@@ -1161,8 +1161,8 @@ namespace eokas::ui {
             stage->addChild(link);
             auto canvasHint = textOf("Drag a card, shape, or link. Drag empty canvas to pan. Scroll to zoom.", 720.0f * s, smallPx, smallPx, mute);
             canvasHint->shape.origin = Vector2(16.0f * s, 14.0f * s) + canvasHint->shape.pivot * canvasHint->shape.size;
-            board->children.push_back(stage);
-            board->children.push_back(canvasHint);
+            board->attachChild(stage);
+            board->attachChild(canvasHint);
             setBox(view, Rect(0.0f, 0.0f, (float)windowWidth, contentH));
             auto controls = makePage("Controls", view);
             dock->dockPage(controls, UIDockMode::Fill);
@@ -1171,7 +1171,7 @@ namespace eokas::ui {
             dock->dockPage(makePage("Details", detailsView), UIDockMode::Fill);
             dock->dockPage(makePage("Canvas", board), UIDockMode::Fill);
             dock->activate(controls.get());
-            root->children.push_back(dock);
+            root->attachChild(dock);
             mHost->prepare();
             mMenu = menu;
             mView = view;

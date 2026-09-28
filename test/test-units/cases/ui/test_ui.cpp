@@ -161,12 +161,12 @@ EOKAS_TEST_CASE(ui) {
     child->setExpanded(false);
     EOKAS_EXPECT(!child->expanded());
     EOKAS_EXPECT(_FloatEqual(tree.shape.size.y, 40.0f));
-    EOKAS_EXPECT(tree.children.size() == 2);
+    EOKAS_EXPECT(tree.children().size() == 2);
     child->setExpanded(true);
     group->setExpanded(false);
     EOKAS_EXPECT(child->expanded());
     EOKAS_EXPECT(_FloatEqual(tree.shape.size.y, 20.0f));
-    EOKAS_EXPECT(tree.children.size() == 1);
+    EOKAS_EXPECT(tree.children().size() == 1);
     group->setExpanded(true);
     int hits = 0;
     group->onExpandedChanged = [&](bool) { hits += 1; };
@@ -268,8 +268,8 @@ EOKAS_TEST_CASE(ui) {
     auto nested = std::make_shared<UIWidget>();
     nested->shape.size = (Rect(10.0f, 8.0f, 20.0f, 12.0f)).size;
     panel->placeChild(*nested, Vector2(10.0f, 8.0f));
-    panel->children.push_back(nested);
-    root->children.push_back(panel);
+    panel->attachChild(nested);
+    root->attachChild(panel);
     EOKAS_EXPECT(uiWindow.hitTest(62.0f, 70.0f) == nested.get());
     EOKAS_EXPECT(uiWindow.hitTest(52.0f, 62.0f) == panel.get());
     uiWindow.quit();
@@ -343,6 +343,16 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(dock.previewMode() == UIDockMode::Left);
     EOKAS_EXPECT(dock.showPreview(392.0f, 150.0f));
     EOKAS_EXPECT(dock.previewMode() == UIDockMode::Right);
+    EOKAS_EXPECT(dock.showPreview(119.0f, 150.0f));
+    EOKAS_EXPECT(dock.previewMode() == UIDockMode::Left);
+    EOKAS_EXPECT(dock.showPreview(121.0f, 150.0f));
+    EOKAS_EXPECT(dock.previewMode() == UIDockMode::Fill);
+    EOKAS_EXPECT(dock.showPreview(280.0f, 150.0f));
+    EOKAS_EXPECT(dock.previewMode() == UIDockMode::Right);
+    EOKAS_EXPECT(dock.showPreview(200.0f, 40.0f));
+    EOKAS_EXPECT(dock.previewMode() == UIDockMode::Top);
+    EOKAS_EXPECT(dock.showPreview(200.0f, 250.0f));
+    EOKAS_EXPECT(dock.previewMode() == UIDockMode::Bottom);
 
     int windows = 0;
     UIApp app;
@@ -380,7 +390,7 @@ EOKAS_TEST_CASE(ui) {
     scaledBox->shape.size = (Rect(10.0f, 10.0f, 20.0f, 20.0f)).size;
     scaleRoot->placeChild(*scaledBox, Vector2(10.0f, 10.0f));
     scaledBox->shape.scale = Vector2(2.0f, 2.0f);
-    scaleRoot->children.push_back(scaledBox);
+    scaleRoot->attachChild(scaledBox);
     scaleWindow.setRoot(scaleRoot);
     EOKAS_EXPECT(scaleWindow.hitTest(0.0f, 0.0f) == scaledBox.get());
     EOKAS_EXPECT(scaleWindow.hitTest(40.0f, 40.0f) == scaledBox.get());
@@ -393,9 +403,9 @@ EOKAS_TEST_CASE(ui) {
     auto nestedScale = std::make_shared<UIWidget>();
     nestedScale->shape.size = (Rect(10.0f, 0.0f, 10.0f, 10.0f)).size;
     scaledParent->placeChild(*nestedScale, Vector2(10.0f, 0.0f));
-    scaledParent->children.push_back(nestedScale);
-    scaleRoot->children.clear();
-    scaleRoot->children.push_back(scaledParent);
+    scaledParent->attachChild(nestedScale);
+    scaleRoot->detachChildren();
+    scaleRoot->attachChild(scaledParent);
     EOKAS_EXPECT(scaleWindow.hitTest(-30.0f, 0.0f) == nestedScale.get());
     EOKAS_EXPECT(scaleWindow.hitTest(-10.0f, 0.0f) == nestedScale.get());
     EOKAS_EXPECT(scaleWindow.hitTest(-31.0f, 0.0f) == scaledParent.get());
@@ -542,8 +552,8 @@ EOKAS_TEST_CASE(ui) {
     auto atRoot = [&](float x, float y) { return pivotSpace(shapeRoot->shape, Vector2(x, y)); };
     lowerChart->setContour({ atRoot(0.0f, 0.0f), atRoot(40.0f, 0.0f), atRoot(40.0f, 40.0f), atRoot(0.0f, 40.0f) });
     upperChart->setContour({ atRoot(0.0f, 0.0f), atRoot(40.0f, 0.0f), atRoot(0.0f, 40.0f) });
-    shapeRoot->children.push_back(lowerChart);
-    shapeRoot->children.push_back(upperChart);
+    shapeRoot->attachChild(lowerChart);
+    shapeRoot->attachChild(upperChart);
     shapeWindow.setRoot(shapeRoot);
     EOKAS_EXPECT(shapeWindow.hitTest(5.0f, 5.0f) == upperChart.get());
     EOKAS_EXPECT(shapeWindow.hitTest(30.0f, 5.0f) == upperChart.get());
@@ -558,8 +568,8 @@ EOKAS_TEST_CASE(ui) {
     outerChart->setContour({ atParent(50.0f, 50.0f), atParent(70.0f, 50.0f), atParent(50.0f, 70.0f) });
     parentChart->addChart(innerChart);
     parentChart->addChart(outerChart);
-    shapeRoot->children.clear();
-    shapeRoot->children.push_back(parentChart);
+    shapeRoot->detachChildren();
+    shapeRoot->attachChild(parentChart);
     EOKAS_EXPECT(shapeWindow.hitTest(6.0f, 6.0f) == innerChart.get());
     EOKAS_EXPECT(shapeWindow.hitTest(2.0f, 2.0f) == parentChart.get());
     EOKAS_EXPECT(shapeWindow.hitTest(55.0f, 55.0f) == nullptr);
@@ -751,7 +761,7 @@ EOKAS_TEST_CASE(ui) {
     hitLink->setPoints({ pivotSpace(linkRoot->shape, Vector2(40.0f, 10.0f)), pivotSpace(linkRoot->shape, Vector2(80.0f, 10.0f)) });
     hitLink->line.thickness = 2.0f;
     hitLink->hitSlop = 4.0f;
-    linkRoot->children.push_back(hitLink);
+    linkRoot->attachChild(hitLink);
     linkWindow.setRoot(linkRoot);
     Vector2 linkPoint = pivotSpace(linkRoot->shape, Vector2(60.0f, 12.0f));
     EOKAS_EXPECT(hitLink->contains(hitLink->shape.toLocal(linkPoint)));
@@ -861,13 +871,14 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(_FloatEqual(tip.x, 5.0f));
     EOKAS_EXPECT(_FloatEqual(tip.y, 5.0f));
 
-    UIWidget parentWidget;
-    parentWidget.shape.setBox(Vector2(0.0f, 0.0f), Vector2(20.0f, 20.0f));
-    UIWidget childWidget;
-    childWidget.shape.size = Vector2(4.0f, 4.0f);
-    parentWidget.placeChild(childWidget, Vector2(6.0f, 6.0f));
-    EOKAS_EXPECT(childWidget.parent == &parentWidget);
-    Vector2 world = UIShape::transformPoint(childWidget.worldTrans(), Vector2(0.0f, 0.0f));
+    auto parentWidget = std::make_shared<UIWidget>();
+    parentWidget->shape.setBox(Vector2(0.0f, 0.0f), Vector2(20.0f, 20.0f));
+    auto childWidget = std::make_shared<UIWidget>();
+    childWidget->shape.size = Vector2(4.0f, 4.0f);
+    parentWidget->attachChild(childWidget);
+    parentWidget->placeChild(*childWidget, Vector2(6.0f, 6.0f));
+    EOKAS_EXPECT(childWidget->parent() == parentWidget.get());
+    Vector2 world = UIShape::transformPoint(childWidget->worldTrans(), Vector2(0.0f, 0.0f));
     EOKAS_EXPECT(_FloatEqual(world.x, 6.0f));
     EOKAS_EXPECT(_FloatEqual(world.y, 6.0f));
 
@@ -879,7 +890,7 @@ EOKAS_TEST_CASE(ui) {
     hostRoot->shape.setBox(Vector2(0.0f, 0.0f), Vector2(800.0f, 600.0f));
     auto dockHost = std::make_shared<UIDockSpace>();
     dockHost->shape.setBox(Vector2(0.0f, 40.0f), Vector2(800.0f, 560.0f));
-    hostRoot->children.push_back(dockHost);
+    hostRoot->attachChild(dockHost);
     host.setRoot(hostRoot);
     UIApp dockApp;
     int created = 0;

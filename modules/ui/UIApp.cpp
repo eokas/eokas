@@ -1,6 +1,5 @@
 #include "UIApp.h"
 #include "widgets/UIText.h"
-#include "widgets/UIView.h"
 
 #include <map>
 #include <stdexcept>
@@ -454,16 +453,9 @@ namespace eokas
             texts.push_back(text);
         }
 
-        for (auto& child : widget->children)
+        for (auto& child : widget->children())
         {
             this->collectTexts(child.get(), texts);
-        }
-        if (UIView* view = dynamic_cast<UIView*>(widget))
-        {
-            for (auto& child : view->root()->children)
-            {
-                this->collectTexts(child.get(), texts);
-            }
         }
     }
 

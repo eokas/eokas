@@ -12,10 +12,10 @@ namespace eokas
     void UIMenuItem::setContent(const std::shared_ptr<UIWidget>& widget)
     {
         content = widget;
-        children.clear();
+        this->detachChildren();
         if (content)
         {
-            children.push_back(content);
+            this->attachChild(content);
         }
     }
 
@@ -89,7 +89,7 @@ namespace eokas
         list->padding = padding;
         list->spacing = spacing;
         list->color = Color(0.0f, 0.0f, 0.0f, 0.0f);
-        children.push_back(list);
+        this->attachChild(list);
     }
 
     void UIMenu::addItem(const std::shared_ptr<UIMenuItem>& item)
@@ -116,7 +116,7 @@ namespace eokas
             float maxItemHeight = 0.0f;
             float sumItemHeight = 0.0f;
             int itemCount = 0;
-            for (auto& child : list->children)
+            for (auto& child : list->children())
             {
                 UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
                 if (item == nullptr || !item->visible)
@@ -146,7 +146,7 @@ namespace eokas
                 this->resize(Vector2(padding * 2.0f + maxItemWidth, padding * 2.0f + sumItemHeight + gap));
             }
 
-            for (auto& child : list->children)
+            for (auto& child : list->children())
             {
                 UIMenuItem* item = dynamic_cast<UIMenuItem*>(child.get());
                 if (item == nullptr || !item->visible)
