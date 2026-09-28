@@ -24,7 +24,7 @@ namespace eokas
 
     private:
         Color capsuleColor() const;
-        void addDisc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, const Color& color);
+        void addDisc(UIPrimitive& primitive, const Matrix3& localToScreen, float cx, float cy, float radius, const Color& color);
     };
 }
 

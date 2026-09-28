@@ -20,6 +20,7 @@ namespace eokas
         void setText(const String& text);
         UIText* label() const;
         void syncSize();
+        void layout() override;
         void render(UIPrimitive& primitive) override;
     };
 
@@ -33,6 +34,7 @@ namespace eokas
 
         UIMenu();
         void addItem(const std::shared_ptr<UIMenuItem>& item);
+        void layout() override;
         void render(UIPrimitive& primitive) override;
     };
 }

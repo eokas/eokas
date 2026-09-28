@@ -84,7 +84,7 @@ namespace eokas
             return true;
         }
 
-        void addCell(UIPrimitive& primitive, const Matrix3& world, const Color& color,
+        void addCell(UIPrimitive& primitive, const Matrix3& localToScreen, const Color& color,
             float x0, float y0, float x1, float y1,
             float u0, float v0, float u1, float v1,
             float halfU, float halfV)
@@ -109,10 +109,10 @@ namespace eokas
                 v1 -= halfV;
                 vh = v1 - v0;
             }
-            primitive.addQuad(world, Rect(x0, y0, w, h), Rect(u0, v0, uw, vh), color);
+            primitive.addQuad(localToScreen, Rect(x0, y0, w, h), Rect(u0, v0, uw, vh), color);
         }
 
-        void renderSliced(UIImage& image, UIPrimitive& primitive, const Matrix3& world, const SliceGrid& grid)
+        void renderSliced(UIImage& image, UIPrimitive& primitive, const Matrix3& localToScreen, const SliceGrid& grid)
         {
             for (int row = 0; row < 3; row++)
             {
@@ -122,7 +122,7 @@ namespace eokas
                     {
                         continue;
                     }
-                    addCell(primitive, world, image.color,
+                    addCell(primitive, localToScreen, image.color,
                         grid.x[col], grid.y[row], grid.x[col + 1], grid.y[row + 1],
                         grid.u[col], grid.v[row], grid.u[col + 1], grid.v[row + 1],
                         grid.halfU, grid.halfV);
@@ -137,15 +137,15 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         SliceGrid grid;
         if (type == UIImageType::Simple || !buildSliceGrid(*this, primitive, grid))
         {
-            primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), uv, color);
+            primitive.addQuad(localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), uv, color);
         }
         else
         {
-            renderSliced(*this, primitive, world, grid);
+            renderSliced(*this, primitive, localToScreen, grid);
         }
         UIWidget::render(primitive);
     }

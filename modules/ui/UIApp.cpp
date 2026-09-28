@@ -292,7 +292,7 @@ namespace eokas
         mFonts.clear();
     }
 
-    void UIApp::toScreenPoint(UIDockPage* page, float x, float y, float& screenX, float& screenY)
+    void UIApp::clientToScreen(UIDockPage* page, float x, float y, float& screenX, float& screenY)
     {
         if (mHostDrag && mSourceSpace)
         {
@@ -387,11 +387,11 @@ namespace eokas
             mSourceSpace = page->space();
             mHostDrag = mSourceSpace != nullptr;
             mDragSlop = mSourceSpace ? mSourceSpace->dragSlop : 4.0f;
-            this->toScreenPoint(page, x, y, mPressScreenX, mPressScreenY);
+            this->clientToScreen(page, x, y, mPressScreenX, mPressScreenY);
         }
         float screenX = 0.0f;
         float screenY = 0.0f;
-        this->toScreenPoint(page, x, y, screenX, screenY);
+        this->clientToScreen(page, x, y, screenX, screenY);
         float dx = screenX - mPressScreenX;
         float dy = screenY - mPressScreenY;
         if (!mDragMoved && (dx * dx + dy * dy) < mDragSlop * mDragSlop) return false;

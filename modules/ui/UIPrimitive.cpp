@@ -232,15 +232,15 @@ namespace eokas
         mTextureDirty = true;
     }
 
-    void UIPrimitive::addQuad(const Matrix3& world, const Rect& local, const Rect& uv, const Color& color)
+    void UIPrimitive::addQuad(const Matrix3& localToScreen, const Rect& local, const Rect& uv, const Color& color)
     {
         Vector2 origin = local.origin;
         Vector2 size = local.size;
         this->addQuad(
-            UIShape::transformPoint(world, origin),
-            UIShape::transformPoint(world, Vector2(origin.x + size.x, origin.y)),
-            UIShape::transformPoint(world, origin + size),
-            UIShape::transformPoint(world, Vector2(origin.x, origin.y + size.y)),
+            UIShape::transformPoint(localToScreen, origin),
+            UIShape::transformPoint(localToScreen, Vector2(origin.x + size.x, origin.y)),
+            UIShape::transformPoint(localToScreen, origin + size),
+            UIShape::transformPoint(localToScreen, Vector2(origin.x, origin.y + size.y)),
             uv,
             color);
     }

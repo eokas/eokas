@@ -67,29 +67,28 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         if (shape.size.x > 0.0f && shape.size.y > 0.0f)
         {
             std::vector<Vector2> loop;
             diamondPoints(Rect(0.0f, 0.0f, shape.size.x, shape.size.y), 0.0f, loop);
             Vector2 vertices[6] = {
-                UIShape::transformPoint(world, loop[0]), UIShape::transformPoint(world, loop[1]), UIShape::transformPoint(world, loop[2]),
-                UIShape::transformPoint(world, loop[0]), UIShape::transformPoint(world, loop[2]), UIShape::transformPoint(world, loop[3])
+                this->localToScreen(loop[0]), this->localToScreen(loop[1]), this->localToScreen(loop[2]),
+                this->localToScreen(loop[0]), this->localToScreen(loop[2]), this->localToScreen(loop[3])
             };
             primitive.addTriangles(vertices, 2, UIFont::solidUV(), this->activeFill());
             if (border.thickness > 0.0f)
             {
-                UIStroke::path(primitive, world, loop, true, border);
+                UIStroke::path(primitive, localToScreen, loop, true, border);
             }
             if (selected && stroke.thickness > 0.0f)
             {
                 float pad = (border.thickness + stroke.thickness) * 0.5f;
                 std::vector<Vector2> outer;
                 diamondPoints(Rect(0.0f, 0.0f, shape.size.x, shape.size.y), pad, outer);
-                UIStroke::path(primitive, world, outer, true, stroke);
+                UIStroke::path(primitive, localToScreen, outer, true, stroke);
             }
         }
-        this->placeLabel();
         UIWidget::render(primitive);
     }
 }

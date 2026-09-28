@@ -43,6 +43,7 @@ namespace eokas
         UILink();
         void setPoints(const std::vector<Vector2>& parentPoints);
         bool contains(const Vector2& point) const override;
+        void layout() override;
         void render(UIPrimitive& primitive) override;
 
     private:

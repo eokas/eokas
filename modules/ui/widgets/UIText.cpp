@@ -4,6 +4,21 @@
 
 namespace eokas
 {
+    void UIText::layout()
+    {
+        if (!visible)
+        {
+            return;
+        }
+        UIFont* font = UIFont::find(style.fontPath);
+        if (font == nullptr || !font->isOpen())
+        {
+            return;
+        }
+        Vector2 measured = font->measure(text.cstr(), text.length(), style.fontSize);
+        this->resize(Vector2(floorf(measured.x + 0.5f), floorf(measured.y + 0.5f)));
+    }
+
     void UIText::render(UIPrimitive& primitive)
     {
         UIFont* font = UIFont::find(style.fontPath);
@@ -12,7 +27,7 @@ namespace eokas
             return;
         }
 
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         float scale = 1.0f;
         float ascender = 0.0f;
         float descender = 0.0f;
@@ -35,7 +50,7 @@ namespace eokas
                 float destW = (float)(int)(g.width * scale + 0.5f);
                 float destH = (float)(int)(g.height * scale + 0.5f);
                 Rect dest(destX, destY, destW, destH);
-                primitive.addQuad(world, dest, g.uv, style.color);
+                primitive.addQuad(localToScreen, dest, g.uv, style.color);
             }
             cursorX += g.advance * scale;
         }

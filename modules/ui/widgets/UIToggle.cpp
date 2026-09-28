@@ -62,7 +62,7 @@ namespace eokas
             UIWidget::render(primitive);
             return;
         }
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
 
         float radius = thick * 0.5f;
         float cy = snap(shape.size.y * 0.5f);
@@ -74,11 +74,11 @@ namespace eokas
         }
 
         Color bg = this->capsuleColor();
-        this->addDisc(primitive, world, left, cy, radius, bg);
+        this->addDisc(primitive, localToScreen, left, cy, radius, bg);
         if (right > left)
         {
-            primitive.addQuad(world, Rect(left, cy - radius, right - left, thick), UIFont::solidUV(), bg);
-            this->addDisc(primitive, world, right, cy, radius, bg);
+            primitive.addQuad(localToScreen, Rect(left, cy - radius, right - left, thick), UIFont::solidUV(), bg);
+            this->addDisc(primitive, localToScreen, right, cy, radius, bg);
         }
 
         float inset = snap(thick * 0.12f);
@@ -88,12 +88,13 @@ namespace eokas
         }
         float thumbRadius = radius - inset;
         float thumbX = value ? right : left;
-        this->addDisc(primitive, world, thumbX, cy, thumbRadius, thumb);
+        this->addDisc(primitive, localToScreen, thumbX, cy, thumbRadius, thumb);
         UIWidget::render(primitive);
     }
 
-    void UIToggle::addDisc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, const Color& color)
+    void UIToggle::addDisc(UIPrimitive& primitive, const Matrix3& localToScreen, float cx, float cy, float radius, const Color& color)
     {
+        (void)localToScreen;
         if (radius <= 0.0f)
         {
             return;
@@ -107,10 +108,10 @@ namespace eokas
             Vector2 e0(cx + cosf(a0) * radius, cy + sinf(a0) * radius);
             Vector2 e1(cx + cosf(a1) * radius, cy + sinf(a1) * radius);
             primitive.addQuad(
-                UIShape::transformPoint(world, center),
-                UIShape::transformPoint(world, e0),
-                UIShape::transformPoint(world, e1),
-                UIShape::transformPoint(world, center),
+                this->localToScreen(center),
+                this->localToScreen(e0),
+                this->localToScreen(e1),
+                this->localToScreen(center),
                 uv,
                 color);
         }

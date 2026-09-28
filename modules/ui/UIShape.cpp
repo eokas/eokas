@@ -25,7 +25,7 @@ namespace eokas
         return Vector2(p.x, p.y);
     }
 
-    Vector2 UIShape::toLocal(const Vector2& parentPivotPoint) const
+    Vector2 UIShape::pivotToLocal(const Vector2& parentPivotPoint) const
     {
         return transformPoint(this->localTrans().inverse(), parentPivotPoint);
     }

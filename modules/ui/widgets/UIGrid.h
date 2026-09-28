@@ -17,6 +17,7 @@ namespace eokas
         float rowSpacing = -1.0f;
         void addChild(const std::shared_ptr<UIWidget>& child);
         void refit();
+        void layout() override;
         void render(UIPrimitive& primitive) override;
     };
 }

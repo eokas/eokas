@@ -24,6 +24,7 @@ namespace eokas
         bool scrollbarContains(float localX, float localY) const;
 
         UIWidget* pick(const Vector2& point) override;
+        void layout() override;
         void render(UIPrimitive& primitive) override;
         void triggerPointerMove(const Vector2& position, const Vector2& delta) override;
         void triggerPointerRelease() override;
@@ -59,7 +60,7 @@ namespace eokas
         Rect horizontalTrack() const;
         Rect verticalThumb() const;
         Rect horizontalThumb() const;
-        void drawScrollbars(UIPrimitive& primitive, const Matrix3& world) const;
+        void drawScrollbars(UIPrimitive& primitive, const Matrix3& localToScreen) const;
     };
 }
 

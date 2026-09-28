@@ -38,6 +38,7 @@ namespace eokas
         void setHead(const std::shared_ptr<UIWidget>& widget);
         const std::shared_ptr<UIWidget>& body() const { return mBody; }
         void setBody(const std::shared_ptr<UIWidget>& widget);
+        void layout() override;
         void render(UIPrimitive& primitive) override;
         void layoutInWindow(float width, float height);
         void place(const Rect& headRect, const Rect& bodyRect, bool showBody, bool tabActive);
@@ -73,7 +74,7 @@ namespace eokas
         ~UIDockSpace() override;
 
         void setScreenMapper(const std::function<Rect(const Rect&)>& mapper);
-        Rect toScreen(const Rect& layout) const;
+        Rect pivotToScreenRect(const Rect& pivot) const;
         Rect screenBounds() const;
         Rect clientToScreen(float x, float y) const;
         bool pageBounds(UIDockPage* page, Rect& screen);
@@ -91,6 +92,7 @@ namespace eokas
         bool splitterAxis(float x, float y, bool& vertical) const;
         void setHover(float x, float y);
 
+        void layout() override;
         void render(UIPrimitive& primitive) override;
         void triggerPointerMove(const Vector2& position, const Vector2& delta) override;
         void triggerPointerRelease() override;
@@ -117,9 +119,7 @@ namespace eokas
         void splitLeaf(Node* leaf, const std::shared_ptr<UIDockPage>& page, UIDockMode mode);
         void splitRoot(const std::shared_ptr<UIDockPage>& page, UIDockMode mode);
         Node* findPageNode(Node* node, UIDockPage* page);
-        Vector2 toLocal(const Vector2& point) const;
-        Vector2 pointerLocal(float x, float y) const;
-        Vector2 layoutFromScreen(float screenX, float screenY) const;
+        Vector2 parentPivotToPivot(const Vector2& parentPivot) const;
         Node* findLeaf(Node* node, const Vector2& point);
         Node* nearestLeaf(Node* node, const Vector2& point);
         Node* firstLeaf(Node* node);

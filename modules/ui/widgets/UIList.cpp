@@ -44,7 +44,7 @@ namespace eokas
         }
     }
 
-    void UIList::render(UIPrimitive& primitive)
+    void UIList::layout()
     {
         if (!visible)
         {
@@ -70,6 +70,7 @@ namespace eokas
                 }
             }
             first = false;
+            child->layout();
             this->placeChild(*child, Vector2(floorf(cursor.x + 0.5f), floorf(cursor.y + 0.5f)));
             if (direction == UIDirection::Horizontal)
             {
@@ -80,9 +81,17 @@ namespace eokas
                 cursor.y += child->shape.size.y;
             }
         }
+    }
+
+    void UIList::render(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
         if (color.a > 0.0f)
         {
-            primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

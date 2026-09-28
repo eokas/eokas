@@ -17,6 +17,7 @@ namespace eokas
         void setHead(const std::shared_ptr<UIWidget>& widget);
         const std::shared_ptr<UIWidget>& body() const { return mBody; }
         void setBody(const std::shared_ptr<UIWidget>& widget);
+        void layout() override;
         void render(UIPrimitive& primitive) override;
 
         std::function<void(bool)> onExpandedChanged;

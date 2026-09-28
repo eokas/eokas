@@ -207,19 +207,19 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         if (this->ring())
         {
-            this->renderRing(primitive, world);
+            this->renderRing(primitive, localToScreen);
         }
         else
         {
-            this->renderLinear(primitive, world, type == SliderType::Vertical);
+            this->renderLinear(primitive, localToScreen, type == SliderType::Vertical);
         }
         UIWidget::render(primitive);
     }
 
-    void UISlider::renderLinear(UIPrimitive& primitive, const Matrix3& world, bool vertical)
+    void UISlider::renderLinear(UIPrimitive& primitive, const Matrix3& localToScreen, bool vertical)
     {
         float t = this->valueT();
         float half = thumbSize * 0.5f;
@@ -233,7 +233,7 @@ namespace eokas
             }
             float axisX = snap(shape.size.x * 0.5f);
             float trackX = axisX - thick * 0.5f;
-            primitive.addQuad(world, Rect(trackX, 0.0f, thick, shape.size.y), solid, track);
+            primitive.addQuad(localToScreen, Rect(trackX, 0.0f, thick, shape.size.y), solid, track);
 
             float span = shape.size.y - thumbSize;
             if (span < 0.0f)
@@ -244,9 +244,9 @@ namespace eokas
             float fillH = shape.size.y - thumbCenter;
             if (fillH > 0.0f)
             {
-                primitive.addQuad(world, Rect(trackX, thumbCenter, thick, fillH), solid, fill);
+                primitive.addQuad(localToScreen, Rect(trackX, thumbCenter, thick, fillH), solid, fill);
             }
-            this->addDisc(primitive, world, axisX, thumbCenter, half, this->thumbDrawColor());
+            this->addDisc(primitive, localToScreen, axisX, thumbCenter, half, this->thumbDrawColor());
             return;
         }
 
@@ -257,7 +257,7 @@ namespace eokas
         }
         float axisY = snap(shape.size.y * 0.5f);
         float trackY = axisY - thick * 0.5f;
-        primitive.addQuad(world, Rect(0.0f, trackY, shape.size.x, thick), solid, track);
+        primitive.addQuad(localToScreen, Rect(0.0f, trackY, shape.size.x, thick), solid, track);
 
         float span = shape.size.x - thumbSize;
         if (span < 0.0f)
@@ -267,12 +267,12 @@ namespace eokas
         float thumbCenter = snap(half + span * t);
         if (thumbCenter > 0.0f)
         {
-            primitive.addQuad(world, Rect(0.0f, trackY, thumbCenter, thick), solid, fill);
+            primitive.addQuad(localToScreen, Rect(0.0f, trackY, thumbCenter, thick), solid, fill);
         }
-        this->addDisc(primitive, world, thumbCenter, axisY, half, this->thumbDrawColor());
+        this->addDisc(primitive, localToScreen, thumbCenter, axisY, half, this->thumbDrawColor());
     }
 
-    void UISlider::renderRing(UIPrimitive& primitive, const Matrix3& world)
+    void UISlider::renderRing(UIPrimitive& primitive, const Matrix3& localToScreen)
     {
         float t = this->valueT();
         float cx = snap(shape.size.x * 0.5f);
@@ -282,24 +282,25 @@ namespace eokas
         float radius = extent * 0.5f - inset;
         if (radius > 0.0f)
         {
-            this->addArc(primitive, world, cx, cy, radius, 0.0f, Math::PI_MUL_2, track);
+            this->addArc(primitive, localToScreen, cx, cy, radius, 0.0f, Math::PI_MUL_2, track);
             if (t >= 1.0f)
             {
-                this->addArc(primitive, world, cx, cy, radius, 0.0f, Math::PI_MUL_2, fill);
+                this->addArc(primitive, localToScreen, cx, cy, radius, 0.0f, Math::PI_MUL_2, fill);
             }
             else if (t > 0.0f)
             {
-                this->addArc(primitive, world, cx, cy, radius, 0.0f, t * Math::PI_MUL_2, fill);
+                this->addArc(primitive, localToScreen, cx, cy, radius, 0.0f, t * Math::PI_MUL_2, fill);
             }
         }
 
         float drawRadius = radius > 0.0f ? radius : 0.0f;
         Vector2 p = this->ringPoint(cx, cy, drawRadius, t * Math::PI_MUL_2);
-        this->addDisc(primitive, world, p.x, p.y, thumbSize * 0.5f, this->thumbDrawColor());
+        this->addDisc(primitive, localToScreen, p.x, p.y, thumbSize * 0.5f, this->thumbDrawColor());
     }
 
-    void UISlider::addDisc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, const Color& color)
+    void UISlider::addDisc(UIPrimitive& primitive, const Matrix3& localToScreen, float cx, float cy, float radius, const Color& color)
     {
+        (void)localToScreen;
         if (radius <= 0.0f)
         {
             return;
@@ -313,17 +314,18 @@ namespace eokas
             Vector2 e0(cx + cosf(a0) * radius, cy + sinf(a0) * radius);
             Vector2 e1(cx + cosf(a1) * radius, cy + sinf(a1) * radius);
             primitive.addQuad(
-                UIShape::transformPoint(world, center),
-                UIShape::transformPoint(world, e0),
-                UIShape::transformPoint(world, e1),
-                UIShape::transformPoint(world, center),
+                this->localToScreen(center),
+                this->localToScreen(e0),
+                this->localToScreen(e1),
+                this->localToScreen(center),
                 uv,
                 color);
         }
     }
 
-    void UISlider::addArc(UIPrimitive& primitive, const Matrix3& world, float cx, float cy, float radius, float a0, float a1, const Color& color)
+    void UISlider::addArc(UIPrimitive& primitive, const Matrix3& localToScreen, float cx, float cy, float radius, float a0, float a1, const Color& color)
     {
+        (void)localToScreen;
         float sweep = a1 - a0;
         if (sweep <= 0.0f)
         {
@@ -346,10 +348,10 @@ namespace eokas
             float s0 = a0 + sweep * ((float)i / (float)steps);
             float s1 = a0 + sweep * ((float)(i + 1) / (float)steps);
             primitive.addQuad(
-                UIShape::transformPoint(world, this->ringPoint(cx, cy, inner, s0)),
-                UIShape::transformPoint(world, this->ringPoint(cx, cy, outer, s0)),
-                UIShape::transformPoint(world, this->ringPoint(cx, cy, outer, s1)),
-                UIShape::transformPoint(world, this->ringPoint(cx, cy, inner, s1)),
+                this->localToScreen(this->ringPoint(cx, cy, inner, s0)),
+                this->localToScreen(this->ringPoint(cx, cy, outer, s0)),
+                this->localToScreen(this->ringPoint(cx, cy, outer, s1)),
+                this->localToScreen(this->ringPoint(cx, cy, inner, s1)),
                 uv,
                 color);
         }

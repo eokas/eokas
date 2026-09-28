@@ -22,10 +22,10 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         if (shape.size.x > 0.0f && shape.size.y > 0.0f)
         {
-            primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), this->activeFill());
+            primitive.addQuad(localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), this->activeFill());
             std::vector<Vector2> loop;
             loop.push_back(Vector2(0.0f, 0.0f));
             loop.push_back(Vector2(shape.size.x, 0.0f));
@@ -33,7 +33,7 @@ namespace eokas
             loop.push_back(Vector2(0.0f, shape.size.y));
             if (border.thickness > 0.0f)
             {
-                UIStroke::path(primitive, world, loop, true, border);
+                UIStroke::path(primitive, localToScreen, loop, true, border);
             }
             if (selected && stroke.thickness > 0.0f)
             {
@@ -43,10 +43,9 @@ namespace eokas
                 outer.push_back(Vector2(shape.size.x + pad, -pad));
                 outer.push_back(Vector2(shape.size.x + pad, shape.size.y + pad));
                 outer.push_back(Vector2(-pad, shape.size.y + pad));
-                UIStroke::path(primitive, world, outer, true, stroke);
+                UIStroke::path(primitive, localToScreen, outer, true, stroke);
             }
         }
-        this->placeLabel();
         UIWidget::render(primitive);
     }
 }

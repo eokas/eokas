@@ -28,7 +28,7 @@ namespace eokas
         void popClip();
         bool outsideClip(const Rect& screen) const;
         void addQuad(const Rect& screen, const Rect& uv, const Color& color);
-        void addQuad(const Matrix3& world, const Rect& local, const Rect& uv, const Color& color);
+        void addQuad(const Matrix3& localToScreen, const Rect& local, const Rect& uv, const Color& color);
         void addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color);
         void addTriangles(const Vector2* vertices, uint32_t triangleCount, const Rect& uv, const Color& color);
         void end();

@@ -399,7 +399,7 @@ namespace eokas
         return false;
     }
 
-    void UILink::render(UIPrimitive& primitive)
+    void UILink::layout()
     {
         if (!visible)
         {
@@ -408,7 +408,18 @@ namespace eokas
         std::vector<Vector2> parent;
         this->resolve(parent);
         this->syncBounds(parent);
-        Matrix3 world = worldTrans();
+        UIChart::layout();
+    }
+
+    void UILink::render(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
+        std::vector<Vector2> parent;
+        this->resolve(parent);
+        Matrix3 localToScreen = matrixLocalToScreen();
         Matrix3 inverse = shape.localTrans().inverse();
         if (parent.size() >= 2)
         {
@@ -417,12 +428,12 @@ namespace eokas
             trimEnd(stroked, markerInset(end.cap), false);
             for (Vector2& point : stroked)
             {
-                point = shape.toLocal(point);
+                point = shape.pivotToLocal(point);
             }
             const UIStrokeStyle& drawn = (selected && stroke.thickness > 0.0f) ? stroke : line;
-            UIStroke::path(primitive, world, stroked, false, drawn);
-            UIStroke::marker(primitive, world, shape.toLocal(parent.front()), UIShape::transformVector(inverse, outwardAt(parent, true)), start.cap);
-            UIStroke::marker(primitive, world, shape.toLocal(parent.back()), UIShape::transformVector(inverse, outwardAt(parent, false)), end.cap);
+            UIStroke::path(primitive, localToScreen, stroked, false, drawn);
+            UIStroke::marker(primitive, localToScreen, shape.pivotToLocal(parent.front()), UIShape::transformVector(inverse, outwardAt(parent, true)), start.cap);
+            UIStroke::marker(primitive, localToScreen, shape.pivotToLocal(parent.back()), UIShape::transformVector(inverse, outwardAt(parent, false)), end.cap);
         }
         UIWidget::render(primitive);
     }

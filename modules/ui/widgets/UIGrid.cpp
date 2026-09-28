@@ -10,11 +10,18 @@ namespace eokas
         this->attachChild(child);
     }
 
-    void UIGrid::render(UIPrimitive& primitive)
+    void UIGrid::layout()
     {
         if (!visible)
         {
             return;
+        }
+        for (auto& child : children())
+        {
+            if (child && child->visible)
+            {
+                child->layout();
+            }
         }
         int cols = columns < 1 ? 1 : columns;
         float gapX = spacing;
@@ -92,9 +99,17 @@ namespace eokas
         {
             this->resize(Vector2(shape.size.x, y + pad));
         }
+    }
+
+    void UIGrid::render(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
         if (color.a > 0.0f)
         {
-            primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

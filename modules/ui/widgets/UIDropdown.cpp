@@ -26,9 +26,7 @@ namespace eokas
             UIFont* font = UIFont::find(text->style.fontPath);
             if (font != nullptr && font->isOpen())
             {
-                float bake = (float)font->pixelSize();
-                float scale = (text->style.fontSize > 0.0f ? text->style.fontSize : bake) / bake;
-                textH = (font->ascender() - font->descender()) * scale;
+                textH = font->measure(text->text.cstr(), text->text.length(), text->style.fontSize).y;
             }
             return textH;
         }
@@ -68,14 +66,22 @@ namespace eokas
         return mLabel.get();
     }
 
-    void UIDropdownItem::render(UIPrimitive& primitive)
+    void UIDropdownItem::layout()
     {
         if (!visible)
         {
             return;
         }
         placeLabel(*this, mLabel.get(), shape.size, paddingX, paddingY);
-        Matrix3 world = worldTrans();
+    }
+
+    void UIDropdownItem::render(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
+        Matrix3 localToScreen = matrixLocalToScreen();
         Color bg = background;
         if (pressed)
         {
@@ -89,7 +95,7 @@ namespace eokas
         {
             bg = selectedFill;
         }
-        primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        primitive.addQuad(localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         UIWidget::render(primitive);
     }
 
@@ -365,13 +371,14 @@ namespace eokas
         placeLabel(*this, mCaption.get(), shape.size, paddingX, paddingY);
     }
 
-    void UIDropdown::drawBorder(UIPrimitive& primitive, const Matrix3& world, const Rect& area) const
+    void UIDropdown::drawBorder(UIPrimitive& primitive, const Matrix3& localToScreen, const Rect& area) const
     {
-        UIStroke::border(primitive, world, area, border);
+        UIStroke::border(primitive, localToScreen, area, border);
     }
 
-    void UIDropdown::drawChevron(UIPrimitive& primitive, const Matrix3& world) const
+    void UIDropdown::drawChevron(UIPrimitive& primitive, const Matrix3& localToScreen) const
     {
+        (void)localToScreen;
         float s = snap(Math::min_s(shape.size.y * 0.28f, 8.0f));
         if (s < 4.0f)
         {
@@ -383,21 +390,36 @@ namespace eokas
         if (expanded)
         {
             primitive.addQuad(
-                UIShape::transformPoint(world, Vector2(cx - s * 0.5f, cy + s * 0.25f)),
-                UIShape::transformPoint(world, Vector2(cx + s * 0.5f, cy + s * 0.25f)),
-                UIShape::transformPoint(world, Vector2(cx, cy - s * 0.35f)),
-                UIShape::transformPoint(world, Vector2(cx, cy - s * 0.35f)),
+                this->localToScreen(Vector2(cx - s * 0.5f, cy + s * 0.25f)),
+                this->localToScreen(Vector2(cx + s * 0.5f, cy + s * 0.25f)),
+                this->localToScreen(Vector2(cx, cy - s * 0.35f)),
+                this->localToScreen(Vector2(cx, cy - s * 0.35f)),
                 uv,
                 chevron);
             return;
         }
         primitive.addQuad(
-            UIShape::transformPoint(world, Vector2(cx - s * 0.5f, cy - s * 0.25f)),
-            UIShape::transformPoint(world, Vector2(cx + s * 0.5f, cy - s * 0.25f)),
-            UIShape::transformPoint(world, Vector2(cx, cy + s * 0.35f)),
-            UIShape::transformPoint(world, Vector2(cx, cy + s * 0.35f)),
+            this->localToScreen(Vector2(cx - s * 0.5f, cy - s * 0.25f)),
+            this->localToScreen(Vector2(cx + s * 0.5f, cy - s * 0.25f)),
+            this->localToScreen(Vector2(cx, cy + s * 0.35f)),
+            this->localToScreen(Vector2(cx, cy + s * 0.35f)),
             uv,
             chevron);
+    }
+
+    void UIDropdown::layout()
+    {
+        if (!visible)
+        {
+            return;
+        }
+        this->syncCaption();
+        this->syncPopup();
+        if (dropdown != nullptr)
+        {
+            dropdown->layout();
+        }
+        this->layoutCaption();
     }
 
     void UIDropdown::render(UIPrimitive& primitive)
@@ -406,10 +428,7 @@ namespace eokas
         {
             return;
         }
-        this->syncCaption();
-        this->layoutCaption();
-        this->syncPopup();
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         Color bg = background;
         if (pickable && pressed)
         {
@@ -419,9 +438,9 @@ namespace eokas
         {
             bg = hoverFill;
         }
-        primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
-        this->drawBorder(primitive, world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y));
-        this->drawChevron(primitive, world);
+        primitive.addQuad(localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        this->drawBorder(primitive, localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y));
+        this->drawChevron(primitive, localToScreen);
         UIWidget::render(primitive);
     }
 

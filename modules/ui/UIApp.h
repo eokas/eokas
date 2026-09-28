@@ -68,7 +68,7 @@ namespace eokas
         Slot* slotOf(UIDockPage* page);
         void destroySlot(Slot& slot, bool deferWindow);
         void closeFonts();
-        void toScreenPoint(UIDockPage* page, float x, float y, float& screenX, float& screenY);
+        void clientToScreen(UIDockPage* page, float x, float y, float& screenX, float& screenY);
         void beginFloat(UIDockPage* page, float screenX, float screenY);
         void updateFloat(UIDockPage* page, float screenX, float screenY);
         bool dragPage(UIDockPage* page, float x, float y, int button);

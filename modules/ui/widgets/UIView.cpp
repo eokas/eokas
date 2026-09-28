@@ -47,13 +47,13 @@ namespace eokas
             return thumb;
         }
 
-        Rect screenBounds(const Matrix3& world, const Rect& local)
+        Rect localToScreenRect(const Matrix3& localToScreen, const Rect& local)
         {
             Vector2 corner[4] = {
-                UIShape::transformPoint(world, local.origin),
-                UIShape::transformPoint(world, Vector2(local.origin.x + local.size.x, local.origin.y)),
-                UIShape::transformPoint(world, local.origin + local.size),
-                UIShape::transformPoint(world, Vector2(local.origin.x, local.origin.y + local.size.y))
+                UIShape::transformPoint(localToScreen, local.origin),
+                UIShape::transformPoint(localToScreen, Vector2(local.origin.x + local.size.x, local.origin.y)),
+                UIShape::transformPoint(localToScreen, local.origin + local.size),
+                UIShape::transformPoint(localToScreen, Vector2(local.origin.x, local.origin.y + local.size.y))
             };
             float minX = corner[0].x;
             float minY = corner[0].y;
@@ -137,14 +137,14 @@ namespace eokas
         {
             return nullptr;
         }
-        Vector2 viewLocal = shape.toLocal(point);
+        Vector2 viewLocal = shape.pivotToLocal(point);
         bool inside = this->contains(viewLocal);
         bool contentScale = mRoot && mRoot->shape.scale.x != 0.0f && mRoot->shape.scale.y != 0.0f;
         Vector2 content = Vector2::ZERO;
         if (contentScale)
         {
             Vector2 inViewPivot = viewLocal - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
-            Vector2 rootLocal = mRoot->shape.toLocal(inViewPivot);
+            Vector2 rootLocal = mRoot->shape.pivotToLocal(inViewPivot);
             content = rootLocal - Vector2(mRoot->shape.pivot.x * mRoot->shape.size.x, mRoot->shape.pivot.y * mRoot->shape.size.y);
             for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
             {
@@ -384,26 +384,36 @@ namespace eokas
         return Rect(track.origin.x + t * travel, track.origin.y, thumb, track.size.y);
     }
 
-    void UIView::drawScrollbars(UIPrimitive& primitive, const Matrix3& world) const
+    void UIView::drawScrollbars(UIPrimitive& primitive, const Matrix3& localToScreen) const
     {
         Rect solid = UIFont::solidUV();
         if (mShowV)
         {
-            primitive.addQuad(world, this->verticalTrack(), solid, scrollbarTrack);
+            primitive.addQuad(localToScreen, this->verticalTrack(), solid, scrollbarTrack);
             Color thumb = (mDrag == BarDrag::VerticalThumb) ? scrollbarPressed : scrollbar;
-            primitive.addQuad(world, this->verticalThumb(), solid, thumb);
+            primitive.addQuad(localToScreen, this->verticalThumb(), solid, thumb);
         }
         if (mShowH)
         {
-            primitive.addQuad(world, this->horizontalTrack(), solid, scrollbarTrack);
+            primitive.addQuad(localToScreen, this->horizontalTrack(), solid, scrollbarTrack);
             Color thumb = (mDrag == BarDrag::HorizontalThumb) ? scrollbarPressed : scrollbar;
-            primitive.addQuad(world, this->horizontalThumb(), solid, thumb);
+            primitive.addQuad(localToScreen, this->horizontalThumb(), solid, thumb);
         }
         if (mShowV && mShowH)
         {
             float bar = this->barSize();
-            primitive.addQuad(world, Rect(mInnerW, mInnerH, bar, bar), solid, scrollbarTrack);
+            primitive.addQuad(localToScreen, Rect(mInnerW, mInnerH, bar, bar), solid, scrollbarTrack);
         }
+    }
+
+    void UIView::layout()
+    {
+        if (!visible)
+        {
+            return;
+        }
+        this->updateMetrics();
+        UIWidget::layout();
     }
 
     void UIView::render(UIPrimitive& primitive)
@@ -412,21 +422,20 @@ namespace eokas
         {
             return;
         }
-        this->updateMetrics();
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         if (color.a > 0.0f)
         {
-            primitive.addQuad(world, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
 
-        primitive.pushClip(screenBounds(world, this->viewport()));
+        primitive.pushClip(localToScreenRect(localToScreen, this->viewport()));
         for (auto& child : mRoot->children())
         {
             if (!child || child->floating)
             {
                 continue;
             }
-            if (!primitive.outsideClip(child->shape.bounds(child->worldTrans())))
+            if (!primitive.outsideClip(child->screenBounds()))
             {
                 child->render(primitive);
             }
@@ -439,7 +448,7 @@ namespace eokas
                 child->render(primitive);
             }
         }
-        this->drawScrollbars(primitive, world);
+        this->drawScrollbars(primitive, localToScreen);
     }
 
     void UIView::triggerPointerMove(const Vector2& position, const Vector2& delta)
@@ -450,7 +459,7 @@ namespace eokas
         {
             return;
         }
-        Vector2 local = shape.toLocal(position);
+        Vector2 local = shape.pivotToLocal(position);
         float lx = local.x;
         float ly = local.y;
         Vector2 point(lx, ly);

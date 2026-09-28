@@ -187,29 +187,9 @@ namespace eokas
         {
             return;
         }
+        t->layout();
         float textW = t->shape.size.x;
         float textH = t->shape.size.y;
-        UIFont* font = UIFont::find(t->style.fontPath);
-        if (font != nullptr && font->isOpen())
-        {
-            float scale = 1.0f;
-            float ascender = 0.0f;
-            float descender = 0.0f;
-            font->drawMetrics(t->style.fontSize, scale, ascender, descender);
-            textW = 0.0f;
-            size_t index = 0;
-            while (index < t->text.length())
-            {
-                uint32_t codepoint = 0;
-                if (!UIFont::nextUtf8(t->text.cstr(), t->text.length(), index, codepoint))
-                {
-                    continue;
-                }
-                textW += font->glyphSized(codepoint, t->style.fontSize).advance * scale;
-            }
-            textW = floorf(textW + 0.5f);
-            textH = floorf((ascender - descender) + 0.5f);
-        }
         float innerW = shape.size.x - labelPadding * 2.0f;
         float innerH = shape.size.y - labelPadding * 2.0f;
         if (innerW < 0.0f)
@@ -222,10 +202,7 @@ namespace eokas
         }
         float x = labelPadding + (innerW - textW) * 0.5f;
         float y = labelPadding + (innerH - textH) * 0.5f;
-        {
-            t->shape.size = Vector2(textW, textH);
-            this->placeChild(*t, Vector2(floorf(x + 0.5f), floorf(y + 0.5f)));
-        }
+        this->placeChild(*t, Vector2(floorf(x + 0.5f), floorf(y + 0.5f)));
     }
 
     void UIChart::setContour(const std::vector<Vector2>& points)
@@ -301,7 +278,7 @@ namespace eokas
         {
             return nullptr;
         }
-        Vector2 local = shape.toLocal(point);
+        Vector2 local = shape.pivotToLocal(point);
         if (!this->contains(local))
         {
             return nullptr;
@@ -333,13 +310,30 @@ namespace eokas
         }
     }
 
-    void UIChart::strokeLoop(UIPrimitive& primitive, const Matrix3& world, const std::vector<Vector2>& localPoints) const
+    void UIChart::strokeLoop(UIPrimitive& primitive, const Matrix3& localToScreen, const std::vector<Vector2>& localPoints) const
     {
         if (!selected || stroke.thickness <= 0.0f || localPoints.size() < 3)
         {
             return;
         }
-        UIStroke::path(primitive, world, localPoints, true, stroke);
+        UIStroke::path(primitive, localToScreen, localPoints, true, stroke);
+    }
+
+    void UIChart::layout()
+    {
+        if (!visible)
+        {
+            return;
+        }
+        this->placeLabel();
+        for (auto& child : children())
+        {
+            if (!child || child.get() == mLabel.get())
+            {
+                continue;
+            }
+            child->layout();
+        }
     }
 
     void UIChart::render(UIPrimitive& primitive)
@@ -348,7 +342,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         Color fill = this->activeFill();
         std::vector<Vector2> triangles;
         if (triangulate(mContour, triangles))
@@ -357,11 +351,11 @@ namespace eokas
             vertices.reserve(triangles.size());
             for (const Vector2& point : triangles)
             {
-                vertices.push_back(UIShape::transformPoint(world, point));
+                vertices.push_back(this->localToScreen(point));
             }
             primitive.addTriangles(vertices.data(), (uint32_t)(vertices.size() / 3), UIFont::solidUV(), fill);
         }
-        this->strokeLoop(primitive, world, mContour);
+        this->strokeLoop(primitive, localToScreen, mContour);
         UIWidget::render(primitive);
     }
 }

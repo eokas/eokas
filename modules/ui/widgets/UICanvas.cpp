@@ -94,16 +94,25 @@ namespace eokas
         this->attachChild(child);
     }
 
+    void UICanvas::layout()
+    {
+        if (!visible)
+        {
+            return;
+        }
+        UIWidget::layout();
+        this->refit();
+    }
+
     void UICanvas::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
         }
-        this->refit();
         if (color.a > 0.0f)
         {
-            primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

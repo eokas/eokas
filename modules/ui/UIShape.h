@@ -18,7 +18,7 @@ namespace eokas
 
         static Vector2 transformPoint(const Matrix3& matrix, const Vector2& point);
         static Vector2 transformVector(const Matrix3& matrix, const Vector2& vector);
-        Vector2 toLocal(const Vector2& parentPivotPoint) const;
+        Vector2 pivotToLocal(const Vector2& parentPivotPoint) const;
         Rect bounds(const Matrix3& toSpace) const;
 
         void setBox(const Vector2& topLeftInParentPivot, const Vector2& newSize);

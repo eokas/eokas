@@ -17,18 +17,13 @@ namespace eokas
             return scale.x != 0.0f && scale.y != 0.0f;
         }
 
-        Matrix3 parentSpaceOf(const UIWidget& widget)
+        Vector2 screenToParentPivot(const UIWidget& widget, const Vector2& screen)
         {
             if (widget.parent() == nullptr)
             {
-                return Matrix3::IDENTITY;
+                return screen;
             }
-            return widget.parent()->pivotToScreen();
-        }
-
-        Vector2 screenToPivot(const UIWidget& widget, const Vector2& screen)
-        {
-            return UIShape::transformPoint(parentSpaceOf(widget).inverse(), screen);
+            return widget.parent()->screenToPivot(screen);
         }
 
         bool keyFromCodepoint(uint32_t codepoint, UIKey& key, UIKeyMods& mods)
@@ -128,9 +123,9 @@ namespace eokas
         mPressX = 0.0f;
         mPressY = 0.0f;
         mDragged = false;
-        mLastLocal = Vector2(0.0f, 0.0f);
+        mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
-        mHasLocal = false;
+        mHasParentPivot = false;
         mFocused = nullptr;
 
         if (!mRoot)
@@ -174,9 +169,9 @@ namespace eokas
         mPressX = 0.0f;
         mPressY = 0.0f;
         mDragged = false;
-        mLastLocal = Vector2(0.0f, 0.0f);
+        mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
-        mHasLocal = false;
+        mHasParentPivot = false;
         mRoot.reset();
         if (mPrimitive)
         {
@@ -200,9 +195,9 @@ namespace eokas
         mPressX = 0.0f;
         mPressY = 0.0f;
         mDragged = false;
-        mLastLocal = Vector2(0.0f, 0.0f);
+        mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
-        mHasLocal = false;
+        mHasParentPivot = false;
         if (widget && widget->parent() != nullptr)
         {
             widget->parent()->detachChild(widget.get());
@@ -210,13 +205,18 @@ namespace eokas
         mRoot = widget;
     }
 
-    void UIWindow::flush()
+    void UIWindow::tick(f32_t deltaTime)
     {
+        (void)deltaTime;
         if (!mPrimitive)
         {
             return;
         }
 
+        if (mRoot)
+        {
+            mRoot->layout();
+        }
         mPrimitive->begin();
         if (mRoot)
         {
@@ -337,8 +337,8 @@ namespace eokas
             {
                 if (UIChart* chart = dynamic_cast<UIChart*>(pressed))
                 {
-                    Vector2 drop = screenToPivot(*canvas, Vector2(x, y));
-                    canvas->dispatchDrop(chart, hit, drop.x, drop.y);
+                    Vector2 parentPivot = screenToParentPivot(*canvas, Vector2(x, y));
+                    canvas->dispatchDrop(chart, hit, parentPivot.x, parentPivot.y);
                 }
             }
         }
@@ -350,8 +350,8 @@ namespace eokas
         this->routeWheel(mRoot.get(), Vector2(x, y), Vector2(deltaX, deltaY));
         if (UIWidget* hit = this->hitTest(x, y))
         {
-            Vector2 local = screenToPivot(*hit, Vector2(x, y));
-            hit->triggerWheel(local, deltaY);
+            Vector2 parentPivot = screenToParentPivot(*hit, Vector2(x, y));
+            hit->triggerWheel(parentPivot, deltaY);
         }
     }
 
@@ -365,8 +365,8 @@ namespace eokas
         UIWidget* target = this->dragTargetOf(mPressed, canvas);
         if (canvas != nullptr && target != nullptr && target != canvas)
         {
-            Vector2 local = screenToPivot(*target, Vector2(x, y));
-            canvas->dragChild(target, local.x, local.y);
+            Vector2 parentPivot = screenToParentPivot(*target, Vector2(x, y));
+            canvas->dragChild(target, parentPivot.x, parentPivot.y);
             return;
         }
         if (mPressedButton != 0)
@@ -382,12 +382,12 @@ namespace eokas
         {
             return;
         }
-        Vector2 local = screenToPivot(*widget, Vector2(x, y));
-        Vector2 delta = (mHasLocal && mLastWidget == widget) ? (local - mLastLocal) : Vector2::ZERO;
-        mLastLocal = local;
+        Vector2 parentPivot = screenToParentPivot(*widget, Vector2(x, y));
+        Vector2 delta = (mHasParentPivot && mLastWidget == widget) ? (parentPivot - mLastParentPivot) : Vector2::ZERO;
+        mLastParentPivot = parentPivot;
         mLastWidget = widget;
-        mHasLocal = true;
-        widget->triggerPointerMove(local, delta);
+        mHasParentPivot = true;
+        widget->triggerPointerMove(parentPivot, delta);
     }
 
     bool UIWindow::collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const
@@ -483,20 +483,20 @@ namespace eokas
                     return true;
                 }
             }
-            Vector2 parentLocal = screenToPivot(*canvas, point);
-            Vector2 local = canvas->shape.toLocal(parentLocal);
+            Vector2 local = canvas->screenToLocal(point);
             if (!Rect(0.0f, 0.0f, canvas->shape.size.x, canvas->shape.size.y).contains(local))
             {
                 return false;
             }
-            UIWidget* hit = canvas->pick(parentLocal);
+            Vector2 parentPivot = screenToParentPivot(*canvas, point);
+            UIWidget* hit = canvas->pick(parentPivot);
             if (UIChart* chart = dynamic_cast<UIChart*>(hit))
             {
                 if (liveScale(chart->shape.scale))
                 {
                     float current = chart->shape.scale.x == 0.0f ? 1.0f : chart->shape.scale.x;
                     float factor = expf(-delta.y * chart->scaleSensitivity);
-                    chart->scaleAt(screenToPivot(*chart, point), current * factor);
+                    chart->scaleAt(screenToParentPivot(*chart, point), current * factor);
                     return true;
                 }
             }
@@ -506,7 +506,7 @@ namespace eokas
                 current = 1.0f;
             }
             float factor = expf(-delta.y * canvas->scaleSensitivity);
-            canvas->scaleAt(parentLocal, current * factor);
+            canvas->scaleAt(parentPivot, current * factor);
             return true;
         }
         if (UIView* view = dynamic_cast<UIView*>(widget))
@@ -526,7 +526,7 @@ namespace eokas
                     return true;
                 }
             }
-            Vector2 local = view->shape.toLocal(screenToPivot(*view, point));
+            Vector2 local = view->screenToLocal(point);
             if (!Rect(0.0f, 0.0f, view->shape.size.x, view->shape.size.y).contains(local))
             {
                 return false;

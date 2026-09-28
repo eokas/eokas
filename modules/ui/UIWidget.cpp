@@ -78,20 +78,75 @@ namespace eokas
         mChildren.clear();
     }
 
-    Matrix3 UIWidget::worldTrans() const
+    Matrix3 UIWidget::matrixLocalToScreen() const
     {
         Matrix3 local = shape.localTrans();
         if (mParent == nullptr)
         {
             return local;
         }
-        return Matrix3::transform(local, mParent->pivotToScreen());
+        return Matrix3::transform(local, mParent->matrixPivotToScreen());
     }
 
-    Matrix3 UIWidget::pivotToScreen() const
+    Matrix3 UIWidget::matrixScreenToLocal() const
+    {
+        return this->matrixLocalToScreen().inverse();
+    }
+
+    Matrix3 UIWidget::matrixPivotToScreen() const
     {
         Matrix3 shift = Matrix3::translation(Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y));
-        return Matrix3::transform(shift, worldTrans());
+        return Matrix3::transform(shift, this->matrixLocalToScreen());
+    }
+
+    Matrix3 UIWidget::matrixScreenToPivot() const
+    {
+        return this->matrixPivotToScreen().inverse();
+    }
+
+    Vector2 UIWidget::screenToPivot(const Vector2& screen) const
+    {
+        return UIShape::transformPoint(this->matrixScreenToPivot(), screen);
+    }
+
+    Vector2 UIWidget::pivotToScreen(const Vector2& pivot) const
+    {
+        return UIShape::transformPoint(this->matrixPivotToScreen(), pivot);
+    }
+
+    Vector2 UIWidget::localToScreen(const Vector2& local) const
+    {
+        return UIShape::transformPoint(this->matrixLocalToScreen(), local);
+    }
+
+    Vector2 UIWidget::screenToLocal(const Vector2& screen) const
+    {
+        return UIShape::transformPoint(this->matrixScreenToLocal(), screen);
+    }
+
+    Rect UIWidget::screenBounds() const
+    {
+        return shape.bounds(this->matrixLocalToScreen());
+    }
+
+    void UIWidget::addQuad(UIPrimitive& primitive, const Rect& local, const Rect& uv, const Color& color) const
+    {
+        primitive.addQuad(this->matrixLocalToScreen(), local, uv, color);
+    }
+
+    void UIWidget::layout()
+    {
+        if (!visible)
+        {
+            return;
+        }
+        for (auto& child : mChildren)
+        {
+            if (child)
+            {
+                child->layout();
+            }
+        }
     }
 
     void UIWidget::render(UIPrimitive& primitive)
@@ -106,7 +161,7 @@ namespace eokas
             {
                 continue;
             }
-            if (!primitive.outsideClip(child->shape.bounds(child->worldTrans())))
+            if (!primitive.outsideClip(child->shape.bounds(child->matrixLocalToScreen())))
             {
                 child->render(primitive);
             }
@@ -132,7 +187,7 @@ namespace eokas
         {
             return nullptr;
         }
-        Vector2 local = shape.toLocal(point);
+        Vector2 local = shape.pivotToLocal(point);
         bool inside = this->contains(local);
         Vector2 childPoint = local - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
         for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)

@@ -32,6 +32,7 @@ namespace eokas
         void scaleAt(const Vector2& focal, float value);
         void setText(const String& value);
         UIText* label() const { return mLabel.get(); }
+        void layout() override;
         void render(UIPrimitive& primitive) override;
 
     private:
@@ -41,7 +42,7 @@ namespace eokas
     protected:
         Color activeFill() const;
         void placeLabel();
-        void strokeLoop(UIPrimitive& primitive, const Matrix3& world, const std::vector<Vector2>& localPoints) const;
+        void strokeLoop(UIPrimitive& primitive, const Matrix3& localToScreen, const std::vector<Vector2>& localPoints) const;
     };
 }
 

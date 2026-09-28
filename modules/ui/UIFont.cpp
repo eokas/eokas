@@ -284,6 +284,29 @@ namespace eokas
         descender = mDescender * scale;
     }
 
+    Vector2 UIFont::measure(const char* text, size_t length, float fontSize) const
+    {
+        float scale = 1.0f;
+        float ascender = 0.0f;
+        float descender = 0.0f;
+        this->drawMetrics(fontSize, scale, ascender, descender);
+        float width = 0.0f;
+        if (text != nullptr)
+        {
+            size_t index = 0;
+            while (index < length)
+            {
+                uint32_t codepoint = 0;
+                if (!UIFont::nextUtf8(text, length, index, codepoint))
+                {
+                    continue;
+                }
+                width += this->glyphSized(codepoint, fontSize).advance * scale;
+            }
+        }
+        return Vector2(width, ascender - descender);
+    }
+
     const UIFontGlyph& UIFont::glyphFor(uint32_t codepoint, uint32_t pixelSize) const
     {
         auto found = mSizes.find(pixelSize);

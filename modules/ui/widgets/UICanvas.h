@@ -17,6 +17,7 @@ namespace eokas
         UICanvas();
         void scaleAt(const Vector2& focal, float value);
         void addChild(const std::shared_ptr<UIWidget>& child);
+        void layout() override;
         void render(UIPrimitive& primitive) override;
         void refit();
         void dragChild(UIWidget* widget, float localX, float localY);

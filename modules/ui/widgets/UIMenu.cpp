@@ -42,30 +42,11 @@ namespace eokas
         {
             return;
         }
-
-        if (UIText* t = this->label())
-        {
-            UIFont* font = UIFont::find(t->style.fontPath);
-            if (font != nullptr && font->isOpen())
-            {
-                float bake = (float)font->pixelSize();
-                float scale = (t->style.fontSize > 0.0f ? t->style.fontSize : bake) / bake;
-                float width = 0.0f;
-                for (size_t i = 0; i < t->text.length(); i++)
-                {
-                    width += font->glyph(t->text.at(i)).advance * scale;
-                }
-                float tight = font->ascender() - font->descender();
-                t->shape.size = Vector2(floorf(width + 0.5f), floorf(tight * scale + 0.5f));
-            }
-            this->resize(Vector2(t->shape.size.x + paddingX * 2.0f, t->shape.size.y + paddingY * 2.0f));
-            return;
-        }
-
+        content->layout();
         this->resize(Vector2(content->shape.size.x + paddingX * 2.0f, content->shape.size.y + paddingY * 2.0f));
     }
 
-    void UIMenuItem::render(UIPrimitive& primitive)
+    void UIMenuItem::layout()
     {
         if (!visible)
         {
@@ -76,9 +57,16 @@ namespace eokas
             Vector2 pos(floorf(paddingX + 0.5f), floorf(paddingY + 0.5f));
             this->placeChild(*content, pos);
         }
+    }
 
+    void UIMenuItem::render(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
         Color bg = hovered ? hoverFill : background;
-        primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         UIWidget::render(primitive);
     }
 
@@ -100,7 +88,7 @@ namespace eokas
         }
     }
 
-    void UIMenu::render(UIPrimitive& primitive)
+    void UIMenu::layout()
     {
         if (!visible)
         {
@@ -165,9 +153,18 @@ namespace eokas
 
             this->placeChild(*list, Vector2::ZERO, shape.size);
         }
+        UIWidget::layout();
+    }
+
+    void UIMenu::render(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
         if (color.a > 0.0f)
         {
-            primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

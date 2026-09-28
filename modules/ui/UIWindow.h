@@ -19,7 +19,7 @@ namespace eokas
         const std::shared_ptr<UIWidget>& root() const;
         void setRoot(const std::shared_ptr<UIWidget>& widget);
 
-        void flush();
+        void tick(f32_t deltaTime);
         UIPrimitive::Ref primitive() const;
 
         UIWidget* hitTest(float x, float y);
@@ -56,9 +56,9 @@ namespace eokas
         float mPressX = 0.0f;
         float mPressY = 0.0f;
         bool mDragged = false;
-        Vector2 mLastLocal { 0.0f, 0.0f };
+        Vector2 mLastParentPivot { 0.0f, 0.0f };
         UIWidget* mLastWidget = nullptr;
-        bool mHasLocal = false;
+        bool mHasParentPivot = false;
         UIWidget* mFocused = nullptr;
     };
 }

@@ -22,6 +22,7 @@ namespace eokas
 
         void setLabel(const String& text);
         UIText* label() const;
+        void layout() override;
         void render(UIPrimitive& primitive) override;
         void triggerPointerRelease() override;
 
@@ -63,6 +64,7 @@ namespace eokas
         void setExpanded(bool next);
         String labelOf(int index) const;
         UIText* caption() const;
+        void layout() override;
         void render(UIPrimitive& primitive) override;
         void triggerPointerRelease() override;
         void triggerKeyPress(const UIKey& key, const UIKeyMods& mods) override;
@@ -77,8 +79,8 @@ namespace eokas
         void syncCaption();
         void syncPopup();
         void layoutCaption();
-        void drawBorder(UIPrimitive& primitive, const Matrix3& world, const Rect& area) const;
-        void drawChevron(UIPrimitive& primitive, const Matrix3& world) const;
+        void drawBorder(UIPrimitive& primitive, const Matrix3& localToScreen, const Rect& area) const;
+        void drawChevron(UIPrimitive& primitive, const Matrix3& localToScreen) const;
     };
 }
 

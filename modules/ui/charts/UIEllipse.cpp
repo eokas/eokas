@@ -37,7 +37,7 @@ namespace eokas
         {
             return;
         }
-        Matrix3 world = worldTrans();
+        Matrix3 localToScreen = matrixLocalToScreen();
         float rx = shape.size.x * 0.5f;
         float ry = shape.size.y * 0.5f;
         if (rx != 0.0f && ry != 0.0f)
@@ -60,12 +60,12 @@ namespace eokas
             {
                 const Vector2& a = boundary[(size_t)i];
                 const Vector2& b = boundary[(size_t)((i + 1) % count)];
-                vertices.push_back(UIShape::transformPoint(world, center));
-                vertices.push_back(UIShape::transformPoint(world, a));
-                vertices.push_back(UIShape::transformPoint(world, b));
+                vertices.push_back(this->localToScreen(center));
+                vertices.push_back(this->localToScreen(a));
+                vertices.push_back(this->localToScreen(b));
             }
             primitive.addTriangles(vertices.data(), (uint32_t)count, UIFont::solidUV(), fill);
-            this->strokeLoop(primitive, world, boundary);
+            this->strokeLoop(primitive, localToScreen, boundary);
         }
         UIWidget::render(primitive);
     }

@@ -20,6 +20,7 @@ namespace eokas
         }
         String text;
         UITextStyle style;
+        void layout() override;
         void render(UIPrimitive& primitive) override;
     };
 }

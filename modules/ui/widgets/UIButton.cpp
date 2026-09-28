@@ -36,7 +36,7 @@ namespace eokas
         return dynamic_cast<UIText*>(content.get());
     }
 
-    void UIButton::render(UIPrimitive& primitive)
+    void UIButton::layout()
     {
         if (!visible)
         {
@@ -44,23 +44,7 @@ namespace eokas
         }
         if (content)
         {
-            if (UIText* t = this->label())
-            {
-                UIFont* font = UIFont::find(t->style.fontPath);
-                if (font != nullptr && font->isOpen())
-                {
-                    float bake = (float)font->pixelSize();
-                    float scale = (t->style.fontSize > 0.0f ? t->style.fontSize : bake) / bake;
-                    float width = 0.0f;
-                    for (size_t i = 0; i < t->text.length(); i++)
-                    {
-                        width += font->glyph(t->text.at(i)).advance * scale;
-                    }
-                    float tight = font->ascender() - font->descender();
-                    t->shape.size = Vector2(floorf(width + 0.5f), floorf(tight * scale + 0.5f));
-                }
-            }
-
+            content->layout();
             float innerW = shape.size.x - paddingX * 2.0f;
             float innerH = shape.size.y - paddingY * 2.0f;
             if (innerW < 0.0f)
@@ -76,7 +60,14 @@ namespace eokas
                 paddingY + (innerH - content->shape.size.y) * 0.5f);
             this->placeChild(*content, Vector2(floorf(pos.x + 0.5f), floorf(pos.y + 0.5f)));
         }
+    }
 
+    void UIButton::render(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
         Color bg = background;
         if (pressed)
         {
@@ -86,7 +77,7 @@ namespace eokas
         {
             bg = hoverFill;
         }
-        primitive.addQuad(worldTrans(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         UIWidget::render(primitive);
     }
 }

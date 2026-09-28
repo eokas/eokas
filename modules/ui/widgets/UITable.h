@@ -42,6 +42,7 @@ namespace eokas
         void setBorder(const UITableBorder& value);
         void clearBorder();
         UITableBorder border() const;
+        void layout() override;
         void render(UIPrimitive& primitive) override;
 
     private:
@@ -129,6 +130,7 @@ namespace eokas
 
         void refit();
         void relayout();
+        void layout() override;
         void render(UIPrimitive& primitive) override;
 
     private:

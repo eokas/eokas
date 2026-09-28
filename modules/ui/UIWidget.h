@@ -21,7 +21,7 @@ namespace eokas
         // parent() is the widget whose pivot space this widget is placed in.
         // Null means the parent space is the screen.
         // shape.origin is this widget's pivot relative to the parent pivot.
-        // Geometry is rasterized in local space with the origin at the top-left, then multiplied by worldTrans().
+        // Geometry is rasterized in local space with the origin at the top-left.
         UIShape shape;
 
         Color color { Color(1.0f, 1.0f, 1.0f, 1.0f) };
@@ -58,8 +58,13 @@ namespace eokas
         Ref attachChild(Ref child);
         Ref detachChild(UIWidget* child);
         void detachChildren();
-        Matrix3 worldTrans() const;
-        Matrix3 pivotToScreen() const;
+        Vector2 screenToPivot(const Vector2& screen) const;
+        Vector2 pivotToScreen(const Vector2& pivot) const;
+        Vector2 localToScreen(const Vector2& local) const;
+        Vector2 screenToLocal(const Vector2& screen) const;
+        Rect screenBounds() const;
+        void addQuad(UIPrimitive& primitive, const Rect& local, const Rect& uv, const Color& color) const;
+        virtual void layout();
         virtual void render(UIPrimitive& primitive);
         virtual bool contains(const Vector2& point) const;
         virtual UIWidget* pick(const Vector2& point);
@@ -76,6 +81,12 @@ namespace eokas
         void resize(const Vector2& newSize);    
         void placeChild(UIWidget& child, const Vector2& topLeftLocal);
         void placeChild(UIWidget& child, const Vector2& topLeftLocal, const Vector2& childSize);
+
+    protected:
+        Matrix3 matrixLocalToScreen() const;
+        Matrix3 matrixScreenToLocal() const;
+        Matrix3 matrixPivotToScreen() const;
+        Matrix3 matrixScreenToPivot() const;
 
     private:
         bool isUnder(const UIWidget* ancestor) const;

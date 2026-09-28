@@ -1285,7 +1285,7 @@ namespace eokas::ui {
             }
         }
 
-        void flushFloatingWindows()
+        void flushFloatingWindows(float delta)
         {
             if (!mHost) return;
             for (auto& item : mFloatWindows)
@@ -1307,7 +1307,7 @@ namespace eokas::ui {
                     item->space.add(uiWindow->primitive());
                     item->shapeReady = true;
                 }
-                uiWindow->flush();
+                uiWindow->tick(delta);
             }
         }
 
@@ -1360,8 +1360,8 @@ namespace eokas::ui {
                 setBox(mDock, Rect(0.0f, top, mClientWidth, mClientHeight - top));
             }
 
-            if (mWindow) mWindow->flush();
-            this->flushFloatingWindows();
+            if (mWindow) mWindow->tick(delta);
+            this->flushFloatingWindows(delta);
             if (mHost) mHost->publishAtlas();
             mRenderer.render(mSurface, mSpace);
             this->placeFloatingWindows();
