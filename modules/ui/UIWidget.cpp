@@ -217,98 +217,263 @@ namespace eokas
         return nullptr;
     }
 
-    void UIWidget::triggerPointerEnter()
+    namespace
     {
-        hovered = true;
+        Vector2 screenToParentPivot(const UIWidget& widget, const Vector2& screen)
+        {
+            if (widget.parent() == nullptr)
+            {
+                return screen;
+            }
+            return widget.parent()->screenToPivot(screen);
+        }
+    }
+
+    bool UIWidget::handlePointerEnter(float screenX, float screenY)
+    {
+        (void)screenX;
+        (void)screenY;
+        mHovered = true;
         if (onPointerEnter)
         {
             onPointerEnter();
+            return true;
         }
+        return false;
     }
 
-    void UIWidget::triggerPointerLeave()
+    bool UIWidget::handlePointerLeave(float screenX, float screenY)
     {
-        hovered = false;
+        (void)screenX;
+        (void)screenY;
+        mHovered = false;
         if (onPointerLeave)
         {
             onPointerLeave();
+            return true;
         }
+        return false;
     }
 
-    void UIWidget::triggerPointerPress()
+    bool UIWidget::handlePointerMove(float screenX, float screenY, const Vector2& delta)
     {
-        pressed = true;
+        if (onPointerMove)
+        {
+            Vector2 position = screenToParentPivot(*this, Vector2(screenX, screenY));
+            onPointerMove(position, delta);
+            return true;
+        }
+        return false;
+    }
+
+    bool UIWidget::handlePointerPress(float screenX, float screenY, int button)
+    {
+        (void)screenX;
+        (void)screenY;
+        (void)button;
+        mPressed = true;
         if (onPointerPress)
         {
             onPointerPress();
+            return true;
         }
+        return false;
     }
 
-    void UIWidget::triggerPointerRelease()
+    bool UIWidget::handlePointerRelease(float screenX, float screenY, int button)
     {
-        const bool click = pressed;
-        pressed = false;
+        (void)screenX;
+        (void)screenY;
+        (void)button;
+        mPressed = false;
         if (onPointerRelease)
         {
             onPointerRelease();
+            return true;
         }
-        if (!click)
+        return false;
+    }
+
+    void UIWidget::handleFocusGain()
+    {
+        if (mFocused)
         {
             return;
         }
-
-        if (onClick)
+        mFocused = true;
+        if (onGotFocus)
         {
-            onClick();
+            onGotFocus();
         }
+    }
 
+    void UIWidget::handleFocusLoss()
+    {
+        if (!mFocused)
+        {
+            return;
+        }
+        mFocused = false;
+        if (onLostFocus)
+        {
+            onLostFocus();
+        }
+    }
+
+    bool UIWidget::handleClick(float screenX, float screenY)
+    {
+        (void)screenX;
+        (void)screenY;
         constexpr auto interval = std::chrono::milliseconds(500);
         auto now = std::chrono::steady_clock::now();
         if (mLastClickTime.has_value() && now - *mLastClickTime < interval)
         {
             mLastClickTime.reset();
-            if (onDoubleClick)
-            {
-                onDoubleClick();
-            }
-            return;
+            return this->handleDoubleClick(screenX, screenY);
         }
         mLastClickTime = now;
+        if (onClick)
+        {
+            onClick();
+            return true;
+        }
+        return false;
     }
 
-    void UIWidget::triggerPointerMove(const Vector2& position, const Vector2& delta)
+    bool UIWidget::handleDoubleClick(float screenX, float screenY)
     {
-        if (onPointerMove)
+        (void)screenX;
+        (void)screenY;
+        if (onDoubleClick)
         {
-            onPointerMove(position, delta);
+            onDoubleClick();
+            return true;
         }
-        if (pressed && onDrag)
+        return false;
+    }
+
+    bool UIWidget::handleDrag(float screenX, float screenY, const Vector2& delta)
+    {
+        (void)screenX;
+        (void)screenY;
+        if (onDrag)
         {
+            Vector2 position = screenToParentPivot(*this, Vector2(screenX, screenY));
             onDrag(position, delta);
+            return true;
         }
+        return false;
     }
 
-    void UIWidget::triggerWheel(const Vector2& position, f32_t delta)
+    bool UIWidget::handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta)
     {
-        if (onWheel)
+        (void)hitUnderCursor;
+        if (onDrop)
         {
-            onWheel(position, delta);
+            Vector2 position = screenToParentPivot(*this, Vector2(screenX, screenY));
+            onDrop(position, delta);
+            return true;
         }
+        return false;
     }
 
-    void UIWidget::triggerKeyPress(const UIKey& key, const UIKeyMods& mods)
+    bool UIWidget::handleKeyPress(const UIKey& key, const UIKeyMods& mods)
     {
         if (onKeyPress)
         {
             onKeyPress(key, mods);
+            return true;
         }
+        return false;
     }
 
-    void UIWidget::triggerKeyRelease(const UIKey& key, const UIKeyMods& mods)
+    bool UIWidget::handleKeyRelease(const UIKey& key, const UIKeyMods& mods)
     {
         if (onKeyRelease)
         {
             onKeyRelease(key, mods);
+            return true;
+        }
+        return false;
+    }
+
+    bool UIWidget::handleWheel(float screenX, float screenY, float deltaX, float deltaY)
+    {
+        if (!visible || shape.scale.x == 0.0f || shape.scale.y == 0.0f)
+        {
+            return false;
+        }
+        Vector2 point(screenX, screenY);
+        for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)
+        {
+            if (*it && (*it)->floating && (*it)->handleWheel(screenX, screenY, deltaX, deltaY))
+            {
+                return true;
+            }
+        }
+        for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)
+        {
+            if (*it && !(*it)->floating && (*it)->handleWheel(screenX, screenY, deltaX, deltaY))
+            {
+                return true;
+            }
+        }
+        if (UIWidget* hit = this->pick(screenToParentPivot(*this, point)))
+        {
+            if (hit != this && hit->handleWheel(screenX, screenY, deltaX, deltaY))
+            {
+                return true;
+            }
+            Vector2 parentPivot = screenToParentPivot(*hit, point);
+            if (hit->onWheel)
+            {
+                hit->onWheel(parentPivot, deltaY);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void UIWidget::endActiveDrag()
+    {
+    }
+
+    bool UIWidget::containsDescendant(const UIWidget* target) const
+    {
+        if (target == nullptr)
+        {
+            return false;
+        }
+        if (this == target)
+        {
+            return true;
+        }
+        for (auto& child : mChildren)
+        {
+            if (child && child->containsDescendant(target))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void UIWidget::resetPointerStateRecursive()
+    {
+        this->endActiveDrag();
+        const bool active = mHovered || mPressed;
+        mHovered = false;
+        mPressed = false;
+        if (active)
+        {
+            this->handlePointerRelease(0.0f, 0.0f, 0);
+        }
+        for (auto& child : mChildren)
+        {
+            if (child)
+            {
+                child->resetPointerStateRecursive();
+            }
         }
     }
 

@@ -451,13 +451,13 @@ namespace eokas
         this->drawScrollbars(primitive, localToScreen);
     }
 
-    void UIView::triggerPointerMove(const Vector2& position, const Vector2& delta)
+    bool UIView::handlePointerMove(float screenX, float screenY, const Vector2& delta)
     {
-        (void)delta;
-        UIWidget::triggerPointerMove(position, delta);
-        if (!pressed)
+        Vector2 position = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
+        UIWidget::handlePointerMove(screenX, screenY, delta);
+        if (!isPressed())
         {
-            return;
+            return false;
         }
         Vector2 local = shape.pivotToLocal(position);
         float lx = local.x;
@@ -493,7 +493,7 @@ namespace eokas
                     mScrollY = clampf(mScrollY, mMinScrollY, mMaxScrollY);
                     this->placeRoot();
                     mDrag = BarDrag::Track;
-                    return;
+                    return true;
                 }
             }
             if (mDrag == BarDrag::None && mShowH)
@@ -506,7 +506,7 @@ namespace eokas
                     mScrollX = clampf(mScrollX, mMinScrollX, mMaxScrollX);
                     this->placeRoot();
                     mDrag = BarDrag::Track;
-                    return;
+                    return true;
                 }
             }
         }
@@ -529,11 +529,40 @@ namespace eokas
             mScrollX = clampf(mMinScrollX + t * (mMaxScrollX - mMinScrollX), mMinScrollX, mMaxScrollX);
             this->placeRoot();
         }
+        return true;
     }
 
-    void UIView::triggerPointerRelease()
+    bool UIView::handlePointerRelease(float screenX, float screenY, int button)
     {
         mDrag = BarDrag::None;
-        UIWidget::triggerPointerRelease();
+        return UIWidget::handlePointerRelease(screenX, screenY, button);
+    }
+
+    bool UIView::handleWheel(float screenX, float screenY, float deltaX, float deltaY)
+    {
+        if (!visible || shape.scale.x == 0.0f || shape.scale.y == 0.0f)
+        {
+            return false;
+        }
+        for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
+        {
+            if (*it && (*it)->floating && (*it)->handleWheel(screenX, screenY, deltaX, deltaY))
+            {
+                return true;
+            }
+        }
+        for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
+        {
+            if (*it && !(*it)->floating && (*it)->handleWheel(screenX, screenY, deltaX, deltaY))
+            {
+                return true;
+            }
+        }
+        Vector2 local = this->screenToLocal(Vector2(screenX, screenY));
+        if (!Rect(0.0f, 0.0f, shape.size.x, shape.size.y).contains(local))
+        {
+            return false;
+        }
+        return this->scrollBy(deltaX, deltaY);
     }
 }

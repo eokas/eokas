@@ -74,6 +74,19 @@ namespace eokas
             return value;
         }
 
+        bool liveScale(const Vector2& scale)
+        {
+            return scale.x != 0.0f && scale.y != 0.0f;
+        }
+
+        Vector2 screenToParentPivot(const UIWidget& widget, const Vector2& screen)
+        {
+            if (widget.parent() == nullptr)
+            {
+                return screen;
+            }
+            return widget.parent()->screenToPivot(screen);
+        }
     }
 
     UICanvas::UICanvas()
@@ -179,72 +192,138 @@ namespace eokas
         mSelfDrag = false;
     }
 
-    void UICanvas::dispatchDrop(UIChart* source, UIWidget* hit, float x, float y)
+    UIWidget* UICanvas::findPressedDragable(UIWidget* node) const
     {
-        if (source == nullptr || !source->onDrop)
+        if (node == nullptr)
         {
-            return;
+            return nullptr;
         }
-        UIChart* target = dynamic_cast<UIChart*>(hit);
-        if (target == source)
+        UIWidget* found = nullptr;
+        for (auto& child : node->children())
         {
-            target = nullptr;
+            if (UIWidget* deeper = this->findPressedDragable(child.get()))
+            {
+                found = deeper;
+            }
         }
-        source->onDrop(target, x, y);
+        if (node != this && node->isPressed() && node->dragable)
+        {
+            return node;
+        }
+        return found;
     }
 
-    namespace
+    void UICanvas::applyCanvasSelection(UIWidget* selectedItem) const
     {
-        void applySelect(UIWidget* node, UIChart* chart)
+        for (const auto& child : children())
         {
-            if (node == nullptr)
+            if (!child)
             {
-                return;
+                continue;
             }
-            if (UIChart* item = dynamic_cast<UIChart*>(node))
+            UIChart* chart = dynamic_cast<UIChart*>(child.get());
+            if (chart != nullptr)
             {
-                item->selected = item == chart;
+                chart->selected = (child.get() == selectedItem);
             }
-            for (auto& child : node->children())
-            {
-                applySelect(child.get(), chart);
-            }
-        }
-    }
-
-    void UICanvas::select(UIChart* chart)
-    {
-        for (auto& child : children())
-        {
-            applySelect(child.get(), chart);
         }
     }
 
-    void UICanvas::triggerPointerMove(const Vector2& position, const Vector2& delta)
+    bool UICanvas::handlePointerMove(float screenX, float screenY, const Vector2& delta)
     {
-        (void)delta;
-        if (!pressed || !dragable)
+        Vector2 position = screenToParentPivot(*this, Vector2(screenX, screenY));
+        if (!isPressed() || !dragable)
         {
-            UIWidget::triggerPointerMove(position, delta);
-            return;
+            return UIWidget::handlePointerMove(screenX, screenY, delta);
         }
-        Vector2 local = position;
         if (!mSelfDrag)
         {
             mSelfDrag = true;
-            mGrab = local;
-            UIWidget::triggerPointerMove(position, delta);
-            return;
+            mGrab = position;
+            return UIWidget::handlePointerMove(screenX, screenY, delta);
         }
-        shape.origin += local - mGrab;
-        mGrab = local;
+        shape.origin += position - mGrab;
+        mGrab = position;
         this->refit();
-        UIWidget::triggerPointerMove(position, delta);
+        UIWidget::handlePointerMove(screenX, screenY, delta);
+        return true;
     }
 
-    void UICanvas::triggerPointerRelease()
+    bool UICanvas::handlePointerRelease(float screenX, float screenY, int button)
     {
         this->endDrag();
-        UIWidget::triggerPointerRelease();
+        return UIWidget::handlePointerRelease(screenX, screenY, button);
     }
+
+    bool UICanvas::handleDrag(float screenX, float screenY, const Vector2& delta)
+    {
+        UIWidget* target = this->findPressedDragable(this);
+        if (target != nullptr && target != this)
+        {
+            Vector2 parentPivot = screenToParentPivot(*target, Vector2(screenX, screenY));
+            this->dragChild(target, parentPivot.x, parentPivot.y);
+            return true;
+        }
+        return UIWidget::handleDrag(screenX, screenY, delta);
+    }
+
+    bool UICanvas::handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta)
+    {
+        (void)screenX;
+        (void)screenY;
+        (void)hitUnderCursor;
+        return UIWidget::handleDrop(screenX, screenY, hitUnderCursor, delta);
+    }
+
+    bool UICanvas::routeNestedWheel(float screenX, float screenY, float deltaX, float deltaY, UIWidget* widget) const
+    {
+        if (widget == nullptr || !widget->visible || !liveScale(widget->shape.scale))
+        {
+            return false;
+        }
+        return widget->handleWheel(screenX, screenY, deltaX, deltaY);
+    }
+
+    bool UICanvas::handleWheel(float screenX, float screenY, float deltaX, float deltaY)
+    {
+        if (!visible || !liveScale(shape.scale))
+        {
+            return false;
+        }
+        Vector2 point(screenX, screenY);
+        for (auto it = children().rbegin(); it != children().rend(); ++it)
+        {
+            if (*it && this->routeNestedWheel(screenX, screenY, deltaX, deltaY, it->get()))
+            {
+                return true;
+            }
+        }
+        Vector2 local = this->screenToLocal(point);
+        if (!Rect(0.0f, 0.0f, shape.size.x, shape.size.y).contains(local))
+        {
+            return false;
+        }
+        Vector2 parentPivot = screenToParentPivot(*this, point);
+        if (UIWidget* hit = this->pick(parentPivot))
+        {
+            if (hit != this && hit->handleWheel(screenX, screenY, deltaX, deltaY))
+            {
+                return true;
+            }
+        }
+        float current = shape.scale.x;
+        if (current == 0.0f)
+        {
+            current = 1.0f;
+        }
+        float factor = expf(-deltaY * scaleSensitivity);
+        this->scaleAt(parentPivot, current * factor);
+        return true;
+    }
+
+    void UICanvas::endActiveDrag()
+    {
+        this->endDrag();
+    }
+
 }

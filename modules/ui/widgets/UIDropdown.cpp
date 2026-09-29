@@ -83,11 +83,11 @@ namespace eokas
         }
         Matrix3 localToScreen = matrixLocalToScreen();
         Color bg = background;
-        if (pressed)
+        if (isPressed())
         {
             bg = pressedFill;
         }
-        else if (hovered)
+        else if (isHovered())
         {
             bg = hoverFill;
         }
@@ -99,15 +99,16 @@ namespace eokas
         UIWidget::render(primitive);
     }
 
-    void UIDropdownItem::triggerPointerRelease()
+    bool UIDropdownItem::handlePointerRelease(float screenX, float screenY, int button)
     {
-        const bool activate = pressed;
-        UIWidget::triggerPointerRelease();
+        const bool activate = isPressed();
+        bool handled = UIWidget::handlePointerRelease(screenX, screenY, button);
         if (activate && owner != nullptr)
         {
             owner->setValue(index);
             owner->setExpanded(false);
         }
+        return handled;
     }
 
     UIDropdown::UIDropdown()
@@ -430,11 +431,11 @@ namespace eokas
         }
         Matrix3 localToScreen = matrixLocalToScreen();
         Color bg = background;
-        if (pickable && pressed)
+        if (pickable && isPressed())
         {
             bg = pressedFill;
         }
-        else if (pickable && (hovered || expanded))
+        else if (pickable && (isHovered() || expanded))
         {
             bg = hoverFill;
         }
@@ -444,34 +445,32 @@ namespace eokas
         UIWidget::render(primitive);
     }
 
-    void UIDropdown::triggerPointerRelease()
+    bool UIDropdown::handlePointerRelease(float screenX, float screenY, int button)
     {
-        if (pressed && pickable)
+        if (isPressed() && pickable)
         {
             this->setExpanded(!expanded);
         }
-        UIWidget::triggerPointerRelease();
+        return UIWidget::handlePointerRelease(screenX, screenY, button);
     }
 
-    void UIDropdown::triggerKeyPress(const UIKey& key, const UIKeyMods& mods)
+    bool UIDropdown::handleKeyPress(const UIKey& key, const UIKeyMods& mods)
     {
         (void)mods;
         if (!pickable)
         {
-            UIWidget::triggerKeyPress(key, mods);
-            return;
+            return UIWidget::handleKeyPress(key, mods);
         }
         if (key == UIKey::Enter)
         {
             this->setExpanded(!expanded);
-            UIWidget::triggerKeyPress(key, mods);
-            return;
+            return UIWidget::handleKeyPress(key, mods);
         }
         if (key == UIKey::Up || key == UIKey::Down)
         {
             int next = this->neighbor(key == UIKey::Up ? -1 : 1);
             this->setValue(next);
         }
-        UIWidget::triggerKeyPress(key, mods);
+        return UIWidget::handleKeyPress(key, mods);
     }
 }

@@ -19,7 +19,7 @@ namespace eokas
         UIStrokeStyle stroke;
         bool selected = false;
 
-        std::function<void(UIChart* target, float x, float y)> onDrop;
+        std::function<void(UIWidget* target, float x, float y)> onChartDrop;
         std::function<void(float delta, float x, float y)> onZoom;
 
         UIChart();
@@ -34,6 +34,10 @@ namespace eokas
         UIText* label() const { return mLabel.get(); }
         void layout() override;
         void render(UIPrimitive& primitive) override;
+
+        bool handleClick(float screenX, float screenY) override;
+        bool handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta) override;
+        bool handleWheel(float screenX, float screenY, float deltaX, float deltaY) override;
 
     private:
         std::vector<Vector2> mContour;

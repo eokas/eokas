@@ -69,11 +69,11 @@ namespace eokas
             return;
         }
         Color bg = background;
-        if (pressed)
+        if (isPressed())
         {
             bg = pressedFill;
         }
-        else if (hovered)
+        else if (isHovered())
         {
             bg = hoverFill;
         }

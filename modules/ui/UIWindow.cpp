@@ -1,9 +1,6 @@
 #include "UIWindow.h"
-#include "widgets/UICanvas.h"
-#include "widgets/UIChart.h"
-#include "widgets/UIView.h"
 
-#include <cmath>
+#include <chrono>
 #include <cstddef>
 
 namespace eokas
@@ -11,11 +8,6 @@ namespace eokas
     namespace
     {
         constexpr const char* kUIShaderPath = "shaders/UI.hlsl";
-
-        bool liveScale(const Vector2& scale)
-        {
-            return scale.x != 0.0f && scale.y != 0.0f;
-        }
 
         Vector2 screenToParentPivot(const UIWidget& widget, const Vector2& screen)
         {
@@ -111,6 +103,22 @@ namespace eokas
             }
             return false;
         }
+
+        void endActiveDrags(UIWidget* widget)
+        {
+            if (widget == nullptr)
+            {
+                return;
+            }
+            widget->endActiveDrag();
+            for (auto& child : widget->children())
+            {
+                if (child)
+                {
+                    endActiveDrags(child.get());
+                }
+            }
+        }
     }
 
     void UIWindow::init(uint32_t width, uint32_t height)
@@ -120,9 +128,7 @@ namespace eokas
         mHovered = nullptr;
         mPressed = nullptr;
         mPressedButton = -1;
-        mPressX = 0.0f;
-        mPressY = 0.0f;
-        mDragged = false;
+        mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
         mHasParentPivot = false;
@@ -166,9 +172,7 @@ namespace eokas
         mHovered = nullptr;
         mPressed = nullptr;
         mPressedButton = -1;
-        mPressX = 0.0f;
-        mPressY = 0.0f;
-        mDragged = false;
+        mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
         mHasParentPivot = false;
@@ -192,9 +196,7 @@ namespace eokas
         mHovered = nullptr;
         mPressed = nullptr;
         mPressedButton = -1;
-        mPressX = 0.0f;
-        mPressY = 0.0f;
-        mDragged = false;
+        mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
         mHasParentPivot = false;
@@ -243,12 +245,14 @@ namespace eokas
     {
         if (mPressed != nullptr)
         {
-            float dx = x - mPressX;
-            float dy = y - mPressY;
-            if (dx * dx + dy * dy > 16.0f)
-            {
-                mDragged = true;
-            }
+            UIInputInfo move;
+            move.target = mPressed;
+            move.type = UIInputEvent::PointerMove;
+            move.x = x;
+            move.y = y;
+            move.time = std::chrono::steady_clock::now();
+            move.button = mPressedButton;
+            this->appendRawInput(move);
             this->dispatchDrag(x, y);
         }
 
@@ -257,17 +261,17 @@ namespace eokas
         {
             if (mHovered != nullptr)
             {
-                mHovered->triggerPointerLeave();
+                mHovered->handlePointerLeave(x, y);
             }
             mHovered = hit;
             if (mHovered != nullptr)
             {
-                mHovered->triggerPointerEnter();
+                mHovered->handlePointerEnter(x, y);
             }
         }
         if (mPressed == nullptr)
         {
-            this->dispatchPointer(mHovered, x, y);
+            this->dispatchPointerMove(mHovered, x, y);
         }
     }
 
@@ -286,7 +290,7 @@ namespace eokas
         mPressedButton = button;
         if (button == 0)
         {
-            bool insideFocus = mFocused != nullptr && this->containsWidget(mFocused, mPressed);
+            bool insideFocus = mFocused != nullptr && mFocused->containsDescendant(mPressed);
             if (mPressed->onKeyPress != nullptr || mPressed->onGotFocus != nullptr)
             {
                 this->setFocus(mPressed);
@@ -296,10 +300,16 @@ namespace eokas
                 this->setFocus(nullptr);
             }
         }
-        mPressX = x;
-        mPressY = y;
-        mDragged = false;
-        mPressed->triggerPointerPress();
+        mRawInputEvents.clear();
+        mPressed->handlePointerPress(x, y, button);
+        UIInputInfo press;
+        press.target = mPressed;
+        press.type = UIInputEvent::PointerPress;
+        press.x = x;
+        press.y = y;
+        press.time = std::chrono::steady_clock::now();
+        press.button = button;
+        this->appendRawInput(press);
         this->dispatchDrag(x, y);
     }
 
@@ -308,51 +318,45 @@ namespace eokas
         UIWidget* hit = this->hitTest(x, y);
         UIWidget* pressed = mPressed;
         const int pressedButton = mPressedButton;
-        const bool dragged = mDragged;
         mPressed = nullptr;
         mPressedButton = -1;
-        mDragged = false;
         if (pressed != nullptr && button == pressedButton)
         {
-            this->endCanvasDrag(mRoot.get());
-            const bool click = !dragged && hit == pressed && button == 0;
-            UICanvas* canvas = nullptr;
-            this->dragTargetOf(pressed, canvas);
-            if (!click)
-            {
-                pressed->pressed = false;
-            }
-            pressed->triggerPointerRelease();
-            if (click)
-            {
-                if (canvas != nullptr)
-                {
-                    if (UIChart* chart = dynamic_cast<UIChart*>(pressed))
-                    {
-                        canvas->select(chart);
-                    }
-                }
-            }
-            else if (dragged && canvas != nullptr)
-            {
-                if (UIChart* chart = dynamic_cast<UIChart*>(pressed))
-                {
-                    Vector2 parentPivot = screenToParentPivot(*canvas, Vector2(x, y));
-                    canvas->dispatchDrop(chart, hit, parentPivot.x, parentPivot.y);
-                }
-            }
+            endActiveDrags(mRoot.get());
+            pressed->handlePointerRelease(x, y, button);
+            UIInputInfo release;
+            release.target = pressed;
+            release.type = UIInputEvent::PointerRelease;
+            release.x = x;
+            release.y = y;
+            release.time = std::chrono::steady_clock::now();
+            release.button = button;
+            this->appendRawInput(release);
+            this->dispatchPointerGesture(pressed, hit, button, x, y);
+        }
+        else
+        {
+            this->clearRawInputEvents();
         }
         this->onMouseMove(x, y);
     }
 
     void UIWindow::onMouseWheel(float x, float y, float deltaX, float deltaY)
     {
-        this->routeWheel(mRoot.get(), Vector2(x, y), Vector2(deltaX, deltaY));
-        if (UIWidget* hit = this->hitTest(x, y))
+        UIInputInfo wheel;
+        wheel.target = this->hitTest(x, y);
+        wheel.type = UIInputEvent::Wheel;
+        wheel.x = x;
+        wheel.y = y;
+        wheel.time = std::chrono::steady_clock::now();
+        wheel.wheelDeltaX = deltaX;
+        wheel.wheelDeltaY = deltaY;
+        this->appendRawInput(wheel);
+        if (mRoot)
         {
-            Vector2 parentPivot = screenToParentPivot(*hit, Vector2(x, y));
-            hit->triggerWheel(parentPivot, deltaY);
+            mRoot->handleWheel(x, y, deltaX, deltaY);
         }
+        this->clearRawInputEvents();
     }
 
     void UIWindow::dispatchDrag(float x, float y)
@@ -361,22 +365,24 @@ namespace eokas
         {
             return;
         }
-        UICanvas* canvas = nullptr;
-        UIWidget* target = this->dragTargetOf(mPressed, canvas);
-        if (canvas != nullptr && target != nullptr && target != canvas)
+        Vector2 delta = this->dropDelta(mRawInputEvents);
+        UIWidget* walker = mPressed;
+        while (walker != nullptr)
         {
-            Vector2 parentPivot = screenToParentPivot(*target, Vector2(x, y));
-            canvas->dragChild(target, parentPivot.x, parentPivot.y);
-            return;
+            if (walker->handleDrag(x, y, delta))
+            {
+                return;
+            }
+            walker = walker->parent();
         }
         if (mPressedButton != 0)
         {
             return;
         }
-        this->dispatchPointer(mPressed, x, y);
+        this->dispatchPointerMove(mPressed, x, y);
     }
 
-    void UIWindow::dispatchPointer(UIWidget* widget, float x, float y)
+    void UIWindow::dispatchPointerMove(UIWidget* widget, float x, float y)
     {
         if (widget == nullptr)
         {
@@ -387,222 +393,7 @@ namespace eokas
         mLastParentPivot = parentPivot;
         mLastWidget = widget;
         mHasParentPivot = true;
-        widget->triggerPointerMove(parentPivot, delta);
-    }
-
-    bool UIWindow::collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const
-    {
-        if (node == nullptr)
-        {
-            return false;
-        }
-        path.push_back(node);
-        if (node == target)
-        {
-            return true;
-        }
-        if (UIView* view = dynamic_cast<UIView*>(node))
-        {
-            for (auto& child : view->root()->children())
-            {
-                if (this->collectPath(child.get(), target, path))
-                {
-                    return true;
-                }
-            }
-            path.pop_back();
-            return false;
-        }
-        for (auto& child : node->children())
-        {
-            if (this->collectPath(child.get(), target, path))
-            {
-                return true;
-            }
-        }
-        path.pop_back();
-        return false;
-    }
-
-    UIWidget* UIWindow::dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const
-    {
-        canvas = nullptr;
-        std::vector<UIWidget*> path;
-        if (!this->collectPath(mRoot.get(), pressed, path))
-        {
-            return nullptr;
-        }
-        int canvasIndex = -1;
-        for (int i = 0; i < (int)path.size(); ++i)
-        {
-            if (dynamic_cast<UICanvas*>(path[(size_t)i]) != nullptr)
-            {
-                canvasIndex = i;
-            }
-        }
-        if (canvasIndex < 0)
-        {
-            return nullptr;
-        }
-        canvas = static_cast<UICanvas*>(path[(size_t)canvasIndex]);
-        int viewIndex = -1;
-        for (int i = canvasIndex + 1; i < (int)path.size(); ++i)
-        {
-            if (dynamic_cast<UIView*>(path[(size_t)i]) != nullptr)
-            {
-                viewIndex = i;
-            }
-        }
-        int start = (int)path.size() - 1;
-        if (viewIndex >= 0)
-        {
-            start = viewIndex;
-        }
-        for (int i = start; i > canvasIndex; --i)
-        {
-            if (path[(size_t)i]->dragable)
-            {
-                return path[(size_t)i];
-            }
-        }
-        return nullptr;
-    }
-
-    bool UIWindow::routeWheel(UIWidget* widget, const Vector2& point, const Vector2& delta)
-    {
-        if (widget == nullptr || !widget->visible || !liveScale(widget->shape.scale))
-        {
-            return false;
-        }
-        if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
-        {
-            for (auto it = canvas->children().rbegin(); it != canvas->children().rend(); ++it)
-            {
-                if (*it && this->routeNestedCanvas(it->get(), point, delta))
-                {
-                    return true;
-                }
-            }
-            Vector2 local = canvas->screenToLocal(point);
-            if (!Rect(0.0f, 0.0f, canvas->shape.size.x, canvas->shape.size.y).contains(local))
-            {
-                return false;
-            }
-            Vector2 parentPivot = screenToParentPivot(*canvas, point);
-            UIWidget* hit = canvas->pick(parentPivot);
-            if (UIChart* chart = dynamic_cast<UIChart*>(hit))
-            {
-                if (liveScale(chart->shape.scale))
-                {
-                    float current = chart->shape.scale.x == 0.0f ? 1.0f : chart->shape.scale.x;
-                    float factor = expf(-delta.y * chart->scaleSensitivity);
-                    chart->scaleAt(screenToParentPivot(*chart, point), current * factor);
-                    return true;
-                }
-            }
-            float current = canvas->shape.scale.x;
-            if (current == 0.0f)
-            {
-                current = 1.0f;
-            }
-            float factor = expf(-delta.y * canvas->scaleSensitivity);
-            canvas->scaleAt(parentPivot, current * factor);
-            return true;
-        }
-        if (UIView* view = dynamic_cast<UIView*>(widget))
-        {
-            const std::shared_ptr<UIWidget>& content = view->root();
-            for (auto it = content->children().rbegin(); it != content->children().rend(); ++it)
-            {
-                if (*it && (*it)->floating && this->routeWheel(it->get(), point, delta))
-                {
-                    return true;
-                }
-            }
-            for (auto it = content->children().rbegin(); it != content->children().rend(); ++it)
-            {
-                if (*it && !(*it)->floating && this->routeWheel(it->get(), point, delta))
-                {
-                    return true;
-                }
-            }
-            Vector2 local = view->screenToLocal(point);
-            if (!Rect(0.0f, 0.0f, view->shape.size.x, view->shape.size.y).contains(local))
-            {
-                return false;
-            }
-            return view->scrollBy(delta.x, delta.y);
-        }
-        for (auto it = widget->children().rbegin(); it != widget->children().rend(); ++it)
-        {
-            if (*it && (*it)->floating && this->routeWheel(it->get(), point, delta))
-            {
-                return true;
-            }
-        }
-        for (auto it = widget->children().rbegin(); it != widget->children().rend(); ++it)
-        {
-            if (*it && !(*it)->floating && this->routeWheel(it->get(), point, delta))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    bool UIWindow::routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& delta)
-    {
-        if (widget == nullptr || !widget->visible || !liveScale(widget->shape.scale))
-        {
-            return false;
-        }
-        if (dynamic_cast<UICanvas*>(widget) != nullptr)
-        {
-            return this->routeWheel(widget, point, delta);
-        }
-        if (UIView* view = dynamic_cast<UIView*>(widget))
-        {
-            for (auto it = view->root()->children().rbegin(); it != view->root()->children().rend(); ++it)
-            {
-                if (*it && this->routeNestedCanvas(it->get(), point, delta))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-        for (auto it = widget->children().rbegin(); it != widget->children().rend(); ++it)
-        {
-            if (*it && this->routeNestedCanvas(it->get(), point, delta))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    void UIWindow::endCanvasDrag(UIWidget* widget)
-    {
-        if (widget == nullptr)
-        {
-            return;
-        }
-        if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
-        {
-            canvas->endDrag();
-        }
-        if (UIView* view = dynamic_cast<UIView*>(widget))
-        {
-            for (auto& child : view->root()->children())
-            {
-                this->endCanvasDrag(child.get());
-            }
-            return;
-        }
-        for (auto& child : widget->children())
-        {
-            this->endCanvasDrag(child.get());
-        }
+        widget->handlePointerMove(x, y, delta);
     }
 
     void UIWindow::onChar(uint32_t codepoint)
@@ -617,7 +408,7 @@ namespace eokas
         {
             return;
         }
-        mFocused->triggerKeyPress(key, mods);
+        mFocused->handleKeyPress(key, mods);
     }
 
     void UIWindow::onKeyDown(UIKey key, const UIKeyMods& mods)
@@ -631,7 +422,7 @@ namespace eokas
         {
             return;
         }
-        mFocused->triggerKeyPress(key, mods);
+        mFocused->handleKeyPress(key, mods);
     }
 
     void UIWindow::setFocus(UIWidget* widget)
@@ -642,20 +433,12 @@ namespace eokas
         }
         if (mFocused != nullptr)
         {
-            mFocused->focused = false;
-            if (mFocused->onLostFocus)
-            {
-                mFocused->onLostFocus();
-            }
+            mFocused->handleFocusLoss();
         }
         mFocused = widget;
         if (mFocused != nullptr)
         {
-            mFocused->focused = true;
-            if (mFocused->onGotFocus)
-            {
-                mFocused->onGotFocus();
-            }
+            mFocused->handleFocusGain();
         }
     }
 
@@ -670,60 +453,7 @@ namespace eokas
         {
             return;
         }
-        const bool active = widget->hovered || widget->pressed;
-        widget->hovered = false;
-        widget->pressed = false;
-        if (active)
-        {
-            widget->triggerPointerRelease();
-        }
-        if (UICanvas* canvas = dynamic_cast<UICanvas*>(widget))
-        {
-            canvas->endDrag();
-        }
-        if (UIView* view = dynamic_cast<UIView*>(widget))
-        {
-            for (auto& child : view->root()->children())
-            {
-                this->resetPointerState(child.get());
-            }
-            return;
-        }
-        for (auto& child : widget->children())
-        {
-            this->resetPointerState(child.get());
-        }
-    }
-
-    bool UIWindow::containsWidget(UIWidget* node, UIWidget* target) const
-    {
-        if (node == nullptr || target == nullptr)
-        {
-            return false;
-        }
-        if (node == target)
-        {
-            return true;
-        }
-        if (UIView* view = dynamic_cast<UIView*>(node))
-        {
-            for (auto& child : view->root()->children())
-            {
-                if (this->containsWidget(child.get(), target))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-        for (auto& child : node->children())
-        {
-            if (this->containsWidget(child.get(), target))
-            {
-                return true;
-            }
-        }
-        return false;
+        widget->resetPointerStateRecursive();
     }
 
     bool UIWindow::focusAlive()
@@ -732,16 +462,122 @@ namespace eokas
         {
             return false;
         }
-        if (this->containsWidget(mRoot.get(), mFocused))
+        if (mRoot && mRoot->containsDescendant(mFocused))
         {
             return true;
         }
-        mFocused->focused = false;
-        if (mFocused->onLostFocus)
-        {
-            mFocused->onLostFocus();
-        }
+        mFocused->handleFocusLoss();
         mFocused = nullptr;
         return false;
+    }
+
+    void UIWindow::appendRawInput(const UIInputInfo& info)
+    {
+        mRawInputEvents.push_back(info);
+    }
+
+    void UIWindow::clearRawInputEvents()
+    {
+        mRawInputEvents.clear();
+    }
+
+    void UIWindow::dispatchPointerGesture(UIWidget* pressed, UIWidget* hit, int button, float x, float y)
+    {
+        const Vector2 delta = this->dropDelta(mRawInputEvents);
+        if (this->isClickGesture(mRawInputEvents, pressed, hit, button))
+        {
+            pressed->handleClick(x, y);
+        }
+        else if (this->isDragGesture(mRawInputEvents))
+        {
+            UIWidget* walker = pressed;
+            while (walker != nullptr)
+            {
+                if (walker->handleDrop(x, y, hit, delta))
+                {
+                    break;
+                }
+                walker = walker->parent();
+            }
+        }
+        this->clearRawInputEvents();
+    }
+
+    const UIInputInfo* UIWindow::findPointerPress(const std::vector<UIInputInfo>& events) const
+    {
+        for (const UIInputInfo& event : events)
+        {
+            if (event.type == UIInputEvent::PointerPress)
+            {
+                return &event;
+            }
+        }
+        return nullptr;
+    }
+
+    bool UIWindow::pointerPressOrigin(const std::vector<UIInputInfo>& events, float& x, float& y) const
+    {
+        const UIInputInfo* press = this->findPointerPress(events);
+        if (press == nullptr)
+        {
+            return false;
+        }
+        x = press->x;
+        y = press->y;
+        return true;
+    }
+
+    bool UIWindow::pointerDragged(const std::vector<UIInputInfo>& events) const
+    {
+        const UIInputInfo* press = this->findPointerPress(events);
+        if (press == nullptr)
+        {
+            return false;
+        }
+        for (const UIInputInfo& event : events)
+        {
+            if (event.type != UIInputEvent::PointerMove && event.type != UIInputEvent::PointerRelease)
+            {
+                continue;
+            }
+            float dx = event.x - press->x;
+            float dy = event.y - press->y;
+            if (dx * dx + dy * dy > 16.0f)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool UIWindow::isClickGesture(const std::vector<UIInputInfo>& events, UIWidget* pressed, UIWidget* hit, int button) const
+    {
+        if (this->pointerDragged(events) || hit != pressed || button != 0)
+        {
+            return false;
+        }
+        const UIInputInfo* press = this->findPointerPress(events);
+        if (press == nullptr)
+        {
+            return false;
+        }
+        return press->target == pressed && press->button == button;
+    }
+
+    bool UIWindow::isDragGesture(const std::vector<UIInputInfo>& events) const
+    {
+        return this->pointerDragged(events) && this->findPointerPress(events) != nullptr;
+    }
+
+    Vector2 UIWindow::dropDelta(const std::vector<UIInputInfo>& events) const
+    {
+        float pressX = 0.0f;
+        float pressY = 0.0f;
+        if (!this->pointerPressOrigin(events, pressX, pressY) || events.empty())
+        {
+            return Vector2(0.0f, 0.0f);
+        }
+        const UIInputInfo& end = events.back();
+        return Vector2(end.x - pressX, end.y - pressY);
     }
 }

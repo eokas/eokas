@@ -3,7 +3,6 @@
 #include "../UIStroke.h"
 #include "UIList.h"
 #include <cmath>
-
 namespace eokas
 {
     namespace
@@ -16,15 +15,12 @@ namespace eokas
         }
         float minf(float a, float b) { return a < b ? a : b; }
         float maxf(float a, float b) { return a > b ? a : b; }
-
         // Dock drop zones: each edge is 30% of that axis, the center fill is the remaining 40%.
         constexpr float kDockEdge = 0.3f;
-
         float snap(float value)
         {
             return floorf(value + 0.5f);
         }
-
         void addPivotQuad(UIPrimitive& primitive, const UIWidget& widget, const Rect& area, const Rect& uv, const Color& color)
         {
             Vector2 origin = area.origin;
@@ -35,7 +31,6 @@ namespace eokas
                 widget.pivotToScreen(Vector2(origin.x, origin.y + area.size.y)),
                 uv, color);
         }
-
         void pivotDash(UIPrimitive& primitive, const UIWidget& widget, const Rect& area, bool alongX, const UIStrokeStyle& style)
         {
             if (area.size.x <= 0.0f || area.size.y <= 0.0f || style.color.a <= 0.0f)
@@ -74,7 +69,6 @@ namespace eokas
                 cursor += on + gap;
             }
         }
-
         void pivotBorder(UIPrimitive& primitive, const UIWidget& widget, const Rect& area, const UIStrokeStyle& style)
         {
             float t = style.thickness;
@@ -100,7 +94,6 @@ namespace eokas
             pivotDash(primitive, widget, Rect(area.origin.x, area.origin.y + t, t, midH), false, style);
             pivotDash(primitive, widget, Rect(area.origin.x + area.size.x - t, area.origin.y + t, t, midH), false, style);
         }
-
         void pivotHairline(UIPrimitive& primitive, const UIWidget& widget, float x, float y, float length, bool vertical, const Color& color)
         {
             float sx = snap(x);
@@ -111,7 +104,6 @@ namespace eokas
             if (vertical) addPivotQuad(primitive, widget, Rect(sx, sy, 1.0f, span), solid, color);
             else addPivotQuad(primitive, widget, Rect(sx, sy, span, 1.0f), solid, color);
         }
-
         void hairline(UIPrimitive& primitive, const UIWidget& widget, float x, float y, float length, bool vertical, const Color& color)
         {
             float sx = snap(x);
@@ -122,12 +114,10 @@ namespace eokas
             if (vertical) widget.addQuad(primitive, Rect(sx, sy, 1.0f, span), solid, color);
             else widget.addQuad(primitive, Rect(sx, sy, span, 1.0f), solid, color);
         }
-
         Vector2 layoutCorner(const UIShape& shape)
         {
             return shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
         }
-
         Rect layoutBounds(const UIWidget& widget, const Rect& area)
         {
             Vector2 corner[4] = {
@@ -149,7 +139,6 @@ namespace eokas
             }
             return Rect(minX, minY, maxX - minX, maxY - minY);
         }
-
         float headContentWidth(UIWidget* head)
         {
             if (!head) return 48.0f;
@@ -167,7 +156,6 @@ namespace eokas
             return 48.0f;
         }
     }
-
     struct UIDockSpace::Node
     {
         bool split = false;
@@ -180,9 +168,7 @@ namespace eokas
         Rect rect;
         ~Node();
     };
-
     UIDockSpace::Node::~Node() = default;
-
     float UIDockSpace::tabStrip(const Node& node) const
     {
         if (node.pages.empty()) return 0.0f;
@@ -196,7 +182,6 @@ namespace eokas
         if (headH > node.rect.size.y) headH = node.rect.size.y;
         return headH;
     }
-
     UIDockPage::UIDockPage()
     {
         pickable = false;
@@ -210,15 +195,12 @@ namespace eokas
         head->color = Color(0.24f, 0.26f, 0.32f, 1.0f);
         this->setHead(head);
     }
-
     UIDockPage::~UIDockPage() { this->unbindHead(); }
-
     void UIDockPage::setDock(UIDockSpace* space, UIDockMode mode)
     {
         mSpace = space;
         mMode = mode;
     }
-
     void UIDockPage::setHead(const std::shared_ptr<UIWidget>& widget)
     {
         if (mHead == widget)
@@ -232,14 +214,12 @@ namespace eokas
         this->bindHead();
         this->syncChildren();
     }
-
     void UIDockPage::setBody(const std::shared_ptr<UIWidget>& widget)
     {
         if (mBody == widget) return;
         mBody = widget;
         this->syncChildren();
     }
-
     void UIDockPage::bindHead()
     {
         if (!mHead) return;
@@ -274,7 +254,6 @@ namespace eokas
             if (this->mSpace) this->mSpace->activate(this);
         };
     }
-
     void UIDockPage::unbindHead()
     {
         if (!mHead) return;
@@ -283,14 +262,12 @@ namespace eokas
         mHead->onPointerRelease = nullptr;
         mHead->onClick = nullptr;
     }
-
     void UIDockPage::syncChildren()
     {
         this->detachChildren();
         if (mHead) this->attachChild(mHead);
         if (mBody) this->attachChild(mBody);
     }
-
     void UIDockPage::place(const Rect& headRect, const Rect& bodyRect, bool showBody, bool tabActive)
     {
         mTabActive = tabActive;
@@ -324,7 +301,6 @@ namespace eokas
             this->placeChild(*mBody, bodyLocal.origin, bodyLocal.size);
         }
     }
-
     void UIDockPage::layoutInWindow(float width, float height)
     {
         float w = snap(width);
@@ -333,7 +309,6 @@ namespace eokas
         if (h < 1.0f) h = 1.0f;
         shape.setBox(Vector2(0.0f, 0.0f), Vector2(w, h));
     }
-
     void UIDockPage::layout()
     {
         if (!visible) return;
@@ -359,7 +334,6 @@ namespace eokas
             mBody->layout();
         }
     }
-
     void UIDockPage::render(UIPrimitive& primitive)
     {
         if (!visible) return;
@@ -402,14 +376,12 @@ namespace eokas
         primitive.popClip();
         if (recolor && mHead) mHead->color = savedHead;
     }
-
     UIDockSpace::UIDockSpace()
     {
         pickable = true;
         color = Color(0.14f, 0.14f, 0.16f, 1.0f);
         mRoot = std::make_unique<Node>();
     }
-
     UIDockSpace::~UIDockSpace()
     {
         auto callback = onDestroy;
@@ -417,36 +389,30 @@ namespace eokas
         if (callback) callback(*this);
         mRoot.reset();
     }
-
     void UIDockSpace::setScreenMapper(const std::function<Rect(const Rect&)>& mapper) { mScreenMapper = mapper; }
-
     Rect UIDockSpace::pivotToScreenRect(const Rect& pivot) const
     {
         Rect client = layoutBounds(*this, pivot);
         if (mScreenMapper) return mScreenMapper(client);
         return client;
     }
-
     Rect UIDockSpace::screenBounds() const
     {
         Rect layout(-shape.pivot.x * shape.size.x, -shape.pivot.y * shape.size.y, shape.size.x, shape.size.y);
         return this->pivotToScreenRect(layout);
     }
-
     Rect UIDockSpace::clientToScreen(float x, float y) const
     {
         Rect client(x, y, 0.0f, 0.0f);
         if (mScreenMapper) return mScreenMapper(client);
         return client;
     }
-
     void UIDockSpace::ensure(const std::shared_ptr<UIDockPage>& page)
     {
         if (!page) return;
         if (page->space() == this) return;
         if (page->space()) page->space()->takePage(page.get());
     }
-
     std::shared_ptr<UIDockPage> UIDockSpace::findShared(UIDockPage* page) const
     {
         for (auto& child : children())
@@ -455,9 +421,7 @@ namespace eokas
         }
         return nullptr;
     }
-
     void UIDockSpace::addPage(const std::shared_ptr<UIDockPage>& page) { this->ensure(page); }
-
     std::shared_ptr<UIDockPage> UIDockSpace::takePage(UIDockPage* page)
     {
         auto held = this->findShared(page);
@@ -474,13 +438,11 @@ namespace eokas
         this->clearPreview();
         return held;
     }
-
     void UIDockSpace::removePage(const std::shared_ptr<UIDockPage>& page)
     {
         if (!page) return;
         this->takePage(page.get());
     }
-
     bool UIDockSpace::extract(std::unique_ptr<Node>& node, UIDockPage* page)
     {
         if (!node) return false;
@@ -515,7 +477,6 @@ namespace eokas
         }
         return false;
     }
-
     void UIDockSpace::reconcile(Node* node, UIDockMode side)
     {
         if (!node) return;
@@ -533,7 +494,6 @@ namespace eokas
         this->reconcile(node->first.get(), firstSide);
         this->reconcile(node->second.get(), secondSide);
     }
-
     void UIDockSpace::fillLeaf(Node* leaf, const std::shared_ptr<UIDockPage>& page)
     {
         if (!leaf || leaf->split || !page) return;
@@ -551,7 +511,6 @@ namespace eokas
         page->floating = false;
         this->attachChild(page);
     }
-
     void UIDockSpace::splitLeaf(Node* leaf, const std::shared_ptr<UIDockPage>& page, UIDockMode mode)
     {
         if (!leaf || leaf->split || !page) return;
@@ -581,7 +540,6 @@ namespace eokas
             leaf->second = std::move(incoming);
         }
     }
-
     void UIDockSpace::splitRoot(const std::shared_ptr<UIDockPage>& page, UIDockMode mode)
     {
         auto previous = std::move(mRoot);
@@ -608,7 +566,6 @@ namespace eokas
             mRoot->second = std::move(incoming);
         }
     }
-
     UIDockSpace::Node* UIDockSpace::findPageNode(Node* node, UIDockPage* page)
     {
         if (!node || !page) return nullptr;
@@ -620,12 +577,10 @@ namespace eokas
         if (auto* found = this->findPageNode(node->first.get(), page)) return found;
         return this->findPageNode(node->second.get(), page);
     }
-
     Vector2 UIDockSpace::parentPivotToPivot(const Vector2& parentPivot) const
     {
         return parentPivot - shape.origin;
     }
-
     UIDockSpace::Node* UIDockSpace::findLeaf(Node* node, const Vector2& point)
     {
         if (!node) return nullptr;
@@ -635,7 +590,6 @@ namespace eokas
         if (auto* found = this->findLeaf(node->first.get(), point)) return found;
         return this->findLeaf(node->second.get(), point);
     }
-
     UIDockSpace::Node* UIDockSpace::nearestLeaf(Node* node, const Vector2& point)
     {
         if (!node) return nullptr;
@@ -650,7 +604,6 @@ namespace eokas
         float db = (bc - point).sqrmagnitude();
         return da <= db ? a : b;
     }
-
     UIDockSpace::Node* UIDockSpace::firstLeaf(Node* node)
     {
         if (!node) return nullptr;
@@ -658,7 +611,6 @@ namespace eokas
         if (auto* leaf = this->firstLeaf(node->first.get())) return leaf;
         return this->firstLeaf(node->second.get());
     }
-
     float UIDockSpace::fitRatio(float ratio, float inner) const
     {
         if (inner <= splitterSize + minPane * 2.0f) return 0.5f;
@@ -667,7 +619,6 @@ namespace eokas
         if (minRatio > maxRatio) return 0.5f;
         return clampf(ratio, minRatio, maxRatio);
     }
-
     UIDockMode UIDockSpace::zoneAt(const Rect& area, const Vector2& point) const
     {
         float w = area.size.x;
@@ -689,7 +640,6 @@ namespace eokas
         if (dx <= dy) return left ? UIDockMode::Left : UIDockMode::Right;
         return top ? UIDockMode::Top : UIDockMode::Bottom;
     }
-
     Rect UIDockSpace::previewRectFor(const Rect& area, UIDockMode mode) const
     {
         if (mode == UIDockMode::Fill || mode == UIDockMode::None) return area;
@@ -702,7 +652,6 @@ namespace eokas
         if (mode == UIDockMode::Top) return Rect(area.origin.x, area.origin.y, area.size.x, innerH * 0.5f);
         return Rect(area.origin.x, area.origin.y + innerH * 0.5f + splitterSize, area.size.x, innerH * 0.5f);
     }
-
     Rect UIDockSpace::splitterRect(Node* node) const
     {
         if (!node || !node->split || !node->first) return Rect();
@@ -719,7 +668,6 @@ namespace eokas
         float ratio = this->fitRatio(node->ratio, area.size.x);
         return Rect(area.origin.x + inner * ratio, area.origin.y, splitterSize, area.size.y);
     }
-
     UIDockSpace::Node* UIDockSpace::findSplitter(Node* node, const Vector2& point, float slop) const
     {
         if (!node || !node->split) return nullptr;
@@ -742,7 +690,6 @@ namespace eokas
         if (gap.contains(point)) return node;
         return nullptr;
     }
-
     bool UIDockSpace::splitterAxis(float x, float y, bool& vertical) const
     {
         if (mSplitterTracking && mDragSplitter)
@@ -756,13 +703,11 @@ namespace eokas
         vertical = hit->vertical;
         return true;
     }
-
     void UIDockSpace::setHover(float x, float y)
     {
         Vector2 pivot = (shape.scale.x == 0.0f || shape.scale.y == 0.0f) ? Vector2::ZERO : this->screenToPivot(Vector2(x, y));
         mHoverSplitter = this->findSplitter(mRoot.get(), pivot, 2.0f);
     }
-
     void UIDockSpace::layoutLeaf(Node* node)
     {
         if (!node) return;
@@ -809,7 +754,6 @@ namespace eokas
             x += w;
         }
     }
-
     void UIDockSpace::layoutNode(Node* node, const Rect& area)
     {
         if (!node) return;
@@ -836,7 +780,6 @@ namespace eokas
             this->layoutNode(node->second.get(), Rect(area.origin.x + firstSize + splitterSize, area.origin.y, secondSize, area.size.y));
         }
     }
-
     bool UIDockSpace::pageBounds(UIDockPage* page, Rect& bounds)
     {
         this->layoutTree();
@@ -845,13 +788,11 @@ namespace eokas
         bounds = this->pivotToScreenRect(leaf->rect);
         return true;
     }
-
     void UIDockSpace::layoutTree()
     {
         if (!mRoot) return;
         this->layoutNode(mRoot.get(), Rect(-shape.pivot.x * shape.size.x, -shape.pivot.y * shape.size.y, shape.size.x, shape.size.y));
     }
-
     void UIDockSpace::dockPage(const std::shared_ptr<UIDockPage>& page, UIDockMode mode)
     {
         if (!page) return;
@@ -884,7 +825,6 @@ namespace eokas
         }
         this->reconcile(mRoot.get(), UIDockMode::Fill);
     }
-
     void UIDockSpace::activate(UIDockPage* page)
     {
         Node* leaf = this->findPageNode(mRoot.get(), page);
@@ -894,7 +834,6 @@ namespace eokas
             if (leaf->pages[i].get() == page) leaf->active = i;
         }
     }
-
     bool UIDockSpace::showPreview(float screenX, float screenY)
     {
         this->layoutTree();
@@ -936,7 +875,6 @@ namespace eokas
         mPreviewRect = this->previewRectFor(area, mPreviewMode);
         return true;
     }
-
     void UIDockSpace::clearPreview()
     {
         mPreview = false;
@@ -944,7 +882,6 @@ namespace eokas
         mPreviewLeaf = nullptr;
         mPreviewRect = Rect();
     }
-
     void UIDockSpace::acceptDrop(const std::shared_ptr<UIDockPage>& page)
     {
         Node* leaf = mPreviewLeaf;
@@ -956,7 +893,6 @@ namespace eokas
         else this->splitLeaf(leaf, page, mode);
         this->reconcile(mRoot.get(), UIDockMode::Fill);
     }
-
     void UIDockSpace::renderNode(Node* node, UIPrimitive& primitive)
     {
         if (!node) return;
@@ -1038,14 +974,12 @@ namespace eokas
         primitive.popClip();
         pivotBorder(primitive, *this, node->rect, border);
     }
-
     void UIDockSpace::layout()
     {
         if (!visible) return;
         this->layoutTree();
         UIWidget::layout();
     }
-
     void UIDockSpace::render(UIPrimitive& primitive)
     {
         if (!visible) return;
@@ -1059,39 +993,46 @@ namespace eokas
         pivotBorder(primitive, *this, layout, border);
         primitive.popClip();
     }
-
-    void UIDockSpace::triggerPointerMove(const Vector2& position, const Vector2& delta)
+    bool UIDockSpace::handlePointerMove(float screenX, float screenY, const Vector2& delta)
     {
-        (void)delta;
-        UIWidget::triggerPointerMove(position, delta);
-        if (!pressed)
+        bool handled = UIWidget::handlePointerMove(screenX, screenY, delta);
+        if (!isPressed())
         {
-            return;
+            return handled;
         }
-        Vector2 pivot = (shape.scale.x == 0.0f || shape.scale.y == 0.0f) ? Vector2::ZERO : this->screenToPivot(position);
+        Vector2 pivot = (shape.scale.x == 0.0f || shape.scale.y == 0.0f) ? Vector2::ZERO : this->screenToPivot(Vector2(screenX, screenY));
         if (!mSplitterTracking)
         {
             mDragSplitter = this->findSplitter(mRoot.get(), pivot, 0.0f);
-            if (!mDragSplitter) return;
+            if (!mDragSplitter)
+            {
+                return handled;
+            }
             mSplitterTracking = true;
             Rect gap = this->splitterRect(mDragSplitter);
             mSplitterGrab = mDragSplitter->vertical ? (pivot.y - gap.origin.y) : (pivot.x - gap.origin.x);
         }
-        if (!mDragSplitter) return;
+        if (!mDragSplitter)
+        {
+            return handled;
+        }
         Rect area = mDragSplitter->rect;
         float span = mDragSplitter->vertical ? area.size.y : area.size.x;
         float origin = mDragSplitter->vertical ? area.origin.y : area.origin.x;
         float pointer = mDragSplitter->vertical ? pivot.y : pivot.x;
         float inner = span - splitterSize;
-        if (inner <= 0.0f) return;
+        if (inner <= 0.0f)
+        {
+            return true;
+        }
         float first = pointer - mSplitterGrab - origin;
         mDragSplitter->ratio = this->fitRatio(first / inner, span);
+        return true;
     }
-
-    void UIDockSpace::triggerPointerRelease()
+    bool UIDockSpace::handlePointerRelease(float screenX, float screenY, int button)
     {
         mSplitterTracking = false;
         mDragSplitter = nullptr;
+        return UIWidget::handlePointerRelease(screenX, screenY, button);
     }
-
 }

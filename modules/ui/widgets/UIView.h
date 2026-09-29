@@ -26,8 +26,9 @@ namespace eokas
         UIWidget* pick(const Vector2& point) override;
         void layout() override;
         void render(UIPrimitive& primitive) override;
-        void triggerPointerMove(const Vector2& position, const Vector2& delta) override;
-        void triggerPointerRelease() override;
+        bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
+        bool handlePointerRelease(float screenX, float screenY, int button) override;
+        bool handleWheel(float screenX, float screenY, float deltaX, float deltaY) override;
 
     private:
         enum class BarDrag

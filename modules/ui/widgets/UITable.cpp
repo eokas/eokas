@@ -1,7 +1,6 @@
 #include "UITable.h"
 #include "../UIFont.h"
 #include <cmath>
-
 namespace eokas
 {
     namespace
@@ -10,12 +9,10 @@ namespace eokas
         {
             return floorf(v + 0.5f);
         }
-
         float positive(float v)
         {
             return v > 0.0f ? v : 0.0f;
         }
-
         void fitPair(float& a, float& b, float span)
         {
             a = positive(a);
@@ -27,7 +24,6 @@ namespace eokas
                 b = span * (b / sum);
             }
         }
-
         void rawInsets(const UITableBorder& border, float& left, float& top, float& right, float& bottom)
         {
             left = positive(border.left.thickness);
@@ -35,14 +31,12 @@ namespace eokas
             right = positive(border.right.thickness);
             bottom = positive(border.bottom.thickness);
         }
-
         void fittedInsets(const Rect& area, const UITableBorder& border, float& left, float& top, float& right, float& bottom)
         {
             rawInsets(border, left, top, right, bottom);
             fitPair(left, right, area.size.x);
             fitPair(top, bottom, area.size.y);
         }
-
         void drawEdge(UIPrimitive& primitive, const Matrix3& localToScreen, const Rect& area, const Color& color)
         {
             if (area.size.x <= 0.0f || area.size.y <= 0.0f || color.a <= 0.0f)
@@ -51,7 +45,6 @@ namespace eokas
             }
             primitive.addQuad(localToScreen, area, UIFont::solidUV(), color);
         }
-
         void drawStyledEdge(UIPrimitive& primitive, const Matrix3& localToScreen, const Rect& area, bool alongX, const UIStrokeStyle& style)
         {
             if (style.pattern != UILinePattern::Dashed || style.dashLength <= 0.0f)
@@ -85,7 +78,6 @@ namespace eokas
                 cursor += on + gap;
             }
         }
-
         void drawBorder(UIPrimitive& primitive, const Matrix3& localToScreen, const Rect& area, const UITableBorder& border)
         {
             float left = 0.0f;
@@ -103,7 +95,6 @@ namespace eokas
             drawStyledEdge(primitive, localToScreen, Rect(area.origin.x, area.origin.y + top, left, midH), false, border.left);
             drawStyledEdge(primitive, localToScreen, Rect(area.origin.x + area.size.x - right, area.origin.y + top, right, midH), false, border.right);
         }
-
         void drawDisclosure(UIPrimitive& primitive, const UIWidget& widget, const Rect& slot, bool expanded, const Color& color)
         {
             float limit = slot.size.x < slot.size.y ? slot.size.x : slot.size.y;
@@ -134,13 +125,11 @@ namespace eokas
                     uv, color);
             }
         }
-
         const std::shared_ptr<UIWidget>& emptyWidget()
         {
             static const std::shared_ptr<UIWidget> kEmpty;
             return kEmpty;
         }
-
         float contentShift(const UITable* table, const UITableRow* row, int column)
         {
             if (table == nullptr || row == nullptr)
@@ -154,7 +143,6 @@ namespace eokas
             }
             return (float)(row->depth() + 1) * indent;
         }
-
         void relayout(UITable* table)
         {
             if (table == nullptr)
@@ -164,7 +152,6 @@ namespace eokas
             table->relayout();
         }
     }
-
     UITableCell::UITableCell(UITable* table, UITableRow* row)
         : mTable(table)
         , mRow(row)
@@ -172,7 +159,6 @@ namespace eokas
         pickable = false;
         color = Color(0.0f, 0.0f, 0.0f, 0.0f);
     }
-
     void UITableCell::setContent(const std::shared_ptr<UIWidget>& widget)
     {
         mContent = widget;
@@ -182,17 +168,14 @@ namespace eokas
             this->attachChild(mContent);
         }
     }
-
     void UITableCell::setBorder(const UITableBorder& value)
     {
         mBorder = value;
     }
-
     void UITableCell::clearBorder()
     {
         mBorder.reset();
     }
-
     UITableBorder UITableCell::border() const
     {
         if (mBorder.has_value())
@@ -205,7 +188,6 @@ namespace eokas
         }
         return UITableBorder();
     }
-
     int UITableCell::column() const
     {
         if (mRow == nullptr)
@@ -214,12 +196,10 @@ namespace eokas
         }
         return mRow->columnOf(this);
     }
-
     float UITableCell::shift() const
     {
         return contentShift(mTable, mRow, this->column());
     }
-
     void UITableCell::layout()
     {
         if (!visible)
@@ -242,7 +222,6 @@ namespace eokas
             this->placeChild(*mContent, Vector2(snap(pos.x), snap(pos.y)));
         }
     }
-
     void UITableCell::render(UIPrimitive& primitive)
     {
         if (!visible)
@@ -310,7 +289,6 @@ namespace eokas
         primitive.popClip();
         drawBorder(primitive, localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), this->border());
     }
-
     UITableRow::UITableRow(UITable* table, UITableRow* parent, float height)
         : mTable(table)
         , mParent(parent)
@@ -326,7 +304,6 @@ namespace eokas
         }
         this->syncCells();
     }
-
     void UITableRow::syncCells()
     {
         this->detachChildren();
@@ -338,7 +315,6 @@ namespace eokas
             }
         }
     }
-
     int UITableRow::index() const
     {
         UITableRow* owner = mParent;
@@ -353,7 +329,6 @@ namespace eokas
         }
         return -1;
     }
-
     int UITableRow::depth() const
     {
         int value = 0;
@@ -363,7 +338,6 @@ namespace eokas
         }
         return value;
     }
-
     UITableRow* UITableRow::row(int index) const
     {
         if (index < 0 || index >= this->rowCount())
@@ -372,12 +346,10 @@ namespace eokas
         }
         return mRows[(size_t)index].get();
     }
-
     UITableRow* UITableRow::addRow(float height)
     {
         return this->insertRow(this->rowCount(), height);
     }
-
     UITableRow* UITableRow::insertRow(int index, float height)
     {
         if (mTable == nullptr || index < 0 || index > this->rowCount())
@@ -389,7 +361,6 @@ namespace eokas
         relayout(mTable);
         return child.get();
     }
-
     void UITableRow::removeRow(int index)
     {
         if (index < 0 || index >= this->rowCount())
@@ -399,12 +370,10 @@ namespace eokas
         mRows.erase(mRows.begin() + index);
         relayout(mTable);
     }
-
     void UITableRow::setHeight(float height)
     {
         mHeight = positive(height);
     }
-
     void UITableRow::setExpanded(bool value)
     {
         if (mExpanded == value)
@@ -421,7 +390,6 @@ namespace eokas
             onExpandedChanged(mExpanded);
         }
     }
-
     UITableCell* UITableRow::cell(int column) const
     {
         if (column < 0 || column >= (int)mCells.size())
@@ -430,7 +398,6 @@ namespace eokas
         }
         return mCells[(size_t)column].get();
     }
-
     int UITableRow::columnOf(const UITableCell* cell) const
     {
         int count = (int)mCells.size();
@@ -443,7 +410,6 @@ namespace eokas
         }
         return -1;
     }
-
     void UITableRow::insertCell(int index)
     {
         if (index < 0 || index > (int)mCells.size())
@@ -460,7 +426,6 @@ namespace eokas
             }
         }
     }
-
     void UITableRow::removeCell(int index)
     {
         if (index < 0 || index >= (int)mCells.size())
@@ -477,7 +442,6 @@ namespace eokas
             }
         }
     }
-
     void UITableRow::collect(bool visibleOnly, std::vector<std::shared_ptr<UITableRow>>& out) const
     {
         if (visibleOnly && !mExpanded)
@@ -494,7 +458,6 @@ namespace eokas
             child->collect(visibleOnly, out);
         }
     }
-
     void UITableRow::setContent(int column, const std::shared_ptr<UIWidget>& widget)
     {
         UITableCell* item = this->cell(column);
@@ -504,7 +467,6 @@ namespace eokas
         }
         item->setContent(widget);
     }
-
     const std::shared_ptr<UIWidget>& UITableRow::getContent(int column) const
     {
         UITableCell* item = this->cell(column);
@@ -514,21 +476,18 @@ namespace eokas
         }
         return item->content();
     }
-
-    void UITableRow::triggerPointerRelease()
+    bool UITableRow::handlePointerRelease(float screenX, float screenY, int button)
     {
-        if (pressed && this->rowCount() > 0)
+        if (isPressed() && this->rowCount() > 0)
         {
             this->setExpanded(!this->expanded());
         }
-        UIWidget::triggerPointerRelease();
+        return UIWidget::handlePointerRelease(screenX, screenY, button);
     }
-
     UITable::UITable()
     {
         pickable = false;
     }
-
     void UITable::appendRows(const std::shared_ptr<UITableRow>& row, bool visibleOnly, std::vector<std::shared_ptr<UITableRow>>& out) const
     {
         if (!row)
@@ -538,7 +497,6 @@ namespace eokas
         out.push_back(row);
         row->collect(visibleOnly, out);
     }
-
     void UITable::syncChildren()
     {
         this->detachChildren();
@@ -552,22 +510,18 @@ namespace eokas
             this->attachChild(row);
         }
     }
-
     float UITable::padding() const
     {
         return positive(cellPadding);
     }
-
     float UITable::spacing() const
     {
         return positive(cellSpacing);
     }
-
     void UITable::addColumn(float width)
     {
         this->insertColumn(this->columnCount(), width);
     }
-
     void UITable::insertColumn(int index, float width)
     {
         if (index < 0 || index > this->columnCount())
@@ -585,7 +539,6 @@ namespace eokas
         }
         this->relayout();
     }
-
     void UITable::removeColumn(int index)
     {
         if (index < 0 || index >= this->columnCount())
@@ -603,7 +556,6 @@ namespace eokas
         }
         this->relayout();
     }
-
     float UITable::columnWidth(int index) const
     {
         if (index < 0 || index >= this->columnCount())
@@ -612,7 +564,6 @@ namespace eokas
         }
         return mColumnWidths[(size_t)index];
     }
-
     void UITable::setColumnWidth(int index, float width)
     {
         if (index < 0 || index >= this->columnCount())
@@ -621,7 +572,6 @@ namespace eokas
         }
         mColumnWidths[(size_t)index] = positive(width);
     }
-
     float UITable::columnIndent(int index) const
     {
         if (index < 0 || index >= this->columnCount())
@@ -630,7 +580,6 @@ namespace eokas
         }
         return mColumnIndents[(size_t)index];
     }
-
     void UITable::setColumnIndent(int index, float size)
     {
         if (index < 0 || index >= this->columnCount())
@@ -639,7 +588,6 @@ namespace eokas
         }
         mColumnIndents[(size_t)index] = positive(size);
     }
-
     UITableRow* UITable::row(int index) const
     {
         if (index < 0 || index >= this->rowCount())
@@ -648,12 +596,10 @@ namespace eokas
         }
         return mRows[(size_t)index].get();
     }
-
     UITableRow* UITable::addRow(float height)
     {
         return this->insertRow(this->rowCount(), height);
     }
-
     UITableRow* UITable::insertRow(int index, float height)
     {
         if (index < 0 || index > this->rowCount())
@@ -665,7 +611,6 @@ namespace eokas
         this->relayout();
         return child.get();
     }
-
     void UITable::removeRow(int index)
     {
         if (index < 0 || index >= this->rowCount())
@@ -675,7 +620,6 @@ namespace eokas
         mRows.erase(mRows.begin() + index);
         this->relayout();
     }
-
     float UITable::rowHeight(int index) const
     {
         UITableRow* line = this->row(index);
@@ -685,7 +629,6 @@ namespace eokas
         }
         return line->height();
     }
-
     void UITable::setRowHeight(int index, float height)
     {
         if (UITableRow* line = this->row(index))
@@ -693,7 +636,6 @@ namespace eokas
             line->setHeight(height);
         }
     }
-
     UITableCell* UITable::cell(int row, int column) const
     {
         UITableRow* line = this->row(row);
@@ -703,7 +645,6 @@ namespace eokas
         }
         return line->cell(column);
     }
-
     void UITable::setContent(int row, int column, const std::shared_ptr<UIWidget>& widget)
     {
         UITableCell* item = this->cell(row, column);
@@ -713,7 +654,6 @@ namespace eokas
         }
         item->setContent(widget);
     }
-
     const std::shared_ptr<UIWidget>& UITable::getContent(int row, int column) const
     {
         UITableCell* item = this->cell(row, column);
@@ -723,7 +663,6 @@ namespace eokas
         }
         return item->content();
     }
-
     void UITable::axisInsets(const UITableCell* item, bool horizontal, float& leading, float& trailing) const
     {
         UITableBorder edges = item != nullptr ? item->border() : border;
@@ -743,7 +682,6 @@ namespace eokas
             trailing = bottom;
         }
     }
-
     float UITable::contentSpan(const UITableRow* row, int column, bool horizontal) const
     {
         UITableCell* item = row != nullptr ? row->cell(column) : nullptr;
@@ -758,7 +696,6 @@ namespace eokas
         }
         return horizontal ? body->shape.size.x : body->shape.size.y;
     }
-
     float UITable::columnPreferred(int index) const
     {
         float given = mColumnWidths[(size_t)index];
@@ -786,7 +723,6 @@ namespace eokas
         }
         return best;
     }
-
     float UITable::rowPreferred(const UITableRow* row) const
     {
         if (row == nullptr)
@@ -813,7 +749,6 @@ namespace eokas
         }
         return best;
     }
-
     void UITable::resolveTracks(const std::vector<float>& given, const std::vector<float>& preferred, float span, std::vector<float>& sizes, float& used) const
     {
         int count = (int)given.size();
@@ -869,7 +804,6 @@ namespace eokas
         }
         used = span;
     }
-
     void UITable::resolveColumns(float span, std::vector<float>& sizes, float& used) const
     {
         int count = this->columnCount();
@@ -880,7 +814,6 @@ namespace eokas
         }
         this->resolveTracks(mColumnWidths, preferred, span, sizes, used);
     }
-
     void UITable::arrange()
     {
         this->syncChildren();
@@ -968,21 +901,18 @@ namespace eokas
             y += rowH;
         }
     }
-
     void UITable::refit()
     {
         Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
         shape.setBox(corner, Vector2(0.0f, 0.0f));
         this->arrange();
     }
-
     void UITable::relayout()
     {
         Vector2 corner = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
         shape.setBox(corner, Vector2(shape.size.x, 0.0f));
         this->arrange();
     }
-
     void UITable::layout()
     {
         if (!visible)
@@ -992,7 +922,6 @@ namespace eokas
         this->arrange();
         UIWidget::layout();
     }
-
     void UITable::render(UIPrimitive& primitive)
     {
         if (!visible)

@@ -751,9 +751,9 @@ namespace eokas
         Matrix3 localToScreen = matrixLocalToScreen();
         this->clampCaret();
         this->ensureCaretVisible();
-        Color bg = hovered ? hoverFill : background;
+        Color bg = isHovered() ? hoverFill : background;
         primitive.addQuad(localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
-        if (focused)
+        if (isFocused())
         {
             this->drawBorder(primitive, localToScreen);
         }
@@ -937,7 +937,7 @@ namespace eokas
 
     void UIInput::drawCaret(UIPrimitive& primitive, const Matrix3& localToScreen, const Rect& content) const
     {
-        if (!focused)
+        if (!isFocused())
         {
             return;
         }
@@ -982,20 +982,20 @@ namespace eokas
         primitive.addQuad(localToScreen, Rect(x, content.origin.y, 1.0f, content.size.y), UIFont::solidUV(), caret.color);
     }
 
-    void UIInput::triggerPointerPress()
+    bool UIInput::handlePointerPress(float screenX, float screenY, int button)
     {
-        UIWidget::triggerPointerPress();
         mPointerSelecting = true;
         mCaretPlaced = false;
+        return UIWidget::handlePointerPress(screenX, screenY, button);
     }
 
-    void UIInput::triggerPointerMove(const Vector2& position, const Vector2& delta)
+    bool UIInput::handlePointerMove(float screenX, float screenY, const Vector2& delta)
     {
-        (void)delta;
-        UIWidget::triggerPointerMove(position, delta);
-        if (!pressed || !mPointerSelecting)
+        Vector2 position = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
+        bool handled = UIWidget::handlePointerMove(screenX, screenY, delta);
+        if (!isPressed() || !mPointerSelecting)
         {
-            return;
+            return handled;
         }
         Vector2 local = shape.pivotToLocal(position);
         size_t index = this->indexAt(local.x, local.y);
@@ -1008,16 +1008,17 @@ namespace eokas
         mCaret = index;
         this->ensureCaretVisible();
         this->resetCaretBlink();
+        return true;
     }
 
-    void UIInput::triggerPointerRelease()
+    bool UIInput::handlePointerRelease(float screenX, float screenY, int button)
     {
         mPointerSelecting = false;
         mCaretPlaced = false;
-        UIWidget::triggerPointerRelease();
+        return UIWidget::handlePointerRelease(screenX, screenY, button);
     }
 
-    void UIInput::triggerKeyPress(const UIKey& key, const UIKeyMods& mods)
+    bool UIInput::handleKeyPress(const UIKey& key, const UIKeyMods& mods)
     {
         switch (key)
         {
@@ -1108,6 +1109,6 @@ namespace eokas
         {
             this->insertText(typed);
         }
-        UIWidget::triggerKeyPress(key, mods);
+        return UIWidget::handleKeyPress(key, mods);
     }
 }

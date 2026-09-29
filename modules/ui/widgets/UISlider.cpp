@@ -65,24 +65,24 @@ namespace eokas
         return (value - minValue) / span;
     }
 
-    void UISlider::triggerPointerRelease()
+    bool UISlider::handlePointerRelease(float screenX, float screenY, int button)
     {
         mTracking = false;
-        UIWidget::triggerPointerRelease();
+        return UIWidget::handlePointerRelease(screenX, screenY, button);
     }
 
-    void UISlider::triggerPointerMove(const Vector2& position, const Vector2& delta)
+    bool UISlider::handlePointerMove(float screenX, float screenY, const Vector2& delta)
     {
-        (void)delta;
-        UIWidget::triggerPointerMove(position, delta);
-        if (!pressed || !pickable)
+        Vector2 position = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
+        bool handled = UIWidget::handlePointerMove(screenX, screenY, delta);
+        if (!isPressed() || !pickable)
         {
-            return;
+            return handled;
         }
         if (maxValue <= minValue)
         {
             this->commitValue(minValue);
-            return;
+            return true;
         }
 
         bool begin = !mTracking;
@@ -110,6 +110,7 @@ namespace eokas
             t = (span > 0.0f) ? Math::clamp((position.x - origin) / span, 0.0f, 1.0f) : 0.0f;
         }
         this->commitValue(minValue + (maxValue - minValue) * t);
+        return true;
     }
 
     bool UISlider::ring() const
@@ -190,11 +191,11 @@ namespace eokas
         {
             return thumb;
         }
-        if (pressed)
+        if (isPressed())
         {
             return thumbPressed;
         }
-        if (hovered)
+        if (isHovered())
         {
             return thumbHover;
         }

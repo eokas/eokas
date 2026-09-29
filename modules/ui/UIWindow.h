@@ -1,6 +1,7 @@
 #ifndef _EOKAS_UI_WINDOW_H_
 #define _EOKAS_UI_WINDOW_H_
 
+#include "UIEvent.h"
 #include "UIWidget.h"
 #include "UIPrimitive.h"
 #include <memory>
@@ -8,8 +9,6 @@
 
 namespace eokas
 {
-    class UICanvas;
-
     class UIWindow
     {
     public:
@@ -33,16 +32,19 @@ namespace eokas
         UIWidget* focus() const;
 
     private:
-        bool collectPath(UIWidget* node, UIWidget* target, std::vector<UIWidget*>& path) const;
-        UIWidget* dragTargetOf(UIWidget* pressed, UICanvas*& canvas) const;
         void dispatchDrag(float x, float y);
-        void dispatchPointer(UIWidget* widget, float x, float y);
-        bool routeWheel(UIWidget* widget, const Vector2& point, const Vector2& delta);
-        bool routeNestedCanvas(UIWidget* widget, const Vector2& point, const Vector2& delta);
-        void endCanvasDrag(UIWidget* widget);
+        void dispatchPointerMove(UIWidget* widget, float x, float y);
         void resetPointerState(UIWidget* widget);
-        bool containsWidget(UIWidget* node, UIWidget* target) const;
         bool focusAlive();
+        void appendRawInput(const UIInputInfo& info);
+        void clearRawInputEvents();
+        void dispatchPointerGesture(UIWidget* pressed, UIWidget* hit, int button, float x, float y);
+        bool pointerDragged(const std::vector<UIInputInfo>& events) const;
+        bool pointerPressOrigin(const std::vector<UIInputInfo>& events, float& x, float& y) const;
+        const UIInputInfo* findPointerPress(const std::vector<UIInputInfo>& events) const;
+        bool isClickGesture(const std::vector<UIInputInfo>& events, UIWidget* pressed, UIWidget* hit, int button) const;
+        bool isDragGesture(const std::vector<UIInputInfo>& events) const;
+        Vector2 dropDelta(const std::vector<UIInputInfo>& events) const;
 
         float mWidth = 0.0f;
         float mHeight = 0.0f;
@@ -53,9 +55,7 @@ namespace eokas
         UIWidget* mHovered = nullptr;
         UIWidget* mPressed = nullptr;
         int mPressedButton = -1;
-        float mPressX = 0.0f;
-        float mPressY = 0.0f;
-        bool mDragged = false;
+        std::vector<UIInputInfo> mRawInputEvents;
         Vector2 mLastParentPivot { 0.0f, 0.0f };
         UIWidget* mLastWidget = nullptr;
         bool mHasParentPivot = false;

@@ -1,8 +1,12 @@
-#ifndef _EOKAS_UI_KEY_H_
-#define _EOKAS_UI_KEY_H_
+#ifndef _EOKAS_UI_EVENT_H_
+#define _EOKAS_UI_EVENT_H_
+
+#include <chrono>
 
 namespace eokas
 {
+    class UIWidget;
+
     enum class UIKey
     {
         Backspace,
@@ -67,6 +71,31 @@ namespace eokas
         bool shift = false;
         bool alt = false;
     };
+
+    enum class UIInputEvent
+    {
+        None,
+        PointerEnter,
+        PointerLeave,
+        PointerMove,
+        PointerPress,
+        PointerRelease,
+        Wheel,
+        KeyPress,
+        Char,
+    };
+
+    struct UIInputInfo
+    {
+        UIWidget* target = nullptr;
+        UIInputEvent type = UIInputEvent::None;
+        float x = 0.0f;
+        float y = 0.0f;
+        std::chrono::steady_clock::time_point time {};
+        int button = 0;
+        float wheelDeltaX = 0.0f;
+        float wheelDeltaY = 0.0f;
+    };
 }
 
-#endif//_EOKAS_UI_KEY_H_
+#endif//_EOKAS_UI_EVENT_H_

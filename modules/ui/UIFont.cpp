@@ -1,11 +1,9 @@
 #include "UIFont.h"
-
 #include <ft2build.h>
 #include <freetype/freetype.h>
 #include <cmath>
 #include <cstring>
 #include <map>
-
 namespace eokas
 {
     namespace
@@ -15,7 +13,6 @@ namespace eokas
             static std::map<String, UIFont*> fonts;
             return fonts;
         }
-
         void unbindFont(UIFont* font)
         {
             std::map<String, UIFont*>& fonts = fontRegistry();
@@ -32,7 +29,6 @@ namespace eokas
             }
         }
     }
-
     void UIFont::bind(const String& path, UIFont* font)
     {
         if (path.isEmpty() || font == nullptr)
@@ -41,7 +37,6 @@ namespace eokas
         }
         fontRegistry()[path] = font;
     }
-
     UIFont* UIFont::find(const String& path)
     {
         if (path.isEmpty())
@@ -56,18 +51,15 @@ namespace eokas
         }
         return found->second;
     }
-
     UIFont::UIFont()
     {
         memset(mGlyphs, 0, sizeof(mGlyphs));
         memset(&mPlaceholder, 0, sizeof(mPlaceholder));
     }
-
     UIFont::~UIFont()
     {
         close();
     }
-
     bool UIFont::open(const char* fontPath, uint32_t pixelSize)
     {
         close();
@@ -75,20 +67,17 @@ namespace eokas
         {
             return false;
         }
-
         FT_Library library = nullptr;
         if (FT_Init_FreeType(&library) != 0)
         {
             return false;
         }
-
         FT_Face face = nullptr;
         if (FT_New_Face(library, fontPath, 0, &face) != 0)
         {
             FT_Done_FreeType(library);
             return false;
         }
-
         if (FT_Set_Pixel_Sizes(face, 0, pixelSize) != 0)
         {
             FT_Done_Face(face);
@@ -96,14 +85,12 @@ namespace eokas
             return false;
         }
         FT_Select_Charmap(face, FT_ENCODING_UNICODE);
-
         mLibrary = library;
         mFace = face;
         mPixelSize = pixelSize;
         mAscender = (float)(face->size->metrics.ascender >> 6);
         mDescender = (float)(face->size->metrics.descender >> 6);
         mLineHeight = (float)(face->size->metrics.height >> 6);
-
         if (!bakeAtlas())
         {
             close();
@@ -112,7 +99,6 @@ namespace eokas
         mAtlasDirty = true;
         return true;
     }
-
     bool UIFont::attachFallback(const char* fontPath)
     {
         if (mLibrary == nullptr || mFace == nullptr || fontPath == nullptr)
@@ -124,7 +110,6 @@ namespace eokas
             FT_Done_Face((FT_Face)mFallback);
             mFallback = nullptr;
         }
-
         FT_Face face = nullptr;
         if (FT_New_Face((FT_Library)mLibrary, fontPath, 0, &face) != 0)
         {
@@ -139,7 +124,6 @@ namespace eokas
         mFallback = face;
         return true;
     }
-
     void UIFont::close()
     {
         unbindFont(this);
@@ -172,49 +156,40 @@ namespace eokas
         memset(mGlyphs, 0, sizeof(mGlyphs));
         memset(&mPlaceholder, 0, sizeof(mPlaceholder));
     }
-
     bool UIFont::isOpen() const
     {
         return mFace != nullptr && !mAtlas.empty();
     }
-
     uint32_t UIFont::atlasSize() const
     {
         return kAtlasSize;
     }
-
     const std::vector<uint8_t>& UIFont::atlasRgba() const
     {
         return mAtlas;
     }
-
     bool UIFont::takeAtlasDirty() const
     {
         bool dirty = mAtlasDirty;
         mAtlasDirty = false;
         return dirty;
     }
-
     uint32_t UIFont::pixelSize() const
     {
         return mPixelSize;
     }
-
     float UIFont::ascender() const
     {
         return mAscender;
     }
-
     float UIFont::descender() const
     {
         return mDescender;
     }
-
     float UIFont::lineHeight() const
     {
         return mLineHeight;
     }
-
     bool UIFont::setPixelSize(uint32_t pixelSize) const
     {
         if (mFace == nullptr || pixelSize == 0) return false;
@@ -222,13 +197,11 @@ namespace eokas
         if (mFallback != nullptr && FT_Set_Pixel_Sizes((FT_Face)mFallback, 0, pixelSize) != 0) return false;
         return true;
     }
-
     bool UIFont::prepareSize(uint32_t pixelSize)
     {
         if (mFace == nullptr || pixelSize == 0) return false;
         if (pixelSize == mPixelSize || mSizes.find(pixelSize) != mSizes.end()) return true;
         if (!this->setPixelSize(pixelSize)) return false;
-
         SizeRun run;
         memset(run.glyphs, 0, sizeof(run.glyphs));
         FT_Face face = (FT_Face)mFace;
@@ -245,12 +218,10 @@ namespace eokas
         mAtlasDirty = true;
         return true;
     }
-
     bool UIFont::hasSize(uint32_t pixelSize) const
     {
         return pixelSize != 0 && (pixelSize == mPixelSize || mSizes.find(pixelSize) != mSizes.end());
     }
-
     float UIFont::ascenderFor(uint32_t pixelSize) const
     {
         if (pixelSize == mPixelSize) return mAscender;
@@ -258,7 +229,6 @@ namespace eokas
         if (found == mSizes.end()) return mAscender;
         return found->second.ascender;
     }
-
     float UIFont::descenderFor(uint32_t pixelSize) const
     {
         if (pixelSize == mPixelSize) return mDescender;
@@ -266,7 +236,6 @@ namespace eokas
         if (found == mSizes.end()) return mDescender;
         return found->second.descender;
     }
-
     void UIFont::drawMetrics(float fontSize, float& scale, float& ascender, float& descender) const
     {
         uint32_t px = (uint32_t)floorf(fontSize + 0.5f);
@@ -283,7 +252,6 @@ namespace eokas
         ascender = mAscender * scale;
         descender = mDescender * scale;
     }
-
     Vector2 UIFont::measure(const char* text, size_t length, float fontSize) const
     {
         float scale = 1.0f;
@@ -306,7 +274,6 @@ namespace eokas
         }
         return Vector2(width, ascender - descender);
     }
-
     const UIFontGlyph& UIFont::glyphFor(uint32_t codepoint, uint32_t pixelSize) const
     {
         auto found = mSizes.find(pixelSize);
@@ -323,19 +290,16 @@ namespace eokas
         mAtlasDirty = true;
         return run.dynamic.emplace(codepoint, baked).first->second;
     }
-
     const UIFontGlyph& UIFont::glyphSized(uint32_t codepoint, float fontSize) const
     {
         uint32_t px = (uint32_t)floorf(fontSize + 0.5f);
         if (px >= 1 && px != mPixelSize && this->hasSize(px)) return this->glyphFor(codepoint, px);
         return this->glyph(codepoint);
     }
-
     const UIFontGlyph& UIFont::glyph(char c) const
     {
         return this->glyph((uint32_t)(unsigned char)c);
     }
-
     const UIFontGlyph& UIFont::glyph(uint32_t codepoint) const
     {
         if (codepoint >= kFirstChar && codepoint <= kLastChar)
@@ -355,7 +319,6 @@ namespace eokas
         mAtlasDirty = true;
         return mDynamic.emplace(codepoint, baked).first->second;
     }
-
     bool UIFont::nextUtf8(const char* data, size_t size, size_t& index, uint32_t& codepoint)
     {
         if (data == nullptr || index >= size)
@@ -402,7 +365,6 @@ namespace eokas
         codepoint = 0;
         return false;
     }
-
     String UIFont::encodeUtf8(uint32_t codepoint)
     {
         char buf[5] = {};
@@ -435,20 +397,17 @@ namespace eokas
         }
         return String(buf, n);
     }
-
     Rect UIFont::solidUV()
     {
         float inv = 1.0f / (float)kAtlasSize;
         return Rect(1.0f * inv, 1.0f * inv, 2.0f * inv, 2.0f * inv);
     }
-
     bool UIFont::bakeAtlas()
     {
         const uint32_t size = kAtlasSize;
         mAtlas.assign(size * size * 4, 0);
         memset(mGlyphs, 0, sizeof(mGlyphs));
         memset(&mPlaceholder, 0, sizeof(mPlaceholder));
-
         for (uint32_t y = 0; y < 4; y++)
         {
             for (uint32_t x = 0; x < 4; x++)
@@ -460,11 +419,9 @@ namespace eokas
                 mAtlas[i + 3] = 0xFF;
             }
         }
-
         mPenX = 6;
         mPenY = 0;
         mRowH = 4;
-
         if (!packGlyph(0, true, mPlaceholder))
         {
             if (!packGlyph((uint32_t)'?', false, mPlaceholder))
@@ -472,7 +429,6 @@ namespace eokas
                 return false;
             }
         }
-
         for (uint32_t code = kFirstChar; code <= kLastChar; code++)
         {
             UIFontGlyph& slot = mGlyphs[code - kFirstChar];
@@ -483,7 +439,6 @@ namespace eokas
         }
         return true;
     }
-
     bool UIFont::packGlyph(uint32_t codeOrZero, bool useGlyphIndex, UIFontGlyph& out) const
     {
         FT_Face face = (FT_Face)mFace;
@@ -503,7 +458,6 @@ namespace eokas
         {
             return false;
         }
-
         FT_GlyphSlot slot = face->glyph;
         if (slot->format != FT_GLYPH_FORMAT_BITMAP)
         {
@@ -583,7 +537,6 @@ namespace eokas
             coveragePitch = (int)gw;
         }
         const uint32_t padding = 2;
-
         if (gw > 0 && gh > 0)
         {
             if (mPenX + gw + padding > kAtlasSize)
@@ -600,7 +553,6 @@ namespace eokas
             {
                 blitGlyph(coverage, coveragePitch, gw, gh, mPenX, mPenY);
             }
-
             float inv = 1.0f / (float)kAtlasSize;
             out.uv = Rect((float)mPenX * inv, (float)mPenY * inv, (float)gw * inv, (float)gh * inv);
             mPenX += gw + padding;
@@ -613,7 +565,6 @@ namespace eokas
         {
             out.uv = Rect(0.0f, 0.0f, 0.0f, 0.0f);
         }
-
         out.width = (float)gw;
         out.height = (float)gh;
         out.bearingX = (float)slot->bitmap_left;
@@ -621,14 +572,12 @@ namespace eokas
         out.advance = (float)(slot->advance.x >> 6);
         return true;
     }
-
     void UIFont::blitGlyph(const unsigned char* src, int pitch, uint32_t srcW, uint32_t srcH, uint32_t dstX, uint32_t dstY) const
     {
         if (src == nullptr || pitch == 0)
         {
             return;
         }
-
         for (uint32_t y = 0; y < srcH; y++)
         {
             const unsigned char* row = pitch >= 0

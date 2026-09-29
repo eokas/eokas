@@ -1,4 +1,5 @@
 #include "UIChart.h"
+#include "UICanvas.h"
 #include "../UIFont.h"
 #include "../UIStroke.h"
 
@@ -159,11 +160,11 @@ namespace eokas
 
     Color UIChart::activeFill() const
     {
-        if (pressed)
+        if (isPressed())
         {
             return pressedFill;
         }
-        if (hovered)
+        if (isHovered())
         {
             return hoverFill;
         }
@@ -357,5 +358,56 @@ namespace eokas
         }
         this->strokeLoop(primitive, localToScreen, mContour);
         UIWidget::render(primitive);
+    }
+
+    bool UIChart::handleClick(float screenX, float screenY)
+    {
+        (void)screenX;
+        (void)screenY;
+        if (UICanvas* canvas = dynamic_cast<UICanvas*>(parent()))
+        {
+            canvas->applyCanvasSelection(this);
+        }
+        return UIWidget::handleClick(screenX, screenY) || true;
+    }
+
+    bool UIChart::handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta)
+    {
+        (void)delta;
+        UIWidget* target = nullptr;
+        if (hitUnderCursor != nullptr && hitUnderCursor != this)
+        {
+            UIChart* chartHit = dynamic_cast<UIChart*>(hitUnderCursor);
+            if (chartHit != nullptr && chartHit != this)
+            {
+                target = chartHit;
+            }
+        }
+        if (onChartDrop)
+        {
+            Vector2 dropPoint = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
+            onChartDrop(target, dropPoint.x, dropPoint.y);
+            return true;
+        }
+        return UIWidget::handleDrop(screenX, screenY, hitUnderCursor, delta);
+    }
+
+    bool UIChart::handleWheel(float screenX, float screenY, float deltaX, float deltaY)
+    {
+        (void)deltaX;
+        if (shape.scale.x == 0.0f || shape.scale.y == 0.0f)
+        {
+            return false;
+        }
+        Vector2 focal = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
+        Vector2 local = shape.pivotToLocal(focal);
+        if (!this->contains(local))
+        {
+            return false;
+        }
+        float current = shape.scale.x == 0.0f ? 1.0f : shape.scale.x;
+        float factor = expf(-deltaY * scaleSensitivity);
+        this->scaleAt(focal, current * factor);
+        return true;
     }
 }

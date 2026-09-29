@@ -1,7 +1,7 @@
 #ifndef _EOKAS_UI_WIDGET_H_
 #define _EOKAS_UI_WIDGET_H_
 
-#include "UIKey.h"
+#include "UIEvent.h"
 #include "UIPrimitive.h"
 #include "UIShape.h"
 #include "UIStyle.h"
@@ -31,9 +31,9 @@ namespace eokas
         bool pickable = true;
         bool dragable = false;
 
-        bool hovered = false;
-        bool pressed = false;
-        bool focused = false;
+        bool isHovered() const { return mHovered; }
+        bool isPressed() const { return mPressed; }
+        bool isFocused() const { return mFocused; }
 
         std::function<void()> onPointerEnter;
         std::function<void()> onPointerLeave;
@@ -69,16 +69,27 @@ namespace eokas
         virtual bool contains(const Vector2& point) const;
         virtual UIWidget* pick(const Vector2& point);
 
-        virtual void triggerPointerEnter();
-        virtual void triggerPointerLeave();
-        virtual void triggerPointerPress();
-        virtual void triggerPointerRelease();
-        virtual void triggerPointerMove(const Vector2& position, const Vector2& delta);
-        virtual void triggerWheel(const Vector2& position, f32_t delta);
-        virtual void triggerKeyPress(const UIKey& key, const UIKeyMods& mods);
-        virtual void triggerKeyRelease(const UIKey& key, const UIKeyMods& mods);
+        virtual bool handlePointerEnter(float screenX, float screenY);
+        virtual bool handlePointerLeave(float screenX, float screenY);
+        virtual bool handlePointerMove(float screenX, float screenY, const Vector2& delta);
+        virtual bool handlePointerPress(float screenX, float screenY, int button);
+        virtual bool handlePointerRelease(float screenX, float screenY, int button);
+        virtual void handleFocusGain();
+        virtual void handleFocusLoss();
+        virtual bool handleClick(float screenX, float screenY);
+        virtual bool handleDoubleClick(float screenX, float screenY);
+        virtual bool handleDrag(float screenX, float screenY, const Vector2& delta);
+        virtual bool handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta);
+        virtual bool handleKeyPress(const UIKey& key, const UIKeyMods& mods);
+        virtual bool handleKeyRelease(const UIKey& key, const UIKeyMods& mods);
+        virtual bool handleWheel(float screenX, float screenY, float deltaX, float deltaY);
 
-        void resize(const Vector2& newSize);    
+        virtual void endActiveDrag();
+
+        bool containsDescendant(const UIWidget* target) const;
+        void resetPointerStateRecursive();
+
+        void resize(const Vector2& newSize);
         void placeChild(UIWidget& child, const Vector2& topLeftLocal);
         void placeChild(UIWidget& child, const Vector2& topLeftLocal, const Vector2& childSize);
 
@@ -93,6 +104,9 @@ namespace eokas
         UIWidget* mParent = nullptr;
         std::vector<Ref> mChildren;
         std::optional<std::chrono::steady_clock::time_point> mLastClickTime;
+        bool mHovered = false;
+        bool mPressed = false;
+        bool mFocused = false;
     };
 }
 

@@ -28,13 +28,14 @@ EOKAS_TEST_CASE(ui) {
     widget.shape.size = (Rect(0, 0, 40, 20)).size;
     widget.shape.origin = (Rect(0, 0, 40, 20)).origin + widget.shape.pivot * widget.shape.size;
     widget.onClick = [&]() { clicks += 1; };
-    widget.pressed = true;
-    widget.triggerPointerRelease();
+    widget.handlePointerPress(0.0f, 0.0f, 0);
+    widget.handlePointerRelease(0.0f, 0.0f, 0);
+    widget.handleClick(0.0f, 0.0f);
     EOKAS_EXPECT(clicks == 1);
-    widget.triggerPointerEnter();
-    EOKAS_EXPECT(widget.hovered);
-    widget.triggerPointerLeave();
-    EOKAS_EXPECT(!widget.hovered);
+    widget.handlePointerEnter(0.0f, 0.0f);
+    EOKAS_EXPECT(widget.isHovered());
+    widget.handlePointerLeave(0.0f, 0.0f);
+    EOKAS_EXPECT(!widget.isHovered());
 
     UIList list;
     auto first = std::make_shared<UIWidget>();
@@ -160,8 +161,8 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(_FloatEqual(boxLeft(other->shape), -20.0f));
     int leafHits = 0;
     grand->onExpandedChanged = [&](bool) { leafHits += 1; };
-    grand->pressed = true;
-    grand->triggerPointerRelease();
+    grand->handlePointerPress(0.0f, 0.0f, 0);
+    grand->handlePointerRelease(0.0f, 0.0f, 0);
     EOKAS_EXPECT(grand->expanded());
     EOKAS_EXPECT(leafHits == 0);
     child->setExpanded(false);
@@ -176,8 +177,8 @@ EOKAS_TEST_CASE(ui) {
     group->setExpanded(true);
     int hits = 0;
     group->onExpandedChanged = [&](bool) { hits += 1; };
-    group->pressed = true;
-    group->triggerPointerRelease();
+    group->handlePointerPress(0.0f, 0.0f, 0);
+    group->handlePointerRelease(0.0f, 0.0f, 0);
     EOKAS_EXPECT(!group->expanded());
     EOKAS_EXPECT(hits == 1);
     group->setExpanded(true);
@@ -229,8 +230,8 @@ EOKAS_TEST_CASE(ui) {
     int toggleHits = 0;
     UIToggle toggle;
     toggle.onValueChanged = [&](bool) { toggleHits += 1; };
-    toggle.pressed = true;
-    toggle.triggerPointerRelease();
+    toggle.handlePointerPress(0.0f, 0.0f, 0);
+    toggle.handlePointerRelease(0.0f, 0.0f, 0);
     EOKAS_EXPECT(toggle.value);
     EOKAS_EXPECT(toggleHits == 1);
 
@@ -614,8 +615,8 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(chartClicks == 1);
     EOKAS_EXPECT(picked->selected);
     EOKAS_EXPECT(!idle->selected);
-    picked->pressed = true;
-    picked->triggerPointerRelease();
+    chartWindow.onMouseDown(30.0f, 30.0f, 0);
+    chartWindow.onMouseUp(30.0f, 30.0f, 0);
     EOKAS_EXPECT(chartDoubles == 1);
 
     std::vector<Vector2> contourBefore = picked->contour();
@@ -624,7 +625,7 @@ EOKAS_TEST_CASE(ui) {
     chartWindow.onMouseDown(30.0f, 30.0f, 0);
     chartWindow.onMouseMove(42.0f, 30.0f);
     chartWindow.onMouseUp(42.0f, 30.0f, 0);
-    EOKAS_EXPECT(chartClicks == 2);
+    EOKAS_EXPECT(chartClicks == 1);
     EOKAS_EXPECT(picked->selected);
     EOKAS_EXPECT(!idle->selected);
     EOKAS_EXPECT(_FloatEqual(boxLeft(picked->shape), contourBefore.empty() ? 0.0f : -23.0f));
@@ -647,8 +648,8 @@ EOKAS_TEST_CASE(ui) {
     dropCanvas->addChild(slot);
     dropWindow.setRoot(dropCanvas);
     int drops = 0;
-    UIChart* dropTarget = nullptr;
-    carried->onDrop = [&](UIChart* target, float, float) {
+    UIWidget* dropTarget = nullptr;
+    carried->onChartDrop = [&](UIWidget* target, float, float) {
         drops += 1;
         dropTarget = target;
     };
@@ -671,8 +672,8 @@ EOKAS_TEST_CASE(ui) {
     plainCanvas->addChild(plain);
     dropWindow.setRoot(plainCanvas);
     int plainDrops = 0;
-    UIChart* plainTarget = stone.get();
-    stone->onDrop = [&](UIChart* target, float, float) {
+    UIWidget* plainTarget = stone.get();
+    stone->onChartDrop = [&](UIWidget* target, float, float) {
         plainDrops += 1;
         plainTarget = target;
     };

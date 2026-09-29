@@ -65,7 +65,7 @@ namespace eokas
         {
             return;
         }
-        Color bg = hovered ? hoverFill : background;
+        Color bg = isHovered() ? hoverFill : background;
         primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         UIWidget::render(primitive);
     }
