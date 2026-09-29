@@ -730,9 +730,10 @@ namespace eokas::ui {
             {
                 float tabH = (float)(int)(28.0f * s + 0.5f);
                 float tabPx = (float)(int)(13.0f * s + 0.5f);
-                float tabPad = (float)(int)(12.0f * s + 0.5f);
+                float tabPad = (tabH - tabPx) * 0.5f;
                 if (tabH < 1.0f) tabH = 1.0f;
                 if (tabPx < 1.0f) tabPx = 1.0f;
+                if (tabPad < 0.0f) tabPad = 0.0f;
                 auto head = std::make_shared<UIList>();
                 head->direction = UIDirection::Horizontal;
                 head->padding = tabPad;
