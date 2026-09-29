@@ -134,23 +134,23 @@ namespace eokas
         Format format = Format::Unknown;
     };
     
-    enum class ProgramType
+    enum class ShaderType
     {
         Vertex, Fragment, Compute
     };
     
-    enum class ProgramTarget
+    enum class ShaderTarget
     {
         SM_3_0, SM_3_1, SM_4_5, SM_5_0, SM_6_0, SM_6_8
     };
     
-    struct ProgramOptions
+    struct ShaderOptions
     {
         std::string name = "";
         std::string source = "";
         std::string entry = "";
-        ProgramType type = ProgramType::Vertex;
-        ProgramTarget target = ProgramTarget::SM_3_0;
+        ShaderType type = ShaderType::Vertex;
+        ShaderTarget target = ShaderTarget::SM_3_0;
     };
 
     enum class PipelineResourceType
@@ -178,13 +178,13 @@ namespace eokas
         bool compatibleWith(const PipelineLayout& other) const;
     };
     
-    struct Program
+    struct ShaderProgram
     {
-        using Ref = std::shared_ptr<Program>;
+        using Ref = std::shared_ptr<ShaderProgram>;
 
-        virtual ~Program() = default;
+        virtual ~ShaderProgram() = default;
         
-        virtual const ProgramOptions& getOptions() const = 0;
+        virtual const ShaderOptions& getOptions() const = 0;
         virtual const PipelineLayout& getLayout() const = 0;
     };
     
@@ -263,8 +263,6 @@ namespace eokas
         bool operator!=(const BlendState& other) const { return !(*this == other); }
     };
     
-    // 长期管线：Shader / InputLayout / 光栅状态 / RootSignature
-    // DX12 对应 ID3D12RootSignature + ID3D12PipelineState
     struct PipelineObject
     {
         using Ref = std::shared_ptr<PipelineObject>;
@@ -273,7 +271,7 @@ namespace eokas
 
         virtual void begin() = 0;
         virtual void setVertexElements(std::vector<VertexElement>& vElements) = 0;
-        virtual void setProgram(ProgramType type, Program::Ref program) = 0;
+        virtual void setShaderProgram(ShaderType type, ShaderProgram::Ref shaderProgram) = 0;
         virtual void setFillMode(FillMode fillMode) = 0;
         virtual void setCullMode(CullMode cullMode) = 0;
         virtual void setDepthStencilState(const DepthStencilState& state) = 0;
@@ -283,8 +281,6 @@ namespace eokas
         virtual const PipelineLayout& getLayout() const = 0;
     };
 
-    // 绘制绑定：持有 PipelineLayout 副本，绑定 UniformBuffer / Texture
-    // DX12 对应 descriptor heap / root CBV，不是 ID3D12PipelineState
     struct PipelineBindings
     {
         using Ref = std::shared_ptr<PipelineBindings>;
@@ -335,7 +331,6 @@ namespace eokas
 
         virtual ~CommandBuffer() = default;
 
-        // 创建后处于关闭状态。每帧调用顺序：open、录制、close。
         virtual void open() = 0;
         virtual void setPipelineObject(PipelineObject::Ref pipeline) = 0;
         virtual void setPipelineBindings(PipelineBindings::Ref bindings) = 0;
@@ -379,7 +374,7 @@ namespace eokas
         virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) = 0;
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length) = 0;
         virtual Texture::Ref createTexture(const TextureOptions& options) = 0;
-        virtual Program::Ref createProgram(const ProgramOptions& options) = 0;
+        virtual ShaderProgram::Ref createShaderProgram(const ShaderOptions& options) = 0;
         virtual PipelineObject::Ref createPipelineObject() = 0;
         virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) = 0;
         virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) = 0;

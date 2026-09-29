@@ -64,8 +64,8 @@ namespace eokas::gpu {
             
             // const char* hlsl = "../shaders/002-texture.hlsl";
             const char* hlsl = "../shaders/003-diffuse.hlsl";
-            auto vs = this->compileShader(hlsl, ProgramType::Vertex, ProgramTarget::SM_5_0, "VSMain");
-            auto ps = this->compileShader(hlsl, ProgramType::Fragment, ProgramTarget::SM_5_0, "PSMain");
+            auto vs = this->compileShader(hlsl, ShaderType::Vertex, ShaderTarget::SM_5_0, "VSMain");
+            auto ps = this->compileShader(hlsl, ShaderType::Fragment, ShaderTarget::SM_5_0, "PSMain");
             
             std::vector<VertexElement> vElements;
             vElements.push_back({"POSITION", 0, 0, Format::R32G32B32_FLOAT});
@@ -84,8 +84,8 @@ namespace eokas::gpu {
             
             mPipelineObject = mDevice->createPipelineObject();
             mPipelineObject->begin();
-            mPipelineObject->setProgram(ProgramType::Vertex, vs);
-            mPipelineObject->setProgram(ProgramType::Fragment, ps);
+            mPipelineObject->setShaderProgram(ShaderType::Vertex, vs);
+            mPipelineObject->setShaderProgram(ShaderType::Fragment, ps);
             mPipelineObject->setVertexElements(vElements);
             mPipelineObject->setCullMode(CullMode::Front);
             DepthStencilState depthStencil;
@@ -212,15 +212,15 @@ namespace eokas::gpu {
             mDevice->waitForNextFrame();
         }
         
-        Program::Ref compileShader(const std::string& file, ProgramType type, ProgramTarget target, const char* entry) {
+        ShaderProgram::Ref compileShader(const std::string& file, ShaderType type, ShaderTarget target, const char* entry) {
             
-            ProgramOptions options;
+            ShaderOptions options;
             options.name = file;
             options.source = Utilities::readTextFile(file);
             options.type = type;
             options.target = target;
             options.entry = entry;
-            return mDevice->createProgram(options);
+            return mDevice->createShaderProgram(options);
         }
     };
 }

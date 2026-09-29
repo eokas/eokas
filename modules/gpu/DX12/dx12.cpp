@@ -74,7 +74,7 @@ namespace eokas
         layout.add(entry);
     }
 
-    static void reflectProgramParameters(ID3DBlob* code, PipelineLayout& parameters)
+    static void reflectShaderProgramParameters(ID3DBlob* code, PipelineLayout& parameters)
     {
         ComPtr<ID3D12ShaderReflection> reflector12;
         if (SUCCEEDED(D3DReflect(code->GetBufferPointer(), code->GetBufferSize(), IID_PPV_ARGS(&reflector12))))
@@ -517,7 +517,7 @@ namespace eokas
         return this->mOptions;
     }
     
-    DX12Program::DX12Program(const DX12Device& device, const ProgramOptions& options)
+    DX12ShaderProgram::DX12ShaderProgram(const DX12Device& device, const ShaderOptions& options)
         : mOptions(options)
     {
         
@@ -529,16 +529,16 @@ namespace eokas
         
         std::string target = "";
         {
-            if (options.type == ProgramType::Vertex) target += "vs";
-            else if (options.type == ProgramType::Fragment) target += "ps";
-            else if (options.type == ProgramType::Compute) target += "cs";
+            if (options.type == ShaderType::Vertex) target += "vs";
+            else if (options.type == ShaderType::Fragment) target += "ps";
+            else if (options.type == ShaderType::Compute) target += "cs";
             
-            if (options.target == ProgramTarget::SM_3_0) target += "_3_0";
-            else if (options.target == ProgramTarget::SM_3_1) target += "_3_1";
-            else if (options.target == ProgramTarget::SM_4_5) target += "_4_5";
-            else if (options.target == ProgramTarget::SM_5_0) target += "_5_0";
-            else if (options.target == ProgramTarget::SM_6_0) target += "_6_0";
-            else if (options.target == ProgramTarget::SM_6_8) target += "_6_8";
+            if (options.target == ShaderTarget::SM_3_0) target += "_3_0";
+            else if (options.target == ShaderTarget::SM_3_1) target += "_3_1";
+            else if (options.target == ShaderTarget::SM_4_5) target += "_4_5";
+            else if (options.target == ShaderTarget::SM_5_0) target += "_5_0";
+            else if (options.target == ShaderTarget::SM_6_0) target += "_6_0";
+            else if (options.target == ShaderTarget::SM_6_8) target += "_6_8";
         }
         
         HRESULT hr = D3DCompile(
@@ -561,15 +561,15 @@ namespace eokas
             throw std::runtime_error("D3DCompile failed.");
         }
 
-        reflectProgramParameters(mCode.Get(), mLayout);
+        reflectShaderProgramParameters(mCode.Get(), mLayout);
     }
     
-    const ProgramOptions& DX12Program::getOptions() const
+    const ShaderOptions& DX12ShaderProgram::getOptions() const
     {
         return mOptions;
     }
     
-    const PipelineLayout& DX12Program::getLayout() const
+    const PipelineLayout& DX12ShaderProgram::getLayout() const
     {
         return mLayout;
     }
@@ -614,9 +614,9 @@ namespace eokas
         }
     }
     
-    void DX12PipelineObject::setProgram(ProgramType type, Program::Ref program)
+    void DX12PipelineObject::setShaderProgram(ShaderType type, ShaderProgram::Ref shaderProgram)
     {
-        mPrograms[type] = program;
+        mShaderPrograms[type] = shaderProgram;
     }
     
     void DX12PipelineObject::setFillMode(FillMode fillMode)
@@ -662,7 +662,7 @@ namespace eokas
         mCBVRegisters.clear();
         mSRVRegisters.clear();
         mSamplerRegisters.clear();
-        for (const auto& node : mPrograms)
+        for (const auto& node : mShaderPrograms)
         {
             for (const auto& entry : node.second->getLayout().entries)
             {
@@ -788,14 +788,14 @@ namespace eokas
             psoDesc.InputLayout.NumElements = (UINT) mVertexElements.size();
             
             psoDesc.pRootSignature = mRootSignature.Get();
-            if (mPrograms.find(ProgramType::Vertex) != mPrograms.end())
+            if (mShaderPrograms.find(ShaderType::Vertex) != mShaderPrograms.end())
             {
-                ComPtr<ID3DBlob> code = dynamic_cast<DX12Program*>(mPrograms[ProgramType::Vertex].get())->mCode;
+                ComPtr<ID3DBlob> code = dynamic_cast<DX12ShaderProgram*>(mShaderPrograms[ShaderType::Vertex].get())->mCode;
                 psoDesc.VS = {code->GetBufferPointer(), code->GetBufferSize()};
             }
-            if (mPrograms.find(ProgramType::Fragment) != mPrograms.end())
+            if (mShaderPrograms.find(ShaderType::Fragment) != mShaderPrograms.end())
             {
-                ComPtr<ID3DBlob> code = dynamic_cast<DX12Program*>(mPrograms[ProgramType::Fragment].get())->mCode;
+                ComPtr<ID3DBlob> code = dynamic_cast<DX12ShaderProgram*>(mShaderPrograms[ShaderType::Fragment].get())->mCode;
                 psoDesc.PS = {code->GetBufferPointer(), code->GetBufferSize()};
             }
             
@@ -1633,9 +1633,9 @@ namespace eokas
         return std::make_shared<DX12Texture>(*this, options);
     }
     
-    Program::Ref DX12Device::createProgram(const ProgramOptions& options)
+    ShaderProgram::Ref DX12Device::createShaderProgram(const ShaderOptions& options)
     {
-        return std::make_shared<DX12Program>(*this, options);
+        return std::make_shared<DX12ShaderProgram>(*this, options);
     }
     
     PipelineObject::Ref DX12Device::createPipelineObject()

@@ -492,27 +492,27 @@ namespace eokas
             if (!loadShaderSource(mShaderSource, mShaderPath, src))
                 return false;
 
-            String programName = "BPR";
+            String shaderName = "BPR";
             if (!mShaderPath.isEmpty())
-                programName = File::fileNameWithoutExtension(resolveShaderPath(mShaderPath));
+                shaderName = File::fileNameWithoutExtension(resolveShaderPath(mShaderPath));
             else if (!mShaderSource.isEmpty())
-                programName = "material";
+                shaderName = "material";
 
-            ProgramOptions vsOpt;
-            vsOpt.name = (programName + "-vs").cstr();
+            ShaderOptions vsOpt;
+            vsOpt.name = (shaderName + "-vs").cstr();
             vsOpt.source = src.cstr();
             vsOpt.entry = "VSMain";
-            vsOpt.type = ProgramType::Vertex;
-            vsOpt.target = ProgramTarget::SM_5_0;
-            mVS = mDevice->createProgram(vsOpt);
+            vsOpt.type = ShaderType::Vertex;
+            vsOpt.target = ShaderTarget::SM_5_0;
+            mVS = mDevice->createShaderProgram(vsOpt);
 
-            ProgramOptions psOpt;
-            psOpt.name = (programName + "-ps").cstr();
+            ShaderOptions psOpt;
+            psOpt.name = (shaderName + "-ps").cstr();
             psOpt.source = src.cstr();
             psOpt.entry = "PSMain";
-            psOpt.type = ProgramType::Fragment;
-            psOpt.target = ProgramTarget::SM_5_0;
-            mPS = mDevice->createProgram(psOpt);
+            psOpt.type = ShaderType::Fragment;
+            psOpt.target = ShaderTarget::SM_5_0;
+            mPS = mDevice->createShaderProgram(psOpt);
 
             std::vector<VertexElement> vElements = mVertexElements;
             if (vElements.empty())
@@ -525,8 +525,8 @@ namespace eokas
 
             mPipelineObject = mDevice->createPipelineObject();
             mPipelineObject->begin();
-            mPipelineObject->setProgram(ProgramType::Vertex, mVS);
-            mPipelineObject->setProgram(ProgramType::Fragment, mPS);
+            mPipelineObject->setShaderProgram(ShaderType::Vertex, mVS);
+            mPipelineObject->setShaderProgram(ShaderType::Fragment, mPS);
             mPipelineObject->setVertexElements(vElements);
             mPipelineObject->setFillMode(mFillMode);
             mPipelineObject->setCullMode(mCullMode);

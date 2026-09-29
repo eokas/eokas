@@ -154,16 +154,16 @@ namespace eokas
         virtual const TextureOptions& getOptions() const override;
     };
     
-    struct DX12Program : public Program
+    struct DX12ShaderProgram : public ShaderProgram
     {
-        ProgramOptions mOptions;
+        ShaderOptions mOptions;
         ComPtr <ID3DBlob> mCode;
         ComPtr <ID3DBlob> mError;
         PipelineLayout mLayout;
         
-        DX12Program(const DX12Device& device, const ProgramOptions& options);
+        DX12ShaderProgram(const DX12Device& device, const ShaderOptions& options);
         
-        virtual const ProgramOptions& getOptions() const override;
+        virtual const ShaderOptions& getOptions() const override;
         virtual const PipelineLayout& getLayout() const override;
     };
     
@@ -174,7 +174,7 @@ namespace eokas
         ComPtr <ID3D12RootSignature> mRootSignature;
         std::vector<std::string> mVertexSemanticNames;
         std::vector<D3D12_INPUT_ELEMENT_DESC> mVertexElements;
-        std::map<ProgramType, DX12Program::Ref> mPrograms;
+        std::map<ShaderType, DX12ShaderProgram::Ref> mShaderPrograms;
         
         D3D12_FILL_MODE mFillMode = D3D12_FILL_MODE_SOLID;
         D3D12_CULL_MODE mCullMode = D3D12_CULL_MODE_BACK;
@@ -193,7 +193,7 @@ namespace eokas
         
         virtual void begin() override;
         virtual void setVertexElements(std::vector<VertexElement>& vElements) override;
-        virtual void setProgram(ProgramType type, Program::Ref program) override;
+        virtual void setShaderProgram(ShaderType type, ShaderProgram::Ref shaderProgram) override;
         virtual void setFillMode(FillMode fillMode) override;
         virtual void setCullMode(CullMode cullMode) override;
         virtual void setDepthStencilState(const DepthStencilState& state) override;
@@ -291,7 +291,7 @@ namespace eokas
         virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) override;
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length) override;
         virtual Texture::Ref createTexture(const TextureOptions& options) override;
-        virtual Program::Ref createProgram(const ProgramOptions& options) override;
+        virtual ShaderProgram::Ref createShaderProgram(const ShaderOptions& options) override;
         virtual PipelineObject::Ref createPipelineObject() override;
         virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) override;
         virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) override;

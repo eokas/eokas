@@ -72,8 +72,8 @@ namespace eokas
         std::vector<std::pair<String, Texture::Ref>> mTextures;
         std::vector<std::pair<String, DynamicBuffer::Ref>> mUniformBuffers;
 
-        Program::Ref mVS;
-        Program::Ref mPS;
+        ShaderProgram::Ref mVS;
+        ShaderProgram::Ref mPS;
         PipelineObject::Ref mPipelineObject;
         PipelineBindings::Ref mPipelineBindings;
         Texture::Ref mDefaultTexture;
