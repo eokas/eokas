@@ -1670,6 +1670,7 @@ namespace eokas
         ID3D12CommandList* commandLists[] = {dxCommandBuffer->mCommandList.Get()};
         mCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
         const UINT64 executeFence = SignalFence();
+        mFenceValues[mFrameIndex] = executeFence;
         ReleaseCommandAllocator(std::move(dxCommandBuffer->mCommandAllocator), executeFence);
     }
     
@@ -1707,15 +1708,16 @@ namespace eokas
     
     void DX12Device::waitForNextFrame()
     {
-        mFenceValues[mFrameIndex] = SignalFence();
-        mFrameIndex = (mFrameIndex + 1) % kFrameCount;
+        const uint32_t nextFrameIndex = (mFrameIndex + 1) % kFrameCount;
 
         const UINT64 completed = mFence->GetCompletedValue();
-        if (completed < mFenceValues[mFrameIndex])
+        if (completed < mFenceValues[nextFrameIndex])
         {
-            _ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValues[mFrameIndex], mFenceEvent));
+            _ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValues[nextFrameIndex], mFenceEvent));
             WaitForSingleObject(mFenceEvent, INFINITE);
         }
+
+        mFrameIndex = nextFrameIndex;
     }
 
     Surface::Ref DX12Device::createSurface(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)

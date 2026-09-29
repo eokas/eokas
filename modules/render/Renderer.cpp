@@ -88,8 +88,6 @@ namespace eokas
         if (!mDevice || !surface)
             return;
 
-        mDevice->waitForGPU();
-
         Camera::Ref cam = space.activeCamera ? space.activeCamera : (space.cameras.empty() ? nullptr : space.cameras[0]);
         if (!cam)
             return;
