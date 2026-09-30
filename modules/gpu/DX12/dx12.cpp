@@ -1348,16 +1348,53 @@ namespace eokas
         mUploadResources.push_back(upload);
     }
 
-    UINT64 DX12Device::SignalFence()
+    void DX12Fence::create(ID3D12Device* device)
     {
-        const UINT64 value = ++mLastQueuedFence;
-        _ThrowIfFailed(mCommandQueue->Signal(mFence.Get(), value));
-        return value;
+        _ThrowIfFailed(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
+        completionEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (completionEvent == nullptr)
+        {
+            _ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
+        }
+    }
+
+    DX12Fence::~DX12Fence()
+    {
+        if (completionEvent != nullptr)
+        {
+            CloseHandle(completionEvent);
+            completionEvent = nullptr;
+        }
+    }
+
+    u64_t DX12Fence::signal(ID3D12CommandQueue* commandQueue)
+    {
+        const u64_t v = ++value;
+        _ThrowIfFailed(commandQueue->Signal(fence.Get(), v));
+        return v;
+    }
+
+    u64_t DX12Fence::completedValue() const
+    {
+        return fence->GetCompletedValue();
+    }
+
+    bool DX12Fence::isCompleted(u64_t fenceValue) const
+    {
+        return completedValue() >= fenceValue;
+    }
+
+    void DX12Fence::wait(u64_t fenceValue)
+    {
+        if (isCompleted(fenceValue))
+            return;
+        _ThrowIfFailed(fence->SetEventOnCompletion(fenceValue, completionEvent));
+        WaitForSingleObject(completionEvent, INFINITE);
     }
 
     ComPtr<ID3D12CommandAllocator> DX12Device::AcquireCommandAllocator()
     {
-        const UINT64 completed = mFence->GetCompletedValue();
+        const u64_t completed = mFence.completedValue();
         for (auto it = commandAllocatorPool.begin(); it != commandAllocatorPool.end(); ++it)
         {
             if (it->dxExecuteFenceValue != 0 && completed < it->dxExecuteFenceValue)
@@ -1434,20 +1471,12 @@ namespace eokas
         queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
         _ThrowIfFailed(mDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&mCommandQueue)));
         
-        memset(mFenceValues, 0, sizeof(UINT64) * kFrameCount);
-        _ThrowIfFailed(mDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&mFence)));
-        mFenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
-        if (mFenceEvent == nullptr)
-        {
-            _ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
-        }
+        mFence.create(mDevice.Get());
     }
     
     DX12Device::~DX12Device()
     {
         this->waitForGPU();
-        CloseHandle(mFenceEvent);
-        mFenceEvent = nullptr;
     }
     
     DX12Surface::DX12Surface(DX12Device& device, void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
@@ -1669,7 +1698,7 @@ namespace eokas
         DX12CommandBuffer* dxCommandBuffer = dynamic_cast<DX12CommandBuffer*>(commandBuffer.get());
         ID3D12CommandList* commandLists[] = {dxCommandBuffer->mCommandList.Get()};
         mCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
-        const UINT64 executeFence = SignalFence();
+        const u64_t executeFence = mFence.signal(mCommandQueue.Get());
         mFenceValues[mFrameIndex] = executeFence;
         ReleaseCommandAllocator(std::move(dxCommandBuffer->mCommandAllocator), executeFence);
     }
@@ -1679,12 +1708,8 @@ namespace eokas
         // Recorded command lists keep references to swapchain buffers until the
         // list is reset. Drain the queue, then drop those references before the
         // caller releases the back buffers.
-        const UINT64 waitValue = SignalFence();
-        if (mFence->GetCompletedValue() < waitValue)
-        {
-            _ThrowIfFailed(mFence->SetEventOnCompletion(waitValue, mFenceEvent));
-            WaitForSingleObject(mFenceEvent, INFINITE);
-        }
+        const u64_t waitValue = mFence.signal(mCommandQueue.Get());
+        mFence.wait(waitValue);
 
         for (auto it = mCommandBuffers.begin(); it != mCommandBuffers.end();)
         {
@@ -1701,21 +1726,17 @@ namespace eokas
 
     void DX12Device::waitForGPU()
     {
-        const UINT64 waitValue = SignalFence();
-        _ThrowIfFailed(mFence->SetEventOnCompletion(waitValue, mFenceEvent));
-        WaitForSingleObject(mFenceEvent, INFINITE);
+        const u64_t waitValue = mFence.signal(mCommandQueue.Get());
+        mFence.wait(waitValue);
     }
     
     void DX12Device::waitForNextFrame()
     {
         const uint32_t nextFrameIndex = (mFrameIndex + 1) % kFrameCount;
 
-        const UINT64 completed = mFence->GetCompletedValue();
-        if (completed < mFenceValues[nextFrameIndex])
-        {
-            _ThrowIfFailed(mFence->SetEventOnCompletion(mFenceValues[nextFrameIndex], mFenceEvent));
-            WaitForSingleObject(mFenceEvent, INFINITE);
-        }
+        const u64_t target = mFenceValues[nextFrameIndex];
+        if (!mFence.isCompleted(target))
+            mFence.wait(target);
 
         mFrameIndex = nextFrameIndex;
     }

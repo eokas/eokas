@@ -253,6 +253,27 @@ namespace eokas
         virtual void close() override;
     };
 
+    struct DX12Fence
+    {
+        ComPtr<ID3D12Fence> fence;
+        u64_t value = 0;
+
+        DX12Fence() = default;
+        ~DX12Fence();
+
+        DX12Fence(const DX12Fence&) = delete;
+        DX12Fence& operator=(const DX12Fence&) = delete;
+
+        void create(ID3D12Device* device);
+        u64_t signal(ID3D12CommandQueue* commandQueue);
+        u64_t completedValue() const;
+        bool isCompleted(u64_t fenceValue) const;
+        void wait(u64_t fenceValue);
+
+    private:
+        HANDLE completionEvent = nullptr;
+    };
+
     struct DX12CommandAllocator
     {
         ComPtr<ID3D12CommandAllocator> dxCommandAllocator;
@@ -270,16 +291,13 @@ namespace eokas
         ComPtr <ID3D12CommandQueue> mCommandQueue;
         std::vector<DX12CommandAllocator> commandAllocatorPool;
         
-        ComPtr <ID3D12Fence> mFence;
-        UINT64 mFenceValues[kFrameCount];
-        UINT64 mLastQueuedFence = 0;
-        HANDLE mFenceEvent = nullptr;
+        DX12Fence mFence;
+        u64_t mFenceValues[kFrameCount] = {};
         uint32_t mFrameIndex = 0;
         std::vector<std::weak_ptr<DX12CommandBuffer>> mCommandBuffers;
         std::vector<DX12Surface*> mSurfaces;
 
         void releaseSurfaceResources();
-        UINT64 SignalFence();
         ComPtr<ID3D12CommandAllocator> AcquireCommandAllocator();
         void ReleaseCommandAllocator(ComPtr<ID3D12CommandAllocator> dxCommandAllocator, UINT64 dxExecuteFenceValue);
         
