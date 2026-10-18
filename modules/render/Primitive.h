@@ -13,11 +13,15 @@ namespace eokas
         Material::Ref material;
         bool visible = true;
         bool screenSpace = false;
+        bool castShadow = false;
+        bool receiveShadow = false;
         DynamicBuffer::Ref objectUniforms;
+        DynamicBuffer::Ref shadowUniforms;
 
         virtual ~Primitive() = default;
         virtual void createResources(Device::Ref device);
         virtual void updateUniforms(const Camera& cam);
+        virtual void updateShadowUniforms(const Matrix4& lightViewProj);
         virtual void upload(CommandBuffer::Ref cmd) { (void)cmd; }
         virtual void encode(CommandBuffer::Ref cmd) = 0;
         virtual bool ready() const;

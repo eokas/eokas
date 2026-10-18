@@ -24,6 +24,7 @@ namespace eokas
         {"metallic", MaterialParamType::Float, (uint32_t)offsetof(MaterialUniforms, metallic)},
         {"roughness", MaterialParamType::Float, (uint32_t)offsetof(MaterialUniforms, roughness)},
         {"ao", MaterialParamType::Float, (uint32_t)offsetof(MaterialUniforms, ao)},
+        {"receiveShadow", MaterialParamType::Float, (uint32_t)offsetof(MaterialUniforms, receiveShadow)},
         {"emissive", MaterialParamType::Float4, (uint32_t)offsetof(MaterialUniforms, emissive)},
     };
 
@@ -217,6 +218,14 @@ namespace eokas
         if (mBlend == state)
             return;
         mBlend = state;
+        this->invalidatePipeline();
+    }
+
+    void Material::setColorBufferFormats(const std::vector<Format>& formats)
+    {
+        if (mColorFormats == formats)
+            return;
+        mColorFormats = formats;
         this->invalidatePipeline();
     }
 
@@ -534,9 +543,11 @@ namespace eokas
             for (const auto& sampler : mSamplers)
                 mPipelineObject->setSamplerState(sampler.first, sampler.second);
             mPipelineObject->setBlendState(mBlend);
-            mPipelineObject->setColorBufferFormats({ Format::R8G8B8A8_UNORM });
-            if (mDepthStencil.depthTest)
-                mPipelineObject->setDepthStencilBufferFormat(Format::D32_FLOAT);
+            if (mColorFormats.empty())
+                mPipelineObject->setColorBufferFormats({ Format::R8G8B8A8_UNORM });
+            else
+                mPipelineObject->setColorBufferFormats(mColorFormats);
+            mPipelineObject->setDepthStencilBufferFormat(Format::D32_FLOAT);
             mPipelineObject->end();
 
             if (!mDefaultTexture)

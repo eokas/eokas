@@ -995,9 +995,12 @@ namespace eokas
             for (UINT i = 1; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
                 psoDesc.BlendState.RenderTarget[i] = psoDesc.BlendState.RenderTarget[0];
             
-            const bool depthEnable = mDepthStencilSet && mDepthStencil.depthTest;
-            psoDesc.DepthStencilState.DepthEnable = depthEnable ? TRUE : FALSE;
-            psoDesc.DepthStencilState.DepthWriteMask = (depthEnable && mDepthStencil.depthWrite)
+            const bool depthTest = mDepthStencilSet && mDepthStencil.depthTest;
+            const bool depthWrite = mDepthStencilSet && mDepthStencil.depthWrite;
+            if (depthTest && mDepthStencilBufferFormat == Format::Unknown)
+                throw std::runtime_error("PipelineObject: depth test requires a depth stencil buffer format.");
+            psoDesc.DepthStencilState.DepthEnable = depthTest ? TRUE : FALSE;
+            psoDesc.DepthStencilState.DepthWriteMask = depthWrite
                 ? D3D12_DEPTH_WRITE_MASK_ALL
                 : D3D12_DEPTH_WRITE_MASK_ZERO;
             psoDesc.DepthStencilState.DepthFunc = DX12Utils::transferCompareOp(mDepthStencil.depthFunc);
@@ -1011,11 +1014,8 @@ namespace eokas
             for (UINT i = 0; i < psoDesc.NumRenderTargets; ++i)
                 psoDesc.RTVFormats[i] = DX12Utils::transferFormat(colorFormats[i]);
 
-            const Format depthFormat = mDepthStencilBufferFormat != Format::Unknown
-                ? mDepthStencilBufferFormat
-                : Format::D32_FLOAT;
-            psoDesc.DSVFormat = depthEnable
-                ? DX12Utils::transferFormat(depthFormat)
+            psoDesc.DSVFormat = mDepthStencilBufferFormat != Format::Unknown
+                ? DX12Utils::transferFormat(mDepthStencilBufferFormat)
                 : DXGI_FORMAT_UNKNOWN;
             psoDesc.SampleMask = UINT_MAX;
             psoDesc.SampleDesc.Count = 1;

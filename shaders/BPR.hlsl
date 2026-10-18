@@ -19,6 +19,8 @@ cbuffer Lighting : register(b1)
 {
     float4 ambientAndCount;
     LightData lights[4];
+    float4x4 shadowMatrix;
+    float4 shadowParams;
 };
 
 cbuffer MaterialParams : register(b2)
@@ -27,12 +29,14 @@ cbuffer MaterialParams : register(b2)
     float metallic;
     float roughness;
     float ao;
-    float _pad0;
+    float receiveShadow;
     float4 emissive;
 };
 
 Texture2D gAlbedoTexture : register(t0);
 SamplerState gAlbedoSampler : register(s0);
+Texture2D gShadowMap : register(t1);
+SamplerState gShadowSampler : register(s1);
 
 static const float kPI = 3.14159265;
 
@@ -115,6 +119,32 @@ void evalLightRadiance(LightData l, float3 worldPos, out float3 L, out float3 ra
     }
 }
 
+float evaluateShadow(float3 worldPos, float3 N, float3 L)
+{
+    float3 pos = worldPos + N * 0.08;
+    float4 clip = mul(float4(pos, 1.0), shadowMatrix);
+    float3 ndc = clip.xyz / max(clip.w, 1e-5);
+    float2 uv = float2(ndc.x * 0.5 + 0.5, ndc.y * -0.5 + 0.5);
+    float bias = shadowParams.x * (1.0 + 2.5 * (1.0 - saturate(dot(N, L))));
+    float texel = shadowParams.y;
+    float lit = 0.0;
+    float inside = (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0 && ndc.z > 0.0 && ndc.z < 1.0) ? 1.0 : 0.0;
+    [unroll]
+    for (int y = -1; y <= 1; ++y)
+    {
+        [unroll]
+        for (int x = -1; x <= 1; ++x)
+        {
+            float2 suv = uv + float2(x, y) * texel;
+            float closest = gShadowMap.SampleLevel(gShadowSampler, suv, 0).r;
+            float kept = (ndc.z - bias <= closest) ? 1.0 : 0.0;
+            lit += kept;
+        }
+    }
+    float visibility = lit / 9.0;
+    return lerp(1.0, visibility, inside);
+}
+
 float3 evalCookTorrance(float3 N, float3 V, float3 L, float3 radiance, float3 baseColor, float metal, float rough)
 {
     float3 H = normalize(V + L);
@@ -151,7 +181,11 @@ float4 PSMain(Varying input) : SV_TARGET
         float3 L;
         float3 radiance;
         evalLightRadiance(lights[i], input.worldPos, L, radiance);
-        lit += evalCookTorrance(N, V, L, radiance, base.rgb, metallic, rough);
+        float visibility = 1.0;
+        int sunIndex = (int)(shadowParams.w + 0.5);
+        if (receiveShadow > 0.5 && shadowParams.z > 0.5 && i == sunIndex)
+            visibility = evaluateShadow(input.worldPos, N, L);
+        lit += evalCookTorrance(N, V, L, radiance, base.rgb, metallic, rough) * visibility;
     }
     lit += emissive.rgb;
     return float4(lit, base.a);

@@ -93,6 +93,7 @@ namespace eokas::gpu {
             depthStencil.depthWrite = true;
             depthStencil.depthFunc = CompareOp::Less;
             mPipelineObject->setDepthStencilState(depthStencil);
+            mPipelineObject->setDepthStencilBufferFormat(Format::D32_FLOAT);
             SamplerState sampler;
             sampler.minFilter = SamplerFilterMode::Linear;
             sampler.magFilter = SamplerFilterMode::Linear;

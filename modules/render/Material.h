@@ -24,6 +24,7 @@ namespace eokas
         void setDepthStencilState(const DepthStencilState& state);
         void setBlendState(const BlendState& state);
         void setSamplerState(uint32_t index, const SamplerState& state);
+        void setColorBufferFormats(const std::vector<Format>& formats);
 
         bool setParameter(const String& name, float value);
         bool setParameter(const String& name, const Vector2& value);
@@ -65,6 +66,7 @@ namespace eokas
         CullMode mCullMode = CullMode::Front;
         DepthStencilState mDepthStencil;
         BlendState mBlend;
+        std::vector<Format> mColorFormats;
         std::vector<std::pair<uint32_t, SamplerState>> mSamplers;
 
         MaterialUniforms mUniformData{};

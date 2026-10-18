@@ -2,6 +2,8 @@
 #define _EOKAS_RENDER_RENDERER_H_
 
 #include "./header.h"
+#include "./Light.h"
+#include "./Material.h"
 
 namespace eokas
 {
@@ -27,10 +29,18 @@ namespace eokas
 
     private:
         void ensureResources(Space& space);
-        void updateLighting(Space& space);
+        void ensureShadowPass();
+        bool findSunLight(const Space& space, Light::Ref& outLight, int& outIndex) const;
+        Matrix4 buildShadowMatrix(const Space& space, const Light& light) const;
+        void updateLighting(Space& space, const Matrix4* shadowMatrix, int shadowLightIndex);
+        void renderShadowPass(CommandBuffer::Ref cmd, Space& space);
 
         Device::Ref mDevice;
         CommandBuffer::Ref mCommandBuffer;
+        RenderTarget::Ref mShadowTarget;
+        Material::Ref mShadowMaterial;
+        bool mShadowAsShaderResource = false;
+        static constexpr uint32_t kShadowMapSize = 2048;
     };
 }
 

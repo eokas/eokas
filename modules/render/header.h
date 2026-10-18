@@ -41,6 +41,8 @@ namespace eokas
     {
         float ambientAndCount[4];
         LightUniforms lights[kMaxSpaceLights];
+        Matrix4 shadowMatrix;
+        float shadowParams[4];
     };
 
     struct MaterialUniforms
@@ -49,7 +51,7 @@ namespace eokas
         float metallic;
         float roughness;
         float ao;
-        float _pad0;
+        float receiveShadow;
         float emissive[4];
     };
 }

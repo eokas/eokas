@@ -43,6 +43,19 @@ namespace eokas
         objectUniforms->unmap();
     }
 
+    void Primitive::updateShadowUniforms(const Matrix4& lightViewProj)
+    {
+        if (!shadowUniforms)
+            return;
+        TransformUniforms u{};
+        u.world = transform.toMatrix();
+        u.wvp = Matrix4::transform(u.world, lightViewProj);
+        u.cameraPos[3] = 1.0f;
+        void* ptr = shadowUniforms->map();
+        memcpy(ptr, &u, sizeof(u));
+        shadowUniforms->unmap();
+    }
+
     bool Primitive::ready() const
     {
         return material && material->isReady() && objectUniforms;

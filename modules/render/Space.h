@@ -15,6 +15,8 @@ namespace eokas
         std::vector<Primitive::Ref> primitives;
         Color clearColor = Color(0, 0.2f, 0.4f, 1);
         Color ambient = Color(0.15f, 0.15f, 0.15f, 1);
+        Vector3 shadowCenter = Vector3(0, 0, 0);
+        float shadowExtent = 64.0f;
         DynamicBuffer::Ref lightingUniforms;
 
         void add(Camera::Ref camera);
