@@ -220,7 +220,7 @@ namespace eokas
         return x1 < clip.origin.x || x0 > cx1 || y1 < clip.origin.y || y0 > cy1;
     }
 
-    void UIPrimitive::setTexture(Texture::Ref tex)
+    void UIPrimitive::setTexture(Texture2D::Ref tex)
     {
         texture = tex;
     }
@@ -396,7 +396,7 @@ namespace eokas
             options.height = mPendingAtlasSize;
             options.mipCount = 1;
             options.format = Format::R8G8B8A8_UNORM;
-            texture = device->createTexture(options);
+            texture = device->createTexture2D(options);
             if (material)
                 material->setParameter(kUIMainTexture, texture);
         }

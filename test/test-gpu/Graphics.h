@@ -30,7 +30,7 @@ namespace eokas::gpu {
         StaticBuffer::Ref mIndexBuffer;
         uint32_t iDataLength;
         Format iDataFormat;
-        Texture::Ref mTexture;
+        Texture2D::Ref mTexture;
         DynamicBuffer::Ref mUniformBuffer;
         uint32_t mIndexCount;
         Matrix4 mViewProj;
@@ -78,7 +78,7 @@ namespace eokas::gpu {
             options.height = 256;
             options.mipCount = 1;
             options.format = Format::R8G8B8A8_UNORM;
-            mTexture = mDevice->createTexture(options);
+            mTexture = mDevice->createTexture2D(options);
             
             mUniformBuffer = mDevice->createDynamicBuffer(sizeof(Matrix4) * 2);
             

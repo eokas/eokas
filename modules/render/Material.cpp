@@ -543,7 +543,7 @@ namespace eokas
                 options.height = 1;
                 options.mipCount = 1;
                 options.format = Format::R8G8B8A8_UNORM;
-                mDefaultTexture = mDevice->createTexture(options);
+                mDefaultTexture = mDevice->createTexture2D(options);
                 mTextureUploaded = false;
             }
         }

@@ -17,13 +17,13 @@ namespace eokas
         DynamicBuffer::Ref indexBuffer;
         uint32_t indexLength = 0;
         Format indexFormat = Format::R32_UINT;
-        Texture::Ref texture;
+        Texture2D::Ref texture;
         uint32_t indexCount = 0;
 
         UIPrimitive();
 
         void begin();
-        void setTexture(Texture::Ref tex);
+        void setTexture(Texture2D::Ref tex);
         void pushClip(const Rect& screenClip);
         void popClip();
         bool outsideClip(const Rect& screen) const;

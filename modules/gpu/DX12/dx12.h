@@ -142,14 +142,14 @@ namespace eokas
         virtual void unmap() override;
     };
     
-    struct DX12Texture : public Texture
+    struct DX12Texture2D : public Texture2D
     {
         TextureOptions mOptions;
         ComPtr <ID3D12Resource> mResource;
         D3D12_RESOURCE_STATES mState = D3D12_RESOURCE_STATE_COPY_DEST;
-        
-        DX12Texture(const DX12Device& device, const TextureOptions& options);
-        
+
+        DX12Texture2D(const DX12Device& device, const TextureOptions& options);
+
         virtual void* getNativeResource() const override;
         virtual const TextureOptions& getOptions() const override;
     };
@@ -208,7 +208,7 @@ namespace eokas
         const DX12Device& mDevice;
         PipelineLayout mLayout;
         std::map<uint32_t, Buffer::Ref> mUniformBuffers;
-        std::map<uint32_t, DX12Texture::Ref> mTextures;
+        std::map<uint32_t, Texture::Ref> mTextures;
         std::shared_ptr<DX12DescriptorHeap> mSRVHeap;
 
         DX12PipelineBindings(const DX12Device& device, const PipelineLayout& layout);
@@ -248,7 +248,7 @@ namespace eokas
         virtual void setIndexBuffer(Buffer::Ref buffer, uint32_t length, Format format) override;
         virtual void drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, uint32_t startInstanceLocation) override;
         virtual void fillBuffer(StaticBuffer::Ref target, const void* data, uint32_t size) override;
-        virtual void fillTexture(Texture::Ref target, const std::vector<uint8_t>& source) override;
+        virtual void fillTexture(Texture2D::Ref target, const std::vector<uint8_t>& source) override;
         virtual void barrier(const std::vector<Barrier>& barriers) override;
         virtual void close() override;
     };
@@ -308,7 +308,7 @@ namespace eokas
         virtual StaticBuffer::Ref createStaticBuffer(uint32_t length) override;
         virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) override;
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length) override;
-        virtual Texture::Ref createTexture(const TextureOptions& options) override;
+        virtual Texture2D::Ref createTexture2D(const TextureOptions& options) override;
         virtual ShaderProgram::Ref createShaderProgram(const ShaderOptions& options) override;
         virtual PipelineObject::Ref createPipelineObject() override;
         virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) override;

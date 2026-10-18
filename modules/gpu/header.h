@@ -122,8 +122,13 @@ namespace eokas
     struct Texture : public Resource
     {
         using Ref = std::shared_ptr<Texture>;
-        
+
         virtual const TextureOptions& getOptions() const = 0;
+    };
+
+    struct Texture2D : public Texture
+    {
+        using Ref = std::shared_ptr<Texture2D>;
     };
     
     struct VertexElement
@@ -343,7 +348,7 @@ namespace eokas
         virtual void setIndexBuffer(Buffer::Ref buffer, uint32_t length, Format format) = 0;
         virtual void drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, uint32_t startInstanceLocation) = 0;
         virtual void fillBuffer(StaticBuffer::Ref target, const void* data, uint32_t size) = 0;
-        virtual void fillTexture(Texture::Ref target, const std::vector<uint8_t>& source) = 0;
+        virtual void fillTexture(Texture2D::Ref target, const std::vector<uint8_t>& source) = 0;
         virtual void barrier(const std::vector<Barrier>& barriers) = 0;
         virtual void close() = 0;
     };
@@ -373,7 +378,7 @@ namespace eokas
         virtual StaticBuffer::Ref createStaticBuffer(uint32_t length) = 0;
         virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) = 0;
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length) = 0;
-        virtual Texture::Ref createTexture(const TextureOptions& options) = 0;
+        virtual Texture2D::Ref createTexture2D(const TextureOptions& options) = 0;
         virtual ShaderProgram::Ref createShaderProgram(const ShaderOptions& options) = 0;
         virtual PipelineObject::Ref createPipelineObject() = 0;
         virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) = 0;

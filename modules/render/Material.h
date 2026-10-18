@@ -76,7 +76,7 @@ namespace eokas
         ShaderProgram::Ref mPS;
         PipelineObject::Ref mPipelineObject;
         PipelineBindings::Ref mPipelineBindings;
-        Texture::Ref mDefaultTexture;
+        Texture2D::Ref mDefaultTexture;
         bool mPipelineDirty = true;
         bool mBindingsDirty = true;
         bool mUniformsDirty = true;

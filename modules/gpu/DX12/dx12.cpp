@@ -482,7 +482,7 @@ namespace eokas
         mResource->Unmap(0, &written);
     }
     
-    DX12Texture::DX12Texture(const DX12Device& device, const TextureOptions& options)
+    DX12Texture2D::DX12Texture2D(const DX12Device& device, const TextureOptions& options)
         : mOptions(options)
     {
         auto& dxDevice = device.mDevice;
@@ -493,7 +493,7 @@ namespace eokas
         textureDesc.Alignment = 0;
         textureDesc.Width = options.width;
         textureDesc.Height = options.height;
-        textureDesc.DepthOrArraySize = options.depth == 0 ? 1 : options.depth;
+        textureDesc.DepthOrArraySize = 1;
         textureDesc.MipLevels = options.mipCount;
         textureDesc.Format = DX12Utils::transferFormat(options.format);
         textureDesc.SampleDesc.Count = 1;
@@ -507,12 +507,12 @@ namespace eokas
         _ThrowIfFailed(dxDevice->CreateCommittedResource(&textureHeapProps, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mResource)));
     }
     
-    void* DX12Texture::getNativeResource() const
+    void* DX12Texture2D::getNativeResource() const
     {
         return mResource.Get();
     }
     
-    const TextureOptions& DX12Texture::getOptions() const
+    const TextureOptions& DX12Texture2D::getOptions() const
     {
         return this->mOptions;
     }
@@ -938,10 +938,10 @@ namespace eokas
             }
 
             auto texture = it->second;
-            auto* dxTexture = dynamic_cast<DX12Texture*>(texture.get());
+            auto* dxTexture = dynamic_cast<DX12Texture2D*>(texture.get());
             if (!dxTexture)
             {
-                throw std::runtime_error("PipelineBindings: texture is not a DX12Texture.");
+                throw std::runtime_error("PipelineBindings: texture is not a DX12Texture2D.");
             }
             auto dxResource = dxTexture->mResource;
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -1259,11 +1259,11 @@ namespace eokas
         mClosed = true;
     }
     
-    void DX12CommandBuffer::fillTexture(Texture::Ref target, const std::vector<uint8_t>& source)
+    void DX12CommandBuffer::fillTexture(Texture2D::Ref target, const std::vector<uint8_t>& source)
     {
         auto& dxDevice = mDevice.mDevice;
         
-        DX12Texture* dxTarget = dynamic_cast<DX12Texture*>(target.get());
+        DX12Texture2D* dxTarget = dynamic_cast<DX12Texture2D*>(target.get());
         
         D3D12_RESOURCE_DESC dxTargetDesc = dxTarget->mResource->GetDesc();
         
@@ -1657,9 +1657,9 @@ namespace eokas
         return std::make_shared<DX12DynamicBuffer>(*this, length);
     }
     
-    Texture::Ref DX12Device::createTexture(const TextureOptions& options)
+    Texture2D::Ref DX12Device::createTexture2D(const TextureOptions& options)
     {
-        return std::make_shared<DX12Texture>(*this, options);
+        return std::make_shared<DX12Texture2D>(*this, options);
     }
     
     ShaderProgram::Ref DX12Device::createShaderProgram(const ShaderOptions& options)
