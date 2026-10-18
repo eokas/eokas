@@ -118,14 +118,14 @@ namespace eokas
         mCommandBuffer->open();
 
         mCommandBuffer->setViewport(cam->viewport);
-        RenderTarget::Ref rt = surface->getActiveRenderTarget();
-        RenderTarget::Ref ds = surface->getActiveDepthTarget();
-        Barrier begin{rt, ResourceState::Present, ResourceState::RenderTarget};
+        RenderTarget::Ref fb = surface->getActiveRenderTarget();
+        Texture2D::Ref color = fb->getColorBuffer(0);
+        Barrier begin{color, ResourceState::Present, ResourceState::RenderTarget};
         mCommandBuffer->barrier({begin});
-        mCommandBuffer->setRenderTargets({rt}, ds);
+        mCommandBuffer->setRenderTarget(fb);
         float c[4] = {space.clearColor.r, space.clearColor.g, space.clearColor.b, space.clearColor.a};
-        mCommandBuffer->clearRenderTarget(rt, c);
-        mCommandBuffer->clearDepthStencil(ds);
+        mCommandBuffer->clearRenderTargetColorBuffer(fb, 0, c);
+        mCommandBuffer->clearRenderTargetDepthStencilBuffer(fb);
 
         for (auto& p : space.primitives)
         {
@@ -137,7 +137,7 @@ namespace eokas
             p->encode(mCommandBuffer);
         }
 
-        Barrier end{rt, ResourceState::RenderTarget, ResourceState::Present};
+        Barrier end{color, ResourceState::RenderTarget, ResourceState::Present};
         mCommandBuffer->barrier({end});
         mCommandBuffer->close();
         mDevice->commitCommandBuffer(mCommandBuffer);

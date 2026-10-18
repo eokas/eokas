@@ -180,26 +180,26 @@ namespace eokas::gpu {
                 mCommandBuffer->setPipelineBindings(mPipelineBindings);
                 mCommandBuffer->setViewport(mViewport);
                 
-                RenderTarget::Ref renderTarget = mSurface->getActiveRenderTarget();
-                RenderTarget::Ref depthTarget = mSurface->getActiveDepthTarget();
+                RenderTarget::Ref frameBuffer = mSurface->getActiveRenderTarget();
+                Texture2D::Ref color = frameBuffer->getColorBuffer(0);
                 
                 Barrier begin;
-                begin.resource = renderTarget;
+                begin.resource = color;
                 begin.before = ResourceState::Present;
                 begin.after = ResourceState::RenderTarget;
                 mCommandBuffer->barrier({begin});
                 
-                mCommandBuffer->setRenderTargets({renderTarget}, depthTarget);
+                mCommandBuffer->setRenderTarget(frameBuffer);
                 float clearColor[4] = {0.0f, 0.2f, 0.4f, 1.0f};
-                mCommandBuffer->clearRenderTarget(renderTarget, clearColor);
-                mCommandBuffer->clearDepthStencil(depthTarget);
+                mCommandBuffer->clearRenderTargetColorBuffer(frameBuffer, 0, clearColor);
+                mCommandBuffer->clearRenderTargetDepthStencilBuffer(frameBuffer);
                 mCommandBuffer->setTopology(Topology::TriangleList);
                 mCommandBuffer->setVertexBuffer(mVertexBuffer, vDataLength, vDataStride);
                 mCommandBuffer->setIndexBuffer(mIndexBuffer, iDataLength, iDataFormat);
                 mCommandBuffer->drawIndexedInstanced(mIndexCount, 1, 0, 0, 0);
                 
                 Barrier end;
-                end.resource = renderTarget;
+                end.resource = color;
                 end.before = ResourceState::RenderTarget;
                 end.after = ResourceState::Present;
                 mCommandBuffer->barrier({end});

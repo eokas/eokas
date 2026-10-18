@@ -534,6 +534,9 @@ namespace eokas
             for (const auto& sampler : mSamplers)
                 mPipelineObject->setSamplerState(sampler.first, sampler.second);
             mPipelineObject->setBlendState(mBlend);
+            mPipelineObject->setColorBufferFormats({ Format::R8G8B8A8_UNORM });
+            if (mDepthStencil.depthTest)
+                mPipelineObject->setDepthStencilBufferFormat(Format::D32_FLOAT);
             mPipelineObject->end();
 
             if (!mDefaultTexture)
