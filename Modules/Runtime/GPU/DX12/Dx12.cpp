@@ -1,0 +1,1917 @@
+
+#include "./Dx12.h"
+
+#include <strsafe.h>
+
+#include <cstdlib>
+#include <malloc.h>
+#include <memory.h>
+#include <string>
+#include <exception>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+#include <map>
+#include <codecvt>
+#include <d3d11shader.h>
+
+namespace eokas
+{
+    class HRException : public std::exception
+    {
+    public:
+        HRException(HRESULT hr, LPCSTR file, UINT line)
+            : std::exception(), m_error(hr)
+        {
+#ifdef UNICODE
+            const wchar_t* wcs = m_error.ErrorMessage();
+            std::wstring_convert<std::codecvt_utf8<wchar_t>> convertor;
+            std::string mbs = convertor.to_bytes(wcs);
+#else
+            std::string mbs = m_error.ErrorMessage();
+#endif
+            char buffer[1024] = {0};
+            sprintf_s(buffer, "\n  at %s : %d", file, line);
+            m_what = mbs + buffer;
+        }
+        
+        const char* what() const noexcept override
+        {
+            return m_what.c_str();
+        }
+    
+    private:
+        _com_error m_error;
+        std::string m_what;
+    };
+
+#define _ThrowIfFailed(hr) { HRESULT ret = (hr); if(FAILED(ret)) throw HRException(ret, __FILE__, __LINE__); }
+
+    namespace
+    {
+        constexpr uint32_t kConstantBufferAlignment = 256;
+
+        uint32_t alignUp(uint32_t value, uint32_t alignment)
+        {
+            return (value + alignment - 1) & ~(alignment - 1);
+        }
+    }
+
+    static void addReflectedBinding(PipelineLayout& layout, const char* name, D3D_SHADER_INPUT_TYPE type, uint32_t bindPoint, uint32_t bindCount)
+    {
+        PipelineLayoutEntry entry;
+        entry.name = name ? name : "";
+        entry.slot = bindPoint;
+        entry.count = bindCount;
+        if (type == D3D_SIT_CBUFFER)
+            entry.type = PipelineResourceType::UniformBuffer;
+        else if (type == D3D_SIT_TEXTURE)
+            entry.type = PipelineResourceType::Texture;
+        else if (type == D3D_SIT_SAMPLER)
+            entry.type = PipelineResourceType::Sampler;
+        else
+            return;
+        layout.add(entry);
+    }
+
+    static void reflectShaderProgramParameters(ID3DBlob* code, PipelineLayout& parameters)
+    {
+        ComPtr<ID3D12ShaderReflection> reflector12;
+        if (SUCCEEDED(D3DReflect(code->GetBufferPointer(), code->GetBufferSize(), IID_PPV_ARGS(&reflector12))))
+        {
+            D3D12_SHADER_DESC shaderDesc = {};
+            _ThrowIfFailed(reflector12->GetDesc(&shaderDesc));
+            for (UINT i = 0; i < shaderDesc.BoundResources; i++)
+            {
+                D3D12_SHADER_INPUT_BIND_DESC bindDesc = {};
+                _ThrowIfFailed(reflector12->GetResourceBindingDesc(i, &bindDesc));
+                addReflectedBinding(parameters, bindDesc.Name, bindDesc.Type, bindDesc.BindPoint, bindDesc.BindCount);
+            }
+            return;
+        }
+
+        ComPtr<ID3D11ShaderReflection> reflector11;
+        _ThrowIfFailed(D3DReflect(
+            code->GetBufferPointer(),
+            code->GetBufferSize(),
+            IID_ID3D11ShaderReflection,
+            &reflector11));
+        D3D11_SHADER_DESC shaderDesc = {};
+        _ThrowIfFailed(reflector11->GetDesc(&shaderDesc));
+        for (UINT i = 0; i < shaderDesc.BoundResources; i++)
+        {
+            D3D11_SHADER_INPUT_BIND_DESC bindDesc = {};
+            _ThrowIfFailed(reflector11->GetResourceBindingDesc(i, &bindDesc));
+            addReflectedBinding(parameters, bindDesc.Name, bindDesc.Type, bindDesc.BindPoint, bindDesc.BindCount);
+        }
+    }
+
+    
+    DXGI_FORMAT DX12Utils::transferFormat(Format format)
+    {
+        switch (format)
+        {
+            case Format::Unknown:
+                break;
+            case Format::R32_UINT: return DXGI_FORMAT_R32_UINT;
+            case Format::R32_FLOAT: return DXGI_FORMAT_R32_FLOAT;
+            case Format::R8G8B8A8_UNORM: return DXGI_FORMAT_R8G8B8A8_UNORM;
+            case Format::B8G8R8A8_UNORM: return DXGI_FORMAT_B8G8R8A8_UNORM;
+            case Format::R16G16B16A16_FLOAT: return DXGI_FORMAT_R16G16B16A16_FLOAT;
+            case Format::R32G32_FLOAT: return DXGI_FORMAT_R32G32_FLOAT;
+            case Format::R32G32B32_FLOAT: return DXGI_FORMAT_R32G32B32_FLOAT;
+            case Format::R32G32B32A32_FLOAT: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+            case Format::D32_FLOAT: return DXGI_FORMAT_D32_FLOAT;
+            case Format::D24_UNORM_S8_UINT: return DXGI_FORMAT_D24_UNORM_S8_UINT;
+            case Format::D16_UNORM: return DXGI_FORMAT_D16_UNORM;
+        }
+        return DXGI_FORMAT_UNKNOWN;
+    }
+
+    D3D12_COMPARISON_FUNC DX12Utils::transferCompareOp(CompareOp op)
+    {
+        switch (op)
+        {
+            case CompareOp::Always: return D3D12_COMPARISON_FUNC_ALWAYS;
+            case CompareOp::Never: return D3D12_COMPARISON_FUNC_NEVER;
+            case CompareOp::Equal: return D3D12_COMPARISON_FUNC_EQUAL;
+            case CompareOp::NotEqual: return D3D12_COMPARISON_FUNC_NOT_EQUAL;
+            case CompareOp::Less: return D3D12_COMPARISON_FUNC_LESS;
+            case CompareOp::LessEqual: return D3D12_COMPARISON_FUNC_LESS_EQUAL;
+            case CompareOp::Greater: return D3D12_COMPARISON_FUNC_GREATER;
+            case CompareOp::GreaterEqual: return D3D12_COMPARISON_FUNC_GREATER_EQUAL;
+        }
+        return D3D12_COMPARISON_FUNC_LESS;
+    }
+
+    D3D12_RESOURCE_STATES DX12Utils::transferResourceState(ResourceState state)
+    {
+        switch (state)
+        {
+            case ResourceState::Common: return D3D12_RESOURCE_STATE_COMMON;
+            case ResourceState::Present: return D3D12_RESOURCE_STATE_PRESENT;
+            case ResourceState::RenderTarget: return D3D12_RESOURCE_STATE_RENDER_TARGET;
+            case ResourceState::DepthWrite: return D3D12_RESOURCE_STATE_DEPTH_WRITE;
+            case ResourceState::DepthRead: return D3D12_RESOURCE_STATE_DEPTH_READ;
+            case ResourceState::ShaderResource: return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            case ResourceState::CopyDest: return D3D12_RESOURCE_STATE_COPY_DEST;
+            case ResourceState::CopySource: return D3D12_RESOURCE_STATE_COPY_SOURCE;
+        }
+        return D3D12_RESOURCE_STATE_COMMON;
+    }
+
+    D3D12_FILTER DX12Utils::transferFilter(SamplerFilterMode minFilter, SamplerFilterMode magFilter, SamplerFilterMode mipFilter)
+    {
+        if (minFilter == SamplerFilterMode::Anisotropic
+            || magFilter == SamplerFilterMode::Anisotropic
+            || mipFilter == SamplerFilterMode::Anisotropic)
+        {
+            return D3D12_FILTER_ANISOTROPIC;
+        }
+        D3D12_FILTER_TYPE minType = (minFilter == SamplerFilterMode::Point)
+            ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
+        D3D12_FILTER_TYPE magType = (magFilter == SamplerFilterMode::Point)
+            ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
+        D3D12_FILTER_TYPE mipType = (mipFilter == SamplerFilterMode::Point)
+            ? D3D12_FILTER_TYPE_POINT : D3D12_FILTER_TYPE_LINEAR;
+        return D3D12_ENCODE_BASIC_FILTER(minType, magType, mipType, D3D12_FILTER_REDUCTION_TYPE_STANDARD);
+    }
+
+    D3D12_TEXTURE_ADDRESS_MODE DX12Utils::transferAddressMode(SamplerAddressMode mode)
+    {
+        switch (mode)
+        {
+            case SamplerAddressMode::Clamp: return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+            case SamplerAddressMode::Border: return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+            case SamplerAddressMode::Repeat: return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+            case SamplerAddressMode::Mirror: return D3D12_TEXTURE_ADDRESS_MODE_MIRROR;
+        }
+        return D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    }
+
+    void DX12Utils::fillStaticSampler(D3D12_STATIC_SAMPLER_DESC& desc, uint32_t shaderRegister, const SamplerState& state)
+    {
+        const bool anisotropic =
+            state.minFilter == SamplerFilterMode::Anisotropic
+            || state.magFilter == SamplerFilterMode::Anisotropic
+            || state.mipFilter == SamplerFilterMode::Anisotropic;
+
+        desc = {};
+        desc.Filter = transferFilter(state.minFilter, state.magFilter, state.mipFilter);
+        desc.AddressU = transferAddressMode(state.addressU);
+        desc.AddressV = transferAddressMode(state.addressV);
+        desc.AddressW = transferAddressMode(state.addressW);
+        desc.MipLODBias = 0;
+        desc.MaxAnisotropy = anisotropic ? 16u : 1u;
+        desc.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+        desc.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+        desc.MinLOD = 0.0f;
+        desc.MaxLOD = D3D12_FLOAT32_MAX;
+        desc.ShaderRegister = shaderRegister;
+        desc.RegisterSpace = 0;
+        desc.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+    }
+
+    D3D12_BLEND DX12Utils::transferBlendFactor(BlendFactor factor)
+    {
+        switch (factor)
+        {
+            case BlendFactor::Zero: return D3D12_BLEND_ZERO;
+            case BlendFactor::One: return D3D12_BLEND_ONE;
+            case BlendFactor::SrcColor: return D3D12_BLEND_SRC_COLOR;
+            case BlendFactor::OneMinusSrcColor: return D3D12_BLEND_INV_SRC_COLOR;
+            case BlendFactor::DstColor: return D3D12_BLEND_DEST_COLOR;
+            case BlendFactor::OneMinusDstColor: return D3D12_BLEND_INV_DEST_COLOR;
+            case BlendFactor::SrcAlpha: return D3D12_BLEND_SRC_ALPHA;
+            case BlendFactor::OneMinusSrcAlpha: return D3D12_BLEND_INV_SRC_ALPHA;
+            case BlendFactor::DstAlpha: return D3D12_BLEND_DEST_ALPHA;
+            case BlendFactor::OneMinusDstAlpha: return D3D12_BLEND_INV_DEST_ALPHA;
+        }
+        return D3D12_BLEND_ONE;
+    }
+
+    D3D12_BLEND_OP DX12Utils::transferBlendOp(BlendOp op)
+    {
+        switch (op)
+        {
+            case BlendOp::Add: return D3D12_BLEND_OP_ADD;
+            case BlendOp::Subtract: return D3D12_BLEND_OP_SUBTRACT;
+            case BlendOp::ReverseSubtract: return D3D12_BLEND_OP_REV_SUBTRACT;
+            case BlendOp::Min: return D3D12_BLEND_OP_MIN;
+            case BlendOp::Max: return D3D12_BLEND_OP_MAX;
+        }
+        return D3D12_BLEND_OP_ADD;
+    }
+    
+    D3D12_PRIMITIVE_TOPOLOGY DX12Utils::transferTopology(Topology topology)
+    {
+        switch(topology)
+        {
+            case Topology::Undefined: return D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+            case Topology::PointList: return D3D_PRIMITIVE_TOPOLOGY_POINTLIST;
+            case Topology::LineList: return D3D_PRIMITIVE_TOPOLOGY_LINELIST;
+            case Topology::LineStrip: return D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;
+            case Topology::TriangleList: return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+            case Topology::TriangleStrip: return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+            case Topology::LineList_Adj: return D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ;
+            case Topology::LineStrip_Adj: return D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;
+            case Topology::TriangleList_Adj: return D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ;
+            case Topology::TriangleStrip_Adj: return D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ;
+            default:
+                break;
+        }
+        return D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
+    }
+    
+    DX12DescriptorHeap::DX12DescriptorHeap(const DX12Device& device, Usage usage, u32_t numDescriptorsPerHeap)
+        : mDevice(device)
+        , mDesc()
+    {
+        auto& dxDevice = device.mDevice;
+        
+        if(usage == Usage::RTV)
+        {
+            mDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+            mDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        }
+        else if(usage == Usage::DSV)
+        {
+            mDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+            mDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+        }
+        else if(usage == Usage::SRV || usage == Usage::UAV)
+        {
+            mDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+            mDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        }
+        mDesc.NumDescriptors = numDescriptorsPerHeap;
+        
+        mHeaps.clear();
+        mDescriptorStride = dxDevice->GetDescriptorHandleIncrementSize(mDesc.Type);
+        mDescriptorCount = 0;
+    }
+    
+    DX12DescriptorHeap::~DX12DescriptorHeap()
+    {
+        mHeaps.clear();
+    }
+    
+    D3D12_CPU_DESCRIPTOR_HANDLE DX12DescriptorHeap::acquire()
+    {
+        auto& dxDevice = mDevice.mDevice;
+        
+        u32_t heapIndex = mDescriptorCount / mDesc.NumDescriptors;
+        u32_t heapOffset = mDescriptorCount % mDesc.NumDescriptors;
+        
+        ComPtr<ID3D12DescriptorHeap> heap;
+        if(heapIndex < mHeaps.size())
+        {
+            heap = mHeaps[heapIndex];
+        }
+        else
+        {
+            _ThrowIfFailed(dxDevice->CreateDescriptorHeap(&mDesc, IID_PPV_ARGS(&heap)));
+            mHeaps.push_back(heap);
+        }
+        
+        D3D12_CPU_DESCRIPTOR_HANDLE handle = heap->GetCPUDescriptorHandleForHeapStart();
+        handle.ptr += mDescriptorStride * heapOffset;
+        
+        mDescriptorCount += 1;
+        
+        return handle;
+    }
+    
+    DX12RenderTarget::DX12RenderTarget(DX12Device& device, const RenderTargetOptions& options)
+        : DX12RenderTarget(
+            device,
+            createColorBuffers(device, options),
+            options.depthStencilFormat == Format::Unknown
+                ? nullptr
+                : createDepthBuffer(device, options.width, options.height, options.depthStencilFormat))
+    {
+    }
+
+    DX12RenderTarget::DX12RenderTarget(DX12Device& device, const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencilBuffer)
+        : mDevice(device)
+        , mColorBuffers(colorBuffers)
+        , mDepthStencilBuffer(depthStencilBuffer)
+    {
+        if (mColorBuffers.empty())
+        {
+            throw std::runtime_error("DX12RenderTarget requires at least one color buffer.");
+        }
+        const TextureOptions& size = mColorBuffers[0]->getOptions();
+        mWidth = size.width;
+        mHeight = size.height;
+        createViews();
+    }
+
+    std::vector<Texture2D::Ref> DX12RenderTarget::createColorBuffers(DX12Device& device, const RenderTargetOptions& options)
+    {
+        if (options.colorFormats.empty())
+        {
+            throw std::runtime_error("RenderTargetOptions requires at least one color format.");
+        }
+        std::vector<Texture2D::Ref> colors;
+        colors.reserve(options.colorFormats.size());
+        for (Format format : options.colorFormats)
+        {
+            colors.push_back(createColorBuffer(device, options.width, options.height, format));
+        }
+        return colors;
+    }
+
+    void DX12RenderTarget::createViews()
+    {
+        const u32_t colorCount = (u32_t)mColorBuffers.size();
+        mRTVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::RTV, colorCount);
+        for (const Texture2D::Ref& color : mColorBuffers)
+        {
+            createColorView(color);
+        }
+        if (mDepthStencilBuffer)
+        {
+            mDSVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::DSV, 1);
+            createDepthView();
+        }
+    }
+
+    uint32_t DX12RenderTarget::getWidth() const { return mWidth; }
+    uint32_t DX12RenderTarget::getHeight() const { return mHeight; }
+    uint32_t DX12RenderTarget::getColorBufferCount() const { return (uint32_t)mColorBuffers.size(); }
+
+    Texture2D::Ref DX12RenderTarget::getColorBuffer(uint32_t index) const
+    {
+        return mColorBuffers.at(index);
+    }
+
+    Texture2D::Ref DX12RenderTarget::getDepthStencilBuffer() const
+    {
+        return mDepthStencilBuffer;
+    }
+
+    Texture2D::Ref DX12RenderTarget::createColorBuffer(DX12Device& device, uint32_t width, uint32_t height, Format format)
+    {
+        TextureOptions tex;
+        tex.width = width;
+        tex.height = height;
+        tex.format = format;
+        tex.mipCount = 1;
+
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = width;
+        desc.Height = height;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = DX12Utils::transferFormat(format);
+        desc.SampleDesc.Count = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+        D3D12_CLEAR_VALUE clearValue = {};
+        clearValue.Format = desc.Format;
+        D3D12_HEAP_PROPERTIES heapProps = {};
+        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+        ComPtr<ID3D12Resource> resource;
+        _ThrowIfFailed(device.mDevice->CreateCommittedResource(
+            &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+            D3D12_RESOURCE_STATE_RENDER_TARGET, &clearValue, IID_PPV_ARGS(&resource)));
+        return std::make_shared<DX12Texture2D>(tex, resource, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    }
+
+    void DX12RenderTarget::createColorView(Texture2D::Ref color)
+    {
+        auto* dxColor = dynamic_cast<DX12Texture2D*>(color.get());
+        D3D12_CPU_DESCRIPTOR_HANDLE view = mRTVHeap->acquire();
+        mDevice.mDevice->CreateRenderTargetView(dxColor->mResource.Get(), nullptr, view);
+        mColorViews.push_back(view);
+    }
+
+    Texture2D::Ref DX12RenderTarget::createDepthBuffer(DX12Device& device, uint32_t width, uint32_t height, Format format)
+    {
+        TextureOptions tex;
+        tex.width = width;
+        tex.height = height;
+        tex.format = format;
+        tex.mipCount = 1;
+
+        D3D12_RESOURCE_DESC desc = {};
+        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        desc.Width = width;
+        desc.Height = height;
+        desc.DepthOrArraySize = 1;
+        desc.MipLevels = 1;
+        desc.Format = DX12Utils::transferFormat(format);
+        desc.SampleDesc.Count = 1;
+        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+        D3D12_CLEAR_VALUE clearValue = {};
+        clearValue.Format = desc.Format;
+        clearValue.DepthStencil.Depth = 1.0f;
+        clearValue.DepthStencil.Stencil = 0;
+        D3D12_HEAP_PROPERTIES heapProps = {};
+        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+        ComPtr<ID3D12Resource> resource;
+        _ThrowIfFailed(device.mDevice->CreateCommittedResource(
+            &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+            D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue, IID_PPV_ARGS(&resource)));
+        return std::make_shared<DX12Texture2D>(tex, resource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+    }
+
+    void DX12RenderTarget::createDepthView()
+    {
+        auto* dxDepth = dynamic_cast<DX12Texture2D*>(mDepthStencilBuffer.get());
+        mDepthView = mDSVHeap->acquire();
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+        dsvDesc.Format = DX12Utils::transferFormat(dxDepth->getOptions().format);
+        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+        mDevice.mDevice->CreateDepthStencilView(dxDepth->mResource.Get(), &dsvDesc, mDepthView);
+    }
+
+    DX12StaticBuffer::DX12StaticBuffer(const DX12Device& device, uint32_t length)
+    {
+        auto& dxDevice = device.mDevice;
+        mLength = length;
+
+        D3D12_RESOURCE_DESC bufferDesc = {};
+        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufferDesc.Alignment = 0;
+        bufferDesc.Width = length;
+        bufferDesc.Height = 1;
+        bufferDesc.DepthOrArraySize = 1;
+        bufferDesc.MipLevels = 1;
+        bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+        bufferDesc.SampleDesc.Count = 1;
+        bufferDesc.SampleDesc.Quality = 0;
+        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+        D3D12_HEAP_PROPERTIES bufferHeapProps = {};
+        bufferHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+        _ThrowIfFailed(dxDevice->CreateCommittedResource(
+            &bufferHeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &bufferDesc,
+            D3D12_RESOURCE_STATE_COPY_DEST,
+            nullptr,
+            IID_PPV_ARGS(&mResource)));
+    }
+
+    void* DX12StaticBuffer::getNativeResource() const
+    {
+        return mResource.Get();
+    }
+
+    uint32_t DX12StaticBuffer::getLength() const
+    {
+        return mLength;
+    }
+
+    DX12MutableBuffer::DX12MutableBuffer(const DX12Device& device, uint32_t length)
+        : mLength(length)
+    {
+        auto& dxDevice = device.mDevice;
+
+        D3D12_RESOURCE_DESC bufferDesc = {};
+        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufferDesc.Alignment = 0;
+        bufferDesc.Width = length;
+        bufferDesc.Height = 1;
+        bufferDesc.DepthOrArraySize = 1;
+        bufferDesc.MipLevels = 1;
+        bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+        bufferDesc.SampleDesc.Count = 1;
+        bufferDesc.SampleDesc.Quality = 0;
+        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+        D3D12_HEAP_PROPERTIES bufferHeapProps = {};
+        bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+        _ThrowIfFailed(dxDevice->CreateCommittedResource(
+            &bufferHeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&mResource)));
+    }
+
+    void* DX12MutableBuffer::getNativeResource() const
+    {
+        return mResource.Get();
+    }
+
+    uint32_t DX12MutableBuffer::getLength() const
+    {
+        return mLength;
+    }
+
+    void* DX12MutableBuffer::map()
+    {
+        UINT8* ptr = nullptr;
+        _ThrowIfFailed(mResource->Map(0, nullptr, (void**) &ptr));
+        return ptr;
+    }
+
+    void DX12MutableBuffer::unmap()
+    {
+        mResource->Unmap(0, nullptr);
+    }
+
+    DX12DynamicBuffer::DX12DynamicBuffer(const DX12Device& device, uint32_t length)
+        : mDevice(device)
+        , mLength(length)
+        , mFrameSize(alignUp(length, kConstantBufferAlignment))
+        , mFrameCount(kFrameCount)
+    {
+        auto& dxDevice = device.mDevice;
+
+        D3D12_RESOURCE_DESC bufferDesc = {};
+        bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bufferDesc.Alignment = 0;
+        bufferDesc.Width = (uint64_t)mFrameSize * mFrameCount;
+        bufferDesc.Height = 1;
+        bufferDesc.DepthOrArraySize = 1;
+        bufferDesc.MipLevels = 1;
+        bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+        bufferDesc.SampleDesc.Count = 1;
+        bufferDesc.SampleDesc.Quality = 0;
+        bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+        D3D12_HEAP_PROPERTIES bufferHeapProps = {};
+        bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+
+        _ThrowIfFailed(dxDevice->CreateCommittedResource(
+            &bufferHeapProps,
+            D3D12_HEAP_FLAG_NONE,
+            &bufferDesc,
+            D3D12_RESOURCE_STATE_GENERIC_READ,
+            nullptr,
+            IID_PPV_ARGS(&mResource)));
+    }
+
+    void* DX12DynamicBuffer::getNativeResource() const
+    {
+        return mResource.Get();
+    }
+
+    uint32_t DX12DynamicBuffer::getLength() const
+    {
+        return mLength;
+    }
+
+    uint32_t DX12DynamicBuffer::getBindOffset() const
+    {
+        return mDevice.getFrameIndex() * mFrameSize;
+    }
+
+    void* DX12DynamicBuffer::map()
+    {
+        void* base = nullptr;
+        D3D12_RANGE readRange = {0, 0};
+        _ThrowIfFailed(mResource->Map(0, &readRange, &base));
+        return static_cast<uint8_t*>(base) + getBindOffset();
+    }
+
+    void DX12DynamicBuffer::unmap()
+    {
+        const uint32_t offset = getBindOffset();
+        D3D12_RANGE written = {offset, offset + mLength};
+        mResource->Unmap(0, &written);
+    }
+    
+    DX12Texture2D::DX12Texture2D(const DX12Device& device, const TextureOptions& options)
+        : mOptions(options)
+    {
+        auto& dxDevice = device.mDevice;
+        
+        // 1. 准备纹理数据和描述符
+        D3D12_RESOURCE_DESC textureDesc = {};
+        textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        textureDesc.Alignment = 0;
+        textureDesc.Width = options.width;
+        textureDesc.Height = options.height;
+        textureDesc.DepthOrArraySize = 1;
+        textureDesc.MipLevels = options.mipCount;
+        textureDesc.Format = DX12Utils::transferFormat(options.format);
+        textureDesc.SampleDesc.Count = 1;
+        textureDesc.SampleDesc.Quality = 0;
+        textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+        textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        
+        // 2. 创建纹理资源
+        D3D12_HEAP_PROPERTIES textureHeapProps = {};
+        textureHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+        _ThrowIfFailed(dxDevice->CreateCommittedResource(&textureHeapProps, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mResource)));
+    }
+    
+    void* DX12Texture2D::getNativeResource() const
+    {
+        return mResource.Get();
+    }
+    
+    const TextureOptions& DX12Texture2D::getOptions() const
+    {
+        return this->mOptions;
+    }
+
+    DX12Texture2D::DX12Texture2D(const TextureOptions& options, ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES state)
+        : mOptions(options)
+        , mResource(std::move(resource))
+        , mState(state)
+    {
+    }
+    
+    DX12ShaderProgram::DX12ShaderProgram(const DX12Device& device, const ShaderOptions& options)
+        : mOptions(options)
+    {
+        
+        UINT compileFlags = 0;
+#if defined(_DEBUG)
+        compileFlags |= D3DCOMPILE_DEBUG;
+        compileFlags |= D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+        
+        std::string target = "";
+        {
+            if (options.type == ShaderType::Vertex) target += "vs";
+            else if (options.type == ShaderType::Fragment) target += "ps";
+            else if (options.type == ShaderType::Compute) target += "cs";
+            
+            if (options.target == ShaderTarget::SM_3_0) target += "_3_0";
+            else if (options.target == ShaderTarget::SM_3_1) target += "_3_1";
+            else if (options.target == ShaderTarget::SM_4_5) target += "_4_5";
+            else if (options.target == ShaderTarget::SM_5_0) target += "_5_0";
+            else if (options.target == ShaderTarget::SM_6_0) target += "_6_0";
+            else if (options.target == ShaderTarget::SM_6_8) target += "_6_8";
+        }
+        
+        HRESULT hr = D3DCompile(
+            options.source.c_str(),
+            options.source.size(),
+            options.name.c_str(),
+            nullptr, nullptr,
+            options.entry.c_str(),
+            target.c_str(),
+            compileFlags, 0,
+            &mCode, &mError);
+        
+        if (mError != nullptr)
+        {
+            std::string str((const char*) mError->GetBufferPointer(), mError->GetBufferSize());
+            throw std::runtime_error(str.c_str());
+        }
+        if (FAILED(hr) || mCode == nullptr)
+        {
+            throw std::runtime_error("D3DCompile failed.");
+        }
+
+        reflectShaderProgramParameters(mCode.Get(), mLayout);
+    }
+    
+    const ShaderOptions& DX12ShaderProgram::getOptions() const
+    {
+        return mOptions;
+    }
+    
+    const PipelineLayout& DX12ShaderProgram::getLayout() const
+    {
+        return mLayout;
+    }
+    
+    DX12PipelineObject::DX12PipelineObject(const DX12Device& device)
+        : mDevice(device)
+    {
+    }
+    
+    void DX12PipelineObject::begin()
+    {
+        mSamplers.clear();
+        mColorBufferFormats.clear();
+        mDepthStencilBufferFormat = Format::Unknown;
+        mLayout.entries.clear();
+        mCBVRegisters.clear();
+        mSRVRegisters.clear();
+        mSamplerRegisters.clear();
+    }
+    
+    void DX12PipelineObject::setVertexElements(std::vector<VertexElement>& vElements)
+    {
+        mVertexSemanticNames.clear();
+        mVertexElements.clear();
+        mVertexSemanticNames.reserve(vElements.size());
+        mVertexElements.reserve(vElements.size());
+        for (size_t index = 0; index < vElements.size(); index++)
+        {
+            const VertexElement& ve = vElements.at(index);
+            mVertexSemanticNames.push_back(ve.semanticName);
+            mVertexElements.push_back({
+                nullptr,
+                ve.semanticIndex,
+                DX12Utils::transferFormat(ve.format),
+                0,
+                ve.offset,
+                D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
+                0
+            });
+        }
+        for (size_t index = 0; index < mVertexElements.size(); index++)
+        {
+            mVertexElements[index].SemanticName = mVertexSemanticNames[index].c_str();
+        }
+    }
+    
+    void DX12PipelineObject::setShaderProgram(ShaderType type, ShaderProgram::Ref shaderProgram)
+    {
+        mShaderPrograms[type] = shaderProgram;
+    }
+    
+    void DX12PipelineObject::setFillMode(FillMode fillMode)
+    {
+        switch(fillMode)
+        {
+            case FillMode::Solid: mFillMode = D3D12_FILL_MODE_SOLID; break;
+            case FillMode::Wireframe: mFillMode = D3D12_FILL_MODE_WIREFRAME; break;
+        }
+    }
+    
+    void DX12PipelineObject::setCullMode(CullMode cullMode)
+    {
+        switch(cullMode)
+        {
+            case CullMode::None: mCullMode = D3D12_CULL_MODE_NONE; break;
+            case CullMode::Front: mCullMode = D3D12_CULL_MODE_FRONT; break;
+            case CullMode::Back: mCullMode = D3D12_CULL_MODE_BACK; break;
+        }
+    }
+
+    void DX12PipelineObject::setDepthStencilState(const DepthStencilState& state)
+    {
+        mDepthStencil = state;
+        mDepthStencilSet = true;
+    }
+
+    void DX12PipelineObject::setSamplerState(uint32_t index, const SamplerState& state)
+    {
+        mSamplers[index] = state;
+    }
+
+    void DX12PipelineObject::setBlendState(const BlendState& state)
+    {
+        mBlend = state;
+    }
+
+    void DX12PipelineObject::setColorBufferFormats(const std::vector<Format>& formats)
+    {
+        if (formats.empty())
+            throw std::runtime_error("PipelineObject: setColorBufferFormats requires at least one format.");
+        if (formats.size() > D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT)
+            throw std::runtime_error("PipelineObject: too many color buffer formats.");
+        mColorBufferFormats = formats;
+    }
+
+    void DX12PipelineObject::setDepthStencilBufferFormat(Format format)
+    {
+        if (format != Format::Unknown
+            && format != Format::D32_FLOAT
+            && format != Format::D24_UNORM_S8_UINT
+            && format != Format::D16_UNORM)
+        {
+            throw std::runtime_error("PipelineObject: invalid depth stencil buffer format.");
+        }
+        mDepthStencilBufferFormat = format;
+    }
+    
+    void DX12PipelineObject::end()
+    {
+        auto& dxDevice = mDevice.mDevice;
+
+        mLayout.entries.clear();
+        mCBVRegisters.clear();
+        mSRVRegisters.clear();
+        mSamplerRegisters.clear();
+        for (const auto& node : mShaderPrograms)
+        {
+            for (const auto& entry : node.second->getLayout().entries)
+            {
+                mLayout.add(entry);
+            }
+        }
+        for (const auto& entry : mLayout.entries)
+        {
+            if (entry.type == PipelineResourceType::UniformBuffer) mCBVRegisters.insert(entry.slot);
+            else if (entry.type == PipelineResourceType::Texture) mSRVRegisters.insert(entry.slot);
+            else if (entry.type == PipelineResourceType::Sampler) mSamplerRegisters.insert(entry.slot);
+        }
+        
+        // Create Root Signature
+        {
+            std::vector<D3D12_STATIC_SAMPLER_DESC> samplers;
+            for (uint32_t shaderRegister : mSamplerRegisters)
+            {
+                D3D12_STATIC_SAMPLER_DESC desc = {};
+                auto it = mSamplers.find(shaderRegister);
+                const SamplerState& state = (it != mSamplers.end()) ? it->second : SamplerState{};
+                DX12Utils::fillStaticSampler(desc, shaderRegister, state);
+                samplers.push_back(desc);
+            }
+            
+            D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+            if (FAILED(dxDevice->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+            {
+                featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+            }
+            
+            D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+            rootSignatureDesc.Version = featureData.HighestVersion;
+
+            std::vector<D3D12_DESCRIPTOR_RANGE1> descriptorRanges1;
+            std::vector<D3D12_ROOT_PARAMETER1> parameters1;
+            std::vector<D3D12_DESCRIPTOR_RANGE> descriptorRanges0;
+            std::vector<D3D12_ROOT_PARAMETER> parameters0;
+
+            if (rootSignatureDesc.Version == D3D_ROOT_SIGNATURE_VERSION_1_1)
+            {
+                for (uint32_t reg : mCBVRegisters)
+                {
+                    D3D12_ROOT_PARAMETER1 parameter = {};
+                    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+                    parameter.Descriptor.ShaderRegister = reg;
+                    parameter.Descriptor.RegisterSpace = 0;
+                    parameter.Descriptor.Flags = D3D12_ROOT_DESCRIPTOR_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+                    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+                    parameters1.push_back(parameter);
+                }
+                if (!mSRVRegisters.empty())
+                {
+                    D3D12_DESCRIPTOR_RANGE1 range = {};
+                    range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                    range.NumDescriptors = *mSRVRegisters.rbegin() - *mSRVRegisters.begin() + 1;
+                    range.BaseShaderRegister = *mSRVRegisters.begin();
+                    range.RegisterSpace = 0;
+                    range.Flags = D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE;
+                    descriptorRanges1.push_back(range);
+
+                    D3D12_ROOT_PARAMETER1 parameter = {};
+                    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                    parameter.DescriptorTable.NumDescriptorRanges = 1;
+                    parameter.DescriptorTable.pDescriptorRanges = descriptorRanges1.data();
+                    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+                    parameters1.push_back(parameter);
+                }
+                
+                rootSignatureDesc.Desc_1_1.NumParameters = (UINT)parameters1.size();
+                rootSignatureDesc.Desc_1_1.pParameters = parameters1.empty() ? nullptr : parameters1.data();
+                rootSignatureDesc.Desc_1_1.NumStaticSamplers = (UINT)samplers.size();
+                rootSignatureDesc.Desc_1_1.pStaticSamplers = samplers.empty() ? nullptr : samplers.data();
+                rootSignatureDesc.Desc_1_1.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+            }
+            else
+            {
+                for (uint32_t reg : mCBVRegisters)
+                {
+                    D3D12_ROOT_PARAMETER parameter = {};
+                    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
+                    parameter.Descriptor.ShaderRegister = reg;
+                    parameter.Descriptor.RegisterSpace = 0;
+                    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+                    parameters0.push_back(parameter);
+                }
+                if (!mSRVRegisters.empty())
+                {
+                    D3D12_DESCRIPTOR_RANGE range = {};
+                    range.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                    range.NumDescriptors = *mSRVRegisters.rbegin() - *mSRVRegisters.begin() + 1;
+                    range.BaseShaderRegister = *mSRVRegisters.begin();
+                    range.RegisterSpace = 0;
+                    descriptorRanges0.push_back(range);
+
+                    D3D12_ROOT_PARAMETER parameter = {};
+                    parameter.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+                    parameter.DescriptorTable.NumDescriptorRanges = 1;
+                    parameter.DescriptorTable.pDescriptorRanges = descriptorRanges0.data();
+                    parameter.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+                    parameters0.push_back(parameter);
+                }
+                
+                rootSignatureDesc.Desc_1_0.NumParameters = (UINT)parameters0.size();
+                rootSignatureDesc.Desc_1_0.pParameters = parameters0.empty() ? nullptr : parameters0.data();
+                rootSignatureDesc.Desc_1_0.NumStaticSamplers = (UINT)samplers.size();
+                rootSignatureDesc.Desc_1_0.pStaticSamplers = samplers.empty() ? nullptr : samplers.data();
+                rootSignatureDesc.Desc_1_0.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+            }
+            
+            ComPtr<ID3DBlob> rootSignatureBlob;
+            ComPtr<ID3DBlob> errorBlob;
+            _ThrowIfFailed(D3D12SerializeVersionedRootSignature(&rootSignatureDesc, &rootSignatureBlob, &errorBlob));
+            _ThrowIfFailed(dxDevice->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&mRootSignature)));
+        }
+        
+        // Create Pipeline State
+        {
+            D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc = {};
+            psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+            psoDesc.InputLayout.pInputElementDescs = mVertexElements.data();
+            psoDesc.InputLayout.NumElements = (UINT) mVertexElements.size();
+            
+            psoDesc.pRootSignature = mRootSignature.Get();
+            if (mShaderPrograms.find(ShaderType::Vertex) != mShaderPrograms.end())
+            {
+                ComPtr<ID3DBlob> code = dynamic_cast<DX12ShaderProgram*>(mShaderPrograms[ShaderType::Vertex].get())->mCode;
+                psoDesc.VS = {code->GetBufferPointer(), code->GetBufferSize()};
+            }
+            if (mShaderPrograms.find(ShaderType::Fragment) != mShaderPrograms.end())
+            {
+                ComPtr<ID3DBlob> code = dynamic_cast<DX12ShaderProgram*>(mShaderPrograms[ShaderType::Fragment].get())->mCode;
+                psoDesc.PS = {code->GetBufferPointer(), code->GetBufferSize()};
+            }
+            
+            psoDesc.RasterizerState.FillMode = mFillMode;
+            psoDesc.RasterizerState.CullMode = mCullMode;
+            psoDesc.RasterizerState.DepthClipEnable = TRUE;
+            
+            psoDesc.BlendState.AlphaToCoverageEnable = FALSE;
+            psoDesc.BlendState.IndependentBlendEnable = FALSE;
+            auto& rt0 = psoDesc.BlendState.RenderTarget[0];
+            rt0.BlendEnable = mBlend.enabled ? TRUE : FALSE;
+            rt0.LogicOpEnable = FALSE;
+            rt0.SrcBlend = DX12Utils::transferBlendFactor(mBlend.srcColor);
+            rt0.DestBlend = DX12Utils::transferBlendFactor(mBlend.dstColor);
+            rt0.BlendOp = DX12Utils::transferBlendOp(mBlend.colorOp);
+            rt0.SrcBlendAlpha = DX12Utils::transferBlendFactor(mBlend.srcAlpha);
+            rt0.DestBlendAlpha = DX12Utils::transferBlendFactor(mBlend.dstAlpha);
+            rt0.BlendOpAlpha = DX12Utils::transferBlendOp(mBlend.alphaOp);
+            rt0.LogicOp = D3D12_LOGIC_OP_NOOP;
+            rt0.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+            for (UINT i = 1; i < D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT; ++i)
+                psoDesc.BlendState.RenderTarget[i] = psoDesc.BlendState.RenderTarget[0];
+            
+            const bool depthTest = mDepthStencilSet && mDepthStencil.depthTest;
+            const bool depthWrite = mDepthStencilSet && mDepthStencil.depthWrite;
+            if (depthTest && mDepthStencilBufferFormat == Format::Unknown)
+                throw std::runtime_error("PipelineObject: depth test requires a depth stencil buffer format.");
+            psoDesc.DepthStencilState.DepthEnable = depthTest ? TRUE : FALSE;
+            psoDesc.DepthStencilState.DepthWriteMask = depthWrite
+                ? D3D12_DEPTH_WRITE_MASK_ALL
+                : D3D12_DEPTH_WRITE_MASK_ZERO;
+            psoDesc.DepthStencilState.DepthFunc = DX12Utils::transferCompareOp(mDepthStencil.depthFunc);
+            psoDesc.DepthStencilState.StencilEnable = FALSE;
+            
+            std::vector<Format> colorFormats = mColorBufferFormats;
+            if (colorFormats.empty())
+                colorFormats.push_back(Format::R8G8B8A8_UNORM);
+
+            psoDesc.NumRenderTargets = (UINT)colorFormats.size();
+            for (UINT i = 0; i < psoDesc.NumRenderTargets; ++i)
+                psoDesc.RTVFormats[i] = DX12Utils::transferFormat(colorFormats[i]);
+
+            psoDesc.DSVFormat = mDepthStencilBufferFormat != Format::Unknown
+                ? DX12Utils::transferFormat(mDepthStencilBufferFormat)
+                : DXGI_FORMAT_UNKNOWN;
+            psoDesc.SampleMask = UINT_MAX;
+            psoDesc.SampleDesc.Count = 1;
+            
+            _ThrowIfFailed(dxDevice->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&mPipelineState)));
+        }
+    }
+
+    const PipelineLayout& DX12PipelineObject::getLayout() const
+    {
+        return mLayout;
+    }
+    
+    DX12PipelineBindings::DX12PipelineBindings(const DX12Device& device, const PipelineLayout& layout)
+        : mDevice(device)
+        , mLayout(layout)
+    {
+    }
+
+    const PipelineLayout& DX12PipelineBindings::getLayout() const
+    {
+        return mLayout;
+    }
+
+    void DX12PipelineBindings::begin()
+    {
+    }
+
+    void DX12PipelineBindings::setUniformBufferBySlot(uint32_t slot, Buffer::Ref buffer)
+    {
+        if (!mLayout.findBySlot(PipelineResourceType::UniformBuffer, slot))
+        {
+            throw std::runtime_error("PipelineBindings: unknown uniform buffer slot.");
+        }
+        mUniformBuffers[slot] = buffer;
+    }
+
+    void DX12PipelineBindings::setUniformBufferByName(const std::string& name, Buffer::Ref buffer)
+    {
+        const PipelineLayoutEntry* entry = mLayout.findByName(PipelineResourceType::UniformBuffer, name);
+        if (!entry)
+        {
+            throw std::runtime_error("PipelineBindings: unknown uniform buffer name.");
+        }
+        setUniformBufferBySlot(entry->slot, buffer);
+    }
+
+    void DX12PipelineBindings::setTextureBySlot(uint32_t slot, Texture::Ref texture)
+    {
+        if (!mLayout.findBySlot(PipelineResourceType::Texture, slot))
+        {
+            throw std::runtime_error("PipelineBindings: unknown texture slot.");
+        }
+        mTextures[slot] = texture;
+    }
+
+    void DX12PipelineBindings::setTextureByName(const std::string& name, Texture::Ref texture)
+    {
+        const PipelineLayoutEntry* entry = mLayout.findByName(PipelineResourceType::Texture, name);
+        if (!entry)
+        {
+            throw std::runtime_error("PipelineBindings: unknown texture name.");
+        }
+        setTextureBySlot(entry->slot, texture);
+    }
+
+    void DX12PipelineBindings::end()
+    {
+        auto& dxDevice = mDevice.mDevice;
+        std::set<uint32_t> srvRegisters;
+        for (const auto& entry : mLayout.entries)
+        {
+            if (entry.type == PipelineResourceType::Texture)
+            {
+                srvRegisters.insert(entry.slot);
+            }
+        }
+        if (srvRegisters.empty())
+        {
+            mSRVHeap.reset();
+            return;
+        }
+
+        uint32_t base = *srvRegisters.begin();
+        uint32_t count = *srvRegisters.rbegin() - base + 1;
+        mSRVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::SRV, count);
+
+        for (uint32_t i = 0; i < count; i++)
+        {
+            uint32_t reg = base + i;
+            D3D12_CPU_DESCRIPTOR_HANDLE srvHandle = mSRVHeap->acquire();
+            if (srvRegisters.find(reg) == srvRegisters.end())
+            {
+                D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+                srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                srvDesc.Texture2D.MipLevels = 1;
+                dxDevice->CreateShaderResourceView(nullptr, &srvDesc, srvHandle);
+                continue;
+            }
+
+            auto it = mTextures.find(reg);
+            if (it == mTextures.end() || !it->second)
+            {
+                throw std::runtime_error("PipelineBindings: missing texture slot.");
+            }
+
+            auto texture = it->second;
+            auto* dxTexture = dynamic_cast<DX12Texture2D*>(texture.get());
+            if (!dxTexture)
+            {
+                throw std::runtime_error("PipelineBindings: texture is not a DX12Texture2D.");
+            }
+            auto dxResource = dxTexture->mResource;
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Format = DX12Utils::transferFormat(texture->getOptions().format);
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Texture2D.MipLevels = 1;
+            dxDevice->CreateShaderResourceView(dxResource.Get(), &srvDesc, srvHandle);
+        }
+    }
+
+    DX12CommandBuffer::DX12CommandBuffer(DX12Device& device)
+        : mDevice(device)
+    {
+        ComPtr<ID3D12CommandAllocator> dxCommandAllocator = device.AcquireCommandAllocator();
+        _ThrowIfFailed(device.mDevice->CreateCommandList(
+            0, D3D12_COMMAND_LIST_TYPE_DIRECT, dxCommandAllocator.Get(), nullptr, IID_PPV_ARGS(&mCommandList)));
+        // CreateCommandList leaves the list recording. Close it so every frame is open/record/close.
+        // This empty recording is never executed, so the allocator can return with fence 0.
+        _ThrowIfFailed(mCommandList->Close());
+        mClosed = true;
+        device.ReleaseCommandAllocator(std::move(dxCommandAllocator), 0);
+    }
+
+    DX12CommandBuffer::~DX12CommandBuffer()
+    {
+        if (mCommandList && !mClosed)
+        {
+            mCommandList->Close();
+            mClosed = true;
+        }
+        if (mCommandAllocator)
+            mDevice.ReleaseCommandAllocator(std::move(mCommandAllocator), 0);
+    }
+
+    void DX12CommandBuffer::releaseResourceReferences()
+    {
+        mUploadResources.clear();
+        mCurrentPipeline.reset();
+        if (!mCommandList)
+            return;
+        if (!mClosed)
+        {
+            _ThrowIfFailed(mCommandList->Close());
+            mClosed = true;
+        }
+        if (mCommandAllocator)
+            mDevice.ReleaseCommandAllocator(std::move(mCommandAllocator), 0);
+        ComPtr<ID3D12CommandAllocator> dxCommandAllocator = mDevice.AcquireCommandAllocator();
+        _ThrowIfFailed(mCommandList->Reset(dxCommandAllocator.Get(), nullptr));
+        _ThrowIfFailed(mCommandList->Close());
+        mClosed = true;
+        mDevice.ReleaseCommandAllocator(std::move(dxCommandAllocator), 0);
+    }
+    
+    void DX12CommandBuffer::open()
+    {
+        mUploadResources.clear();
+        mCommandAllocator = mDevice.AcquireCommandAllocator();
+        ID3D12PipelineState* pso = nullptr;
+        if (auto* current = dynamic_cast<DX12PipelineObject*>(mCurrentPipeline.get()))
+        {
+            pso = current->mPipelineState.Get();
+        }
+        _ThrowIfFailed(mCommandList->Reset(mCommandAllocator.Get(), pso));
+        mClosed = false;
+        if (mCurrentPipeline)
+        {
+            setPipelineObject(mCurrentPipeline);
+        }
+    }
+
+    void DX12CommandBuffer::setPipelineObject(PipelineObject::Ref pipeline)
+    {
+        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(pipeline.get());
+        if (!pipelineObject)
+        {
+            throw std::runtime_error("CommandBuffer: invalid pipeline.");
+        }
+        mCurrentPipeline = pipeline;
+        mCommandList->SetPipelineState(pipelineObject->mPipelineState.Get());
+        mCommandList->SetGraphicsRootSignature(pipelineObject->mRootSignature.Get());
+    }
+
+    void DX12CommandBuffer::setPipelineBindings(PipelineBindings::Ref bindings)
+    {
+        auto* pipelineObject = dynamic_cast<DX12PipelineObject*>(mCurrentPipeline.get());
+        auto* pipelineBindings = dynamic_cast<DX12PipelineBindings*>(bindings.get());
+        if (!pipelineObject || !pipelineBindings)
+        {
+            throw std::runtime_error("CommandBuffer: setPipelineObject before setPipelineBindings.");
+        }
+        if (!pipelineBindings->getLayout().compatibleWith(pipelineObject->getLayout()))
+        {
+            throw std::runtime_error("CommandBuffer: PipelineBindings layout is not compatible with current PipelineObject.");
+        }
+
+        uint32_t root = 0;
+        for (uint32_t reg : pipelineObject->mCBVRegisters)
+        {
+            auto ubIt = pipelineBindings->mUniformBuffers.find(reg);
+            if (ubIt == pipelineBindings->mUniformBuffers.end() || !ubIt->second)
+            {
+                throw std::runtime_error("PipelineBindings: missing uniform buffer slot.");
+            }
+            auto* native = static_cast<ID3D12Resource*>(ubIt->second->getNativeResource());
+            if (!native)
+            {
+                throw std::runtime_error("PipelineBindings: uniform buffer has no native resource.");
+            }
+            mCommandList->SetGraphicsRootConstantBufferView(
+                root, native->GetGPUVirtualAddress() + ubIt->second->getBindOffset());
+            root += 1;
+        }
+
+        if (!pipelineObject->mSRVRegisters.empty())
+        {
+            if (pipelineBindings->mSRVHeap == nullptr || pipelineBindings->mSRVHeap->mHeaps.empty())
+            {
+                throw std::runtime_error("PipelineBindings: missing SRV heap.");
+            }
+            std::vector<ID3D12DescriptorHeap*> dxSRVHeapList(pipelineBindings->mSRVHeap->mHeaps.size());
+            for (size_t i = 0; i < dxSRVHeapList.size(); i++)
+            {
+                dxSRVHeapList[i] = pipelineBindings->mSRVHeap->mHeaps[i].Get();
+            }
+            mCommandList->SetDescriptorHeaps((UINT)dxSRVHeapList.size(), dxSRVHeapList.data());
+            mCommandList->SetGraphicsRootDescriptorTable(
+                (UINT)pipelineObject->mCBVRegisters.size(),
+                dxSRVHeapList[0]->GetGPUDescriptorHandleForHeapStart());
+        }
+    }
+    
+    void DX12CommandBuffer::setRenderTarget(RenderTarget::Ref renderTarget)
+    {
+        auto* dxRT = dynamic_cast<DX12RenderTarget*>(renderTarget.get());
+        if (!dxRT)
+        {
+            throw std::runtime_error("CommandBuffer: setRenderTarget requires a DX12RenderTarget.");
+        }
+        const D3D12_CPU_DESCRIPTOR_HANDLE* dsv = dxRT->mDepthStencilBuffer ? &dxRT->mDepthView : nullptr;
+        mCommandList->OMSetRenderTargets((UINT)dxRT->mColorViews.size(), dxRT->mColorViews.data(), FALSE, dsv);
+    }
+    
+    void DX12CommandBuffer::clearRenderTargetColorBuffer(RenderTarget::Ref renderTarget, uint32_t colorIndex, float(& color)[4])
+    {
+        auto* dxRT = dynamic_cast<DX12RenderTarget*>(renderTarget.get());
+        if (!dxRT)
+        {
+            throw std::runtime_error("CommandBuffer: clearRenderTargetColorBuffer requires a DX12RenderTarget.");
+        }
+        mCommandList->ClearRenderTargetView(dxRT->mColorViews.at(colorIndex), color, 0, nullptr);
+    }
+
+    void DX12CommandBuffer::clearRenderTargetDepthStencilBuffer(RenderTarget::Ref renderTarget, float depth, uint32_t stencil)
+    {
+        auto* dxRT = dynamic_cast<DX12RenderTarget*>(renderTarget.get());
+        if (!dxRT || !dxRT->mDepthStencilBuffer)
+        {
+            return;
+        }
+        D3D12_CLEAR_FLAGS flags = D3D12_CLEAR_FLAG_DEPTH;
+        auto* dxDepth = dynamic_cast<DX12Texture2D*>(dxRT->mDepthStencilBuffer.get());
+        if (dxDepth->getOptions().format == Format::D24_UNORM_S8_UINT)
+        {
+            flags |= D3D12_CLEAR_FLAG_STENCIL;
+        }
+        mCommandList->ClearDepthStencilView(dxRT->mDepthView, flags, depth, (UINT8)stencil, 0, nullptr);
+    }
+    
+    void DX12CommandBuffer::setViewport(const Viewport& viewport)
+    {
+        D3D12_VIEWPORT dxViewport;
+        dxViewport.TopLeftX = viewport.left;
+        dxViewport.TopLeftY = viewport.top;
+        dxViewport.Width = viewport.right - viewport.left;
+        dxViewport.Height = viewport.bottom - viewport.top;
+        dxViewport.MinDepth = viewport.front;
+        dxViewport.MaxDepth = viewport.back;
+        
+        D3D12_RECT dxScissorRect;
+        dxScissorRect.left = (LONG) viewport.left;
+        dxScissorRect.top = (LONG) viewport.top;
+        dxScissorRect.right = (LONG) viewport.right;
+        dxScissorRect.bottom = (LONG) viewport.bottom;
+        
+        mCommandList->RSSetViewports(1, &dxViewport);
+        mCommandList->RSSetScissorRects(1, &dxScissorRect);
+    }
+    
+    void DX12CommandBuffer::setTopology(Topology topology)
+    {
+        D3D_PRIMITIVE_TOPOLOGY dxTopology = DX12Utils::transferTopology(topology);
+        mCommandList->IASetPrimitiveTopology(dxTopology);
+    }
+    
+    void DX12CommandBuffer::setVertexBuffer(Buffer::Ref buffer, uint32_t length, uint32_t stride)
+    {
+        auto* dxRes = static_cast<ID3D12Resource*>(buffer->getNativeResource());
+        D3D12_VERTEX_BUFFER_VIEW dxVBV;
+        dxVBV.BufferLocation = dxRes->GetGPUVirtualAddress() + buffer->getBindOffset();
+        dxVBV.SizeInBytes = length;
+        dxVBV.StrideInBytes = stride;
+        
+        mCommandList->IASetVertexBuffers(0, 1, &dxVBV);
+    }
+    
+    void DX12CommandBuffer::setIndexBuffer(Buffer::Ref buffer, uint32_t length, Format format)
+    {
+        auto* dxRes = static_cast<ID3D12Resource*>(buffer->getNativeResource());
+        D3D12_INDEX_BUFFER_VIEW dxIBV;
+        dxIBV.BufferLocation = dxRes->GetGPUVirtualAddress() + buffer->getBindOffset();
+        dxIBV.SizeInBytes = length;
+        dxIBV.Format = DX12Utils::transferFormat(format);
+        
+        mCommandList->IASetIndexBuffer(&dxIBV);
+    }
+
+    void DX12CommandBuffer::fillBuffer(StaticBuffer::Ref target, const void* data, uint32_t size)
+    {
+        if (!target || !data || size == 0)
+        {
+            throw std::runtime_error("CommandBuffer: fillBuffer requires a valid target and data.");
+        }
+
+        auto* dxTarget = dynamic_cast<DX12StaticBuffer*>(target.get());
+        if (!dxTarget || !dxTarget->mResource)
+        {
+            throw std::runtime_error("CommandBuffer: fillBuffer target is not a DX12StaticBuffer.");
+        }
+        if (size > dxTarget->mLength)
+        {
+            throw std::runtime_error("CommandBuffer: fillBuffer source is larger than the static buffer.");
+        }
+
+        auto& dxDevice = mDevice.mDevice;
+        ComPtr<ID3D12Resource> upload;
+        {
+            D3D12_RESOURCE_DESC bufferDesc = {};
+            bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            bufferDesc.Alignment = 0;
+            bufferDesc.Width = size;
+            bufferDesc.Height = 1;
+            bufferDesc.DepthOrArraySize = 1;
+            bufferDesc.MipLevels = 1;
+            bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+            bufferDesc.SampleDesc.Count = 1;
+            bufferDesc.SampleDesc.Quality = 0;
+            bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+            D3D12_HEAP_PROPERTIES bufferHeapProps = {};
+            bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+            _ThrowIfFailed(dxDevice->CreateCommittedResource(
+                &bufferHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+                D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upload)));
+        }
+
+        UINT8* dstPtr = nullptr;
+        _ThrowIfFailed(upload->Map(0, nullptr, (void**)&dstPtr));
+        memcpy(dstPtr, data, size);
+        upload->Unmap(0, nullptr);
+
+        if (dxTarget->mState != D3D12_RESOURCE_STATE_COPY_DEST)
+        {
+            D3D12_RESOURCE_BARRIER toCopy = {};
+            toCopy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            toCopy.Transition.pResource = dxTarget->mResource.Get();
+            toCopy.Transition.Subresource = 0;
+            toCopy.Transition.StateBefore = dxTarget->mState;
+            toCopy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+            mCommandList->ResourceBarrier(1, &toCopy);
+            dxTarget->mState = D3D12_RESOURCE_STATE_COPY_DEST;
+        }
+
+        mCommandList->CopyBufferRegion(dxTarget->mResource.Get(), 0, upload.Get(), 0, size);
+
+        D3D12_RESOURCE_BARRIER onFinish = {};
+        onFinish.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        onFinish.Transition.pResource = dxTarget->mResource.Get();
+        onFinish.Transition.Subresource = 0;
+        onFinish.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        onFinish.Transition.StateAfter = D3D12_RESOURCE_STATE_GENERIC_READ;
+        mCommandList->ResourceBarrier(1, &onFinish);
+        dxTarget->mState = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+        mUploadResources.push_back(upload);
+    }
+    
+    void DX12CommandBuffer::drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, uint32_t startInstanceLocation)
+    {
+        
+        mCommandList->DrawIndexedInstanced(indexCountPerInstance, instanceCount, startIndexLocation, baseVertexLocation, startInstanceLocation);
+    }
+    
+    void DX12CommandBuffer::barrier(const std::vector<Barrier>& barriers)
+    {
+        std::vector<D3D12_RESOURCE_BARRIER> dxBarriers;
+        dxBarriers.resize(barriers.size());
+        for (size_t index = 0; index < barriers.size(); index++)
+        {
+            const Barrier& barrier = barriers.at(index);
+            
+            D3D12_RESOURCE_BARRIER& dxBarrier = dxBarriers.at(index);
+            dxBarrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            dxBarrier.Transition.pResource = (ID3D12Resource*) barrier.resource->getNativeResource();
+            dxBarrier.Transition.Subresource = 0;
+            dxBarrier.Transition.StateBefore = DX12Utils::transferResourceState(barrier.before);
+            dxBarrier.Transition.StateAfter = DX12Utils::transferResourceState(barrier.after);
+        }
+        mCommandList->ResourceBarrier((UINT) dxBarriers.size(), dxBarriers.data());
+    }
+    
+    void DX12CommandBuffer::close()
+    {
+        _ThrowIfFailed(mCommandList->Close());
+        mClosed = true;
+    }
+    
+    void DX12CommandBuffer::fillTexture(Texture2D::Ref target, const std::vector<uint8_t>& source)
+    {
+        auto& dxDevice = mDevice.mDevice;
+        
+        DX12Texture2D* dxTarget = dynamic_cast<DX12Texture2D*>(target.get());
+        
+        D3D12_RESOURCE_DESC dxTargetDesc = dxTarget->mResource->GetDesc();
+        
+        // 1. 获取目标贴图的信息
+        UINT subresourceIndex = 0;
+        UINT subresourceCount = 1;
+        D3D12_PLACED_SUBRESOURCE_FOOTPRINT uploadFootprint;
+        UINT64 uploadBufferSize;
+        UINT numRows;
+        UINT64 rowSizeInBytes;
+        dxDevice->GetCopyableFootprints(&dxTargetDesc, subresourceIndex, subresourceCount, 0, &uploadFootprint, &numRows, &rowSizeInBytes, &uploadBufferSize);
+        
+        // 2. 创建上传堆
+        ComPtr<ID3D12Resource> upload;
+        {
+            D3D12_RESOURCE_DESC bufferDesc = {};
+            bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+            bufferDesc.Alignment = 0;
+            bufferDesc.Width = uploadBufferSize;
+            bufferDesc.Height = 1;
+            bufferDesc.DepthOrArraySize = 1;
+            bufferDesc.MipLevels = 1;
+            bufferDesc.Format = DXGI_FORMAT_UNKNOWN;
+            bufferDesc.SampleDesc.Count = 1;
+            bufferDesc.SampleDesc.Quality = 0;
+            bufferDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            bufferDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+            
+            D3D12_HEAP_PROPERTIES bufferHeapProps = {};
+            bufferHeapProps.Type = D3D12_HEAP_TYPE_UPLOAD;
+            _ThrowIfFailed(dxDevice->CreateCommittedResource(&bufferHeapProps, D3D12_HEAP_FLAG_NONE, &bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&upload)));
+        }
+        
+        // 3. 将数据从 std::vector<UINT8> 复制到上传堆中
+        const UINT8* srcPtr = source.data();
+        UINT8* dstPtr;
+        _ThrowIfFailed(upload->Map(0, nullptr, (void**) &dstPtr));
+        for (UINT row = 0; row < numRows; ++row)
+        {
+            memcpy(dstPtr, srcPtr, rowSizeInBytes);
+            dstPtr += uploadFootprint.Footprint.RowPitch;
+            srcPtr += rowSizeInBytes;
+        }
+        upload->Unmap(0, nullptr);
+        
+        if (dxTarget->mState != D3D12_RESOURCE_STATE_COPY_DEST)
+        {
+            D3D12_RESOURCE_BARRIER toCopy = {};
+            toCopy.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            toCopy.Transition.pResource = dxTarget->mResource.Get();
+            toCopy.Transition.Subresource = 0;
+            toCopy.Transition.StateBefore = dxTarget->mState;
+            toCopy.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_DEST;
+            mCommandList->ResourceBarrier(1, &toCopy);
+            dxTarget->mState = D3D12_RESOURCE_STATE_COPY_DEST;
+        }
+
+        // 4. 将数据从上传堆复制到纹理资源中
+        {
+            D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
+            srcLocation.pResource = upload.Get();
+            srcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+            srcLocation.PlacedFootprint = uploadFootprint;
+            
+            D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
+            dstLocation.pResource = dxTarget->mResource.Get();
+            dstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+            dstLocation.SubresourceIndex = 0;
+            
+            mCommandList->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, nullptr);
+            
+            D3D12_RESOURCE_BARRIER onFinish = {};
+            onFinish.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            onFinish.Transition.pResource = dxTarget->mResource.Get();
+            onFinish.Transition.Subresource = 0;
+            onFinish.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+            onFinish.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            mCommandList->ResourceBarrier(1, &onFinish);
+            dxTarget->mState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        }
+
+        mUploadResources.push_back(upload);
+    }
+
+    void DX12Fence::create(ID3D12Device* device)
+    {
+        _ThrowIfFailed(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence)));
+        completionEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+        if (completionEvent == nullptr)
+        {
+            _ThrowIfFailed(HRESULT_FROM_WIN32(GetLastError()));
+        }
+    }
+
+    DX12Fence::~DX12Fence()
+    {
+        if (completionEvent != nullptr)
+        {
+            CloseHandle(completionEvent);
+            completionEvent = nullptr;
+        }
+    }
+
+    u64_t DX12Fence::signal(ID3D12CommandQueue* commandQueue)
+    {
+        const u64_t v = ++value;
+        _ThrowIfFailed(commandQueue->Signal(fence.Get(), v));
+        return v;
+    }
+
+    u64_t DX12Fence::completedValue() const
+    {
+        return fence->GetCompletedValue();
+    }
+
+    bool DX12Fence::isCompleted(u64_t fenceValue) const
+    {
+        return completedValue() >= fenceValue;
+    }
+
+    void DX12Fence::wait(u64_t fenceValue)
+    {
+        if (isCompleted(fenceValue))
+            return;
+        _ThrowIfFailed(fence->SetEventOnCompletion(fenceValue, completionEvent));
+        WaitForSingleObject(completionEvent, INFINITE);
+    }
+
+    ComPtr<ID3D12CommandAllocator> DX12Device::AcquireCommandAllocator()
+    {
+        const u64_t completed = mFence.completedValue();
+        for (auto it = commandAllocatorPool.begin(); it != commandAllocatorPool.end(); ++it)
+        {
+            if (it->dxExecuteFenceValue != 0 && completed < it->dxExecuteFenceValue)
+                continue;
+            _ThrowIfFailed(it->dxCommandAllocator->Reset());
+            ComPtr<ID3D12CommandAllocator> dxCommandAllocator = std::move(it->dxCommandAllocator);
+            commandAllocatorPool.erase(it);
+            return dxCommandAllocator;
+        }
+
+        ComPtr<ID3D12CommandAllocator> dxCommandAllocator;
+        _ThrowIfFailed(mDevice->CreateCommandAllocator(
+            D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&dxCommandAllocator)));
+        return dxCommandAllocator;
+    }
+
+    void DX12Device::ReleaseCommandAllocator(ComPtr<ID3D12CommandAllocator> dxCommandAllocator, UINT64 dxExecuteFenceValue)
+    {
+        if (!dxCommandAllocator)
+            return;
+        commandAllocatorPool.push_back(DX12CommandAllocator{ std::move(dxCommandAllocator), dxExecuteFenceValue });
+    }
+    
+    DX12Device::DX12Device()
+    {
+        UINT dxgiFactoryFlags = 0U;
+
+#if defined(_DEBUG)
+        // Enable the debug layer (requires the Graphics Tools "optional feature").
+        // NOTE: Enabling the debug layer after device creation will invalidate the active device.
+        {
+            ComPtr<ID3D12Debug> dc;
+            if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dc))))
+            {
+                if (SUCCEEDED(dc->QueryInterface(IID_PPV_ARGS(&mDebugController))))
+                {
+                    mDebugController->EnableDebugLayer();
+                    mDebugController->SetEnableGPUBasedValidation(true);
+                }
+                
+                // Enable additional debug layers.
+                dxgiFactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
+            }
+        }
+#endif
+        
+        // Create DXGI Factory
+        _ThrowIfFailed(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&mDXGIFactory)));
+        
+        // Enum Adapter and Create Device
+        for (UINT adapterIndex = 0; DXGI_ERROR_NOT_FOUND != mDXGIFactory->EnumAdapters1(adapterIndex, &mDXGIAdapter); adapterIndex++)
+        {
+            DXGI_ADAPTER_DESC1 desc = {};
+            mDXGIAdapter->GetDesc1(&desc);
+            if (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE)
+            {
+                continue;
+            }
+            
+            _ThrowIfFailed(D3D12CreateDevice(mDXGIAdapter.Get(), mFeatureLevel, IID_PPV_ARGS(&mDevice)));
+#if defined(_DEBUG)
+            _ThrowIfFailed(mDevice->QueryInterface(IID_PPV_ARGS(&mDebugDevice)));
+#endif
+            break;
+        }
+        if (mDevice == nullptr)
+        {
+            throw std::runtime_error("Create Device Failed.");
+        }
+        
+        // Create Command Queue
+        D3D12_COMMAND_QUEUE_DESC queueDesc = {};
+        queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+        queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+        _ThrowIfFailed(mDevice->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&mCommandQueue)));
+        
+        mFence.create(mDevice.Get());
+    }
+    
+    DX12Device::~DX12Device()
+    {
+        this->waitForGPU();
+    }
+    
+    DX12Surface::DX12Surface(DX12Device& device, void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
+        : mDevice(device)
+        , mWindowHandle(windowHandle)
+        , mWidth(windowWidth)
+        , mHeight(windowHeight)
+    {
+        _ThrowIfFailed(mDevice.mDXGIFactory->MakeWindowAssociation((HWND) windowHandle, DXGI_MWA_NO_ALT_ENTER));
+
+        ComPtr<IDXGISwapChain> swapchain;
+        DXGI_SWAP_CHAIN_DESC swapchainDesc = {};
+        swapchainDesc.BufferCount = kFrameCount;
+        swapchainDesc.BufferDesc.Width = windowWidth;
+        swapchainDesc.BufferDesc.Height = windowHeight;
+        swapchainDesc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        swapchainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        swapchainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        swapchainDesc.SampleDesc.Count = 1;
+        swapchainDesc.OutputWindow = (HWND) windowHandle;
+        swapchainDesc.Windowed = TRUE;
+        _ThrowIfFailed(mDevice.mDXGIFactory->CreateSwapChain(mDevice.mCommandQueue.Get(), &swapchainDesc, &swapchain));
+        _ThrowIfFailed(swapchain.As(&mSwapChain));
+
+        createTargets();
+        mDevice.mSurfaces.push_back(this);
+    }
+
+    DX12Surface::~DX12Surface()
+    {
+        mDevice.releaseSurfaceResources();
+        for (uint32_t i = 0; i < kFrameCount; i++)
+        {
+            mFrameBuffers[i].reset();
+        }
+        mSwapChain.Reset();
+        detach();
+    }
+
+    void DX12Surface::createTargets()
+    {
+        for (UINT i = 0; i < kFrameCount; i++)
+        {
+            ComPtr<ID3D12Resource> backBuffer;
+            _ThrowIfFailed(mSwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));
+
+            TextureOptions colorOptions;
+            colorOptions.width = mWidth;
+            colorOptions.height = mHeight;
+            colorOptions.format = Format::R8G8B8A8_UNORM;
+            colorOptions.mipCount = 1;
+            Texture2D::Ref color = std::make_shared<DX12Texture2D>(
+                colorOptions, backBuffer, D3D12_RESOURCE_STATE_PRESENT);
+            Texture2D::Ref depth = DX12RenderTarget::createDepthBuffer(
+                mDevice, mWidth, mHeight, Format::D32_FLOAT);
+
+            mFrameBuffers[i] = std::make_shared<DX12RenderTarget>(
+                mDevice, std::vector<Texture2D::Ref>{color}, depth);
+        }
+
+        mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
+    }
+
+    void DX12Surface::detach()
+    {
+        for (auto it = mDevice.mSurfaces.begin(); it != mDevice.mSurfaces.end(); ++it)
+        {
+            if (*it == this)
+            {
+                mDevice.mSurfaces.erase(it);
+                break;
+            }
+        }
+    }
+
+    void* DX12Surface::getWindowHandle() const
+    {
+        return mWindowHandle;
+    }
+
+    uint32_t DX12Surface::getWidth() const
+    {
+        return mWidth;
+    }
+
+    uint32_t DX12Surface::getHeight() const
+    {
+        return mHeight;
+    }
+
+    RenderTarget::Ref DX12Surface::getActiveRenderTarget()
+    {
+        return mFrameBuffers[mFrameBufferIndex];
+    }
+
+    void DX12Surface::present()
+    {
+        HRESULT hr = mSwapChain->Present(1, 0);
+        if (FAILED(hr))
+        {
+            _ThrowIfFailed(mDevice.mDevice->GetDeviceRemovedReason());
+        }
+        mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
+    }
+
+    void DX12Surface::resize(uint32_t width, uint32_t height)
+    {
+        mDevice.releaseSurfaceResources();
+        for (uint32_t i = 0; i < kFrameCount; i++)
+        {
+            mFrameBuffers[i].reset();
+        }
+
+        _ThrowIfFailed(mSwapChain->ResizeBuffers(kFrameCount, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
+        mWidth = width;
+        mHeight = height;
+        createTargets();
+    }
+
+    uint32_t DX12Device::getFrameIndex() const
+    {
+        return mFrameIndex;
+    }
+
+    StaticBuffer::Ref DX12Device::createStaticBuffer(uint32_t length)
+    {
+        return std::make_shared<DX12StaticBuffer>(*this, length);
+    }
+
+    MutableBuffer::Ref DX12Device::createMutableBuffer(uint32_t length)
+    {
+        return std::make_shared<DX12MutableBuffer>(*this, length);
+    }
+
+    DynamicBuffer::Ref DX12Device::createDynamicBuffer(uint32_t length)
+    {
+        return std::make_shared<DX12DynamicBuffer>(*this, length);
+    }
+    
+    Texture2D::Ref DX12Device::createTexture2D(const TextureOptions& options)
+    {
+        return std::make_shared<DX12Texture2D>(*this, options);
+    }
+
+    RenderTarget::Ref DX12Device::createRenderTarget(const RenderTargetOptions& options)
+    {
+        if (options.colorFormats.empty())
+        {
+            throw std::runtime_error("RenderTargetOptions requires at least one color format.");
+        }
+        return std::make_shared<DX12RenderTarget>(*this, options);
+    }
+    
+    ShaderProgram::Ref DX12Device::createShaderProgram(const ShaderOptions& options)
+    {
+        return std::make_shared<DX12ShaderProgram>(*this, options);
+    }
+    
+    PipelineObject::Ref DX12Device::createPipelineObject()
+    {
+        return std::make_shared<DX12PipelineObject>(*this);
+    }
+
+    PipelineBindings::Ref DX12Device::createPipelineBindings(const PipelineLayout& layout)
+    {
+        return std::make_shared<DX12PipelineBindings>(*this, layout);
+    }
+
+    PipelineBindings::Ref DX12Device::createPipelineBindings(PipelineObject::Ref pipeline)
+    {
+        if (!pipeline)
+        {
+            throw std::runtime_error("Device: createPipelineBindings requires a pipeline.");
+        }
+        return createPipelineBindings(pipeline->getLayout());
+    }
+
+    CommandBuffer::Ref DX12Device::createCommandBuffer()
+    {
+        auto commandBuffer = std::make_shared<DX12CommandBuffer>(*this);
+        mCommandBuffers.push_back(commandBuffer);
+        return commandBuffer;
+    }
+    
+    void DX12Device::commitCommandBuffer(const CommandBuffer::Ref commandBuffer)
+    {
+        DX12CommandBuffer* dxCommandBuffer = dynamic_cast<DX12CommandBuffer*>(commandBuffer.get());
+        ID3D12CommandList* commandLists[] = {dxCommandBuffer->mCommandList.Get()};
+        mCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
+        const u64_t executeFence = mFence.signal(mCommandQueue.Get());
+        mFenceValues[mFrameIndex] = executeFence;
+        ReleaseCommandAllocator(std::move(dxCommandBuffer->mCommandAllocator), executeFence);
+    }
+    
+    void DX12Device::releaseSurfaceResources()
+    {
+        // Recorded command lists keep references to swapchain buffers until the
+        // list is reset. Drain the queue, then drop those references before the
+        // caller releases the back buffers.
+        const u64_t waitValue = mFence.signal(mCommandQueue.Get());
+        mFence.wait(waitValue);
+
+        for (auto it = mCommandBuffers.begin(); it != mCommandBuffers.end();)
+        {
+            std::shared_ptr<DX12CommandBuffer> commandBuffer = it->lock();
+            if (!commandBuffer)
+            {
+                it = mCommandBuffers.erase(it);
+                continue;
+            }
+            commandBuffer->releaseResourceReferences();
+            ++it;
+        }
+    }
+
+    void DX12Device::waitForGPU()
+    {
+        const u64_t waitValue = mFence.signal(mCommandQueue.Get());
+        mFence.wait(waitValue);
+    }
+    
+    void DX12Device::waitForNextFrame()
+    {
+        const uint32_t nextFrameIndex = (mFrameIndex + 1) % kFrameCount;
+
+        const u64_t target = mFenceValues[nextFrameIndex];
+        if (!mFence.isCompleted(target))
+            mFence.wait(target);
+
+        mFrameIndex = nextFrameIndex;
+    }
+
+    Surface::Ref DX12Device::createSurface(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight)
+    {
+        for (DX12Surface* existing : mSurfaces)
+        {
+            if (existing->mWindowHandle == windowHandle)
+            {
+                throw std::runtime_error("Device: surface already exists for this window.");
+            }
+        }
+        return std::make_shared<DX12Surface>(*this, windowHandle, windowWidth, windowHeight);
+    }
+    
+    Device::Ref GPUFactory::createDevice()
+    {
+        return std::make_shared<DX12Device>();
+    }
+}

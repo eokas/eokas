@@ -1,0 +1,415 @@
+#ifndef _EOKAS_GPU_HEADER_H_
+#define _EOKAS_GPU_HEADER_H_
+
+#include "Base/Main.h"
+
+namespace eokas
+{
+    enum class Format
+    {
+        Unknown,
+        R32_UINT,
+        R32_FLOAT,
+        R8G8B8A8_UNORM,
+        B8G8R8A8_UNORM,
+        R16G16B16A16_FLOAT,
+        R32G32_FLOAT,
+        R32G32B32_FLOAT,
+        R32G32B32A32_FLOAT,
+        D32_FLOAT,
+        D24_UNORM_S8_UINT,
+        D16_UNORM,
+        DXT1,
+        DXT3,
+        DXT5,
+        ASTC_4x4_HDR,
+        ASTC_6x6_HDR,
+        ASTC_8x8_HDR,
+        ASTC_10x10_HDR,
+        ASTC_12x12_HDR
+    };
+    
+    enum class Topology
+    {
+        Undefined = 0,
+        PointList = 1,
+        LineList = 2,
+        LineStrip = 3,
+        TriangleList = 4,
+        TriangleStrip = 5,
+        LineList_Adj = 10,
+        LineStrip_Adj = 11,
+        TriangleList_Adj = 12,
+        TriangleStrip_Adj = 13,
+    };
+    
+    struct Resource
+    {
+        using Ref = std::shared_ptr<Resource>;
+
+        virtual ~Resource() = default;
+        virtual void* getNativeResource() const = 0;
+    };
+    
+    struct Buffer : public Resource
+    {
+        using Ref = std::shared_ptr<Buffer>;
+        virtual uint32_t getLength() const = 0;
+        virtual uint32_t getBindOffset() const { return 0; }
+    };
+
+    struct StaticBuffer : public Buffer
+    {
+        using Ref = std::shared_ptr<StaticBuffer>;
+    };
+
+    struct MutableBuffer : public Buffer
+    {
+        using Ref = std::shared_ptr<MutableBuffer>;
+        virtual void* map() = 0;
+        virtual void unmap() = 0;
+    };
+
+    struct DynamicBuffer : public Buffer
+    {
+        using Ref = std::shared_ptr<DynamicBuffer>;
+        virtual void* map() = 0;
+        virtual void unmap() = 0;
+    };
+    
+    struct TextureOptions
+    {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        uint32_t depth = 0;
+        Format format = Format::Unknown;
+        uint32_t mipCount = 1;
+    };
+
+    enum class SamplerFilterMode { Point, Linear, Anisotropic };
+
+    enum class SamplerAddressMode { Clamp, Border, Repeat, Mirror };
+
+    struct SamplerState
+    {
+        using Ref = std::shared_ptr<SamplerState>;
+
+        SamplerFilterMode minFilter = SamplerFilterMode::Linear;
+        SamplerFilterMode magFilter = SamplerFilterMode::Linear;
+        SamplerFilterMode mipFilter = SamplerFilterMode::Linear;
+        SamplerAddressMode addressU = SamplerAddressMode::Clamp;
+        SamplerAddressMode addressV = SamplerAddressMode::Clamp;
+        SamplerAddressMode addressW = SamplerAddressMode::Clamp;
+
+        bool operator==(const SamplerState& other) const
+        {
+            return minFilter == other.minFilter
+                && magFilter == other.magFilter
+                && mipFilter == other.mipFilter
+                && addressU == other.addressU
+                && addressV == other.addressV
+                && addressW == other.addressW;
+        }
+
+        bool operator!=(const SamplerState& other) const { return !(*this == other); }
+    };
+    
+    struct Texture : public Resource
+    {
+        using Ref = std::shared_ptr<Texture>;
+
+        virtual const TextureOptions& getOptions() const = 0;
+    };
+
+    struct Texture2D : public Texture
+    {
+        using Ref = std::shared_ptr<Texture2D>;
+    };
+
+    struct RenderTargetOptions
+    {
+        uint32_t width = 0;
+        uint32_t height = 0;
+        std::vector<Format> colorFormats; // 至少一项；空 vector 对 createRenderTarget 非法
+        Format depthStencilFormat = Format::Unknown;
+    };
+
+    struct RenderTarget
+    {
+        using Ref = std::shared_ptr<RenderTarget>;
+
+        virtual ~RenderTarget() = default;
+        virtual uint32_t getWidth() const = 0;
+        virtual uint32_t getHeight() const = 0;
+        virtual uint32_t getColorBufferCount() const = 0;
+        virtual Texture2D::Ref getColorBuffer(uint32_t index) const = 0;
+        virtual Texture2D::Ref getDepthStencilBuffer() const = 0;
+    };
+    
+    struct VertexElement
+    {
+        std::string semanticName = {};
+        uint32_t semanticIndex = 0;
+        uint32_t offset = 0;
+        Format format = Format::Unknown;
+    };
+    
+    enum class ShaderType
+    {
+        Vertex, Fragment, Compute
+    };
+    
+    enum class ShaderTarget
+    {
+        SM_3_0, SM_3_1, SM_4_5, SM_5_0, SM_6_0, SM_6_8
+    };
+    
+    struct ShaderOptions
+    {
+        std::string name = "";
+        std::string source = "";
+        std::string entry = "";
+        ShaderType type = ShaderType::Vertex;
+        ShaderTarget target = ShaderTarget::SM_3_0;
+    };
+
+    enum class PipelineResourceType
+    {
+        UniformBuffer,
+        Texture,
+        Sampler
+    };
+
+    struct PipelineLayoutEntry
+    {
+        std::string name;
+        PipelineResourceType type = PipelineResourceType::UniformBuffer;
+        uint32_t slot = 0;
+        uint32_t count = 1;
+    };
+
+    struct PipelineLayout
+    {
+        std::vector<PipelineLayoutEntry> entries;
+
+        void add(const PipelineLayoutEntry& entry);
+        const PipelineLayoutEntry* findBySlot(PipelineResourceType type, uint32_t slot) const;
+        const PipelineLayoutEntry* findByName(PipelineResourceType type, const std::string& name) const;
+        bool compatibleWith(const PipelineLayout& other) const;
+    };
+    
+    struct ShaderProgram
+    {
+        using Ref = std::shared_ptr<ShaderProgram>;
+
+        virtual ~ShaderProgram() = default;
+        
+        virtual const ShaderOptions& getOptions() const = 0;
+        virtual const PipelineLayout& getLayout() const = 0;
+    };
+    
+    enum class FillMode
+    {
+        Solid, Wireframe
+    };
+    
+    enum class CullMode
+    {
+        None, Front, Back
+    };
+
+    enum class CompareOp
+    {
+         Always, Never, Equal, NotEqual, Less, LessEqual, Greater, GreaterEqual
+    };
+
+    enum class StencilOp {
+        Keep, Zero, Replace, IncrementClamp, DecrementClamp, Invert,
+        IncrementWrap, DecrementWrap
+    };
+
+    struct DepthStencilState
+    {
+        bool depthTest = true;
+        bool depthWrite = true;
+        CompareOp depthFunc = CompareOp::Less;
+        StencilOp stencilOp = StencilOp::Keep;
+
+        bool operator==(const DepthStencilState& other) const
+        {
+            return depthTest == other.depthTest
+                && depthWrite == other.depthWrite
+                && depthFunc == other.depthFunc
+                && stencilOp == other.stencilOp;
+        }
+
+        bool operator!=(const DepthStencilState& other) const { return !(*this == other); }
+    };
+
+    enum class BlendFactor
+    {
+        Zero, One,
+        SrcColor, OneMinusSrcColor,
+        DstColor, OneMinusDstColor,
+        SrcAlpha, OneMinusSrcAlpha,
+        DstAlpha, OneMinusDstAlpha
+    };
+
+    enum class BlendOp {
+        Add, Subtract, ReverseSubtract, Min, Max
+    };
+
+    struct BlendState
+    {
+        bool enabled = false;
+        BlendFactor srcColor = BlendFactor::One;
+        BlendFactor dstColor = BlendFactor::Zero;
+        BlendOp colorOp = BlendOp::Add;
+        BlendFactor srcAlpha = BlendFactor::One;
+        BlendFactor dstAlpha = BlendFactor::Zero;
+        BlendOp alphaOp = BlendOp::Add;
+
+        bool operator==(const BlendState& other) const
+        {
+            return enabled == other.enabled
+                && srcColor == other.srcColor
+                && dstColor == other.dstColor
+                && colorOp == other.colorOp
+                && srcAlpha == other.srcAlpha
+                && dstAlpha == other.dstAlpha
+                && alphaOp == other.alphaOp;
+        }
+
+        bool operator!=(const BlendState& other) const { return !(*this == other); }
+    };
+    
+    struct PipelineObject
+    {
+        using Ref = std::shared_ptr<PipelineObject>;
+
+        virtual ~PipelineObject() = default;
+
+        virtual void begin() = 0;
+        virtual void setVertexElements(std::vector<VertexElement>& vElements) = 0;
+        virtual void setShaderProgram(ShaderType type, ShaderProgram::Ref shaderProgram) = 0;
+        virtual void setFillMode(FillMode fillMode) = 0;
+        virtual void setCullMode(CullMode cullMode) = 0;
+        virtual void setDepthStencilState(const DepthStencilState& state) = 0;
+        virtual void setSamplerState(uint32_t index, const SamplerState& state) = 0;
+        virtual void setBlendState(const BlendState& state) = 0;
+        virtual void setColorBufferFormats(const std::vector<Format>& formats) = 0;
+        virtual void setDepthStencilBufferFormat(Format format) = 0;
+        virtual void end() = 0;
+        virtual const PipelineLayout& getLayout() const = 0;
+    };
+
+    struct PipelineBindings
+    {
+        using Ref = std::shared_ptr<PipelineBindings>;
+
+        virtual ~PipelineBindings() = default;
+
+        virtual const PipelineLayout& getLayout() const = 0;
+        virtual void begin() = 0;
+        virtual void setUniformBufferBySlot(uint32_t slot, Buffer::Ref buffer) = 0;
+        virtual void setUniformBufferByName(const std::string& name, Buffer::Ref buffer) = 0;
+        virtual void setTextureBySlot(uint32_t slot, Texture::Ref texture) = 0;
+        virtual void setTextureByName(const std::string& name, Texture::Ref texture) = 0;
+        virtual void end() = 0;
+    };
+    
+    struct Viewport
+    {
+        float left = 0;
+        float right = 1024;
+        float top = 0;
+        float bottom = 768;
+        float front = 0.0f;
+        float back = 1.0f;
+    };
+    
+    enum class ResourceState
+    {
+        Common,
+        Present,
+        RenderTarget,
+        DepthWrite,
+        DepthRead,
+        ShaderResource,
+        CopyDest,
+        CopySource
+    };
+
+    struct Barrier
+    {
+        Resource::Ref resource = nullptr;
+        ResourceState before = ResourceState::Common;
+        ResourceState after = ResourceState::Common;
+    };
+    
+    struct CommandBuffer
+    {
+        using Ref = std::shared_ptr<CommandBuffer>;
+
+        virtual ~CommandBuffer() = default;
+
+        virtual void open() = 0;
+        virtual void setPipelineObject(PipelineObject::Ref pipeline) = 0;
+        virtual void setPipelineBindings(PipelineBindings::Ref bindings) = 0;
+        virtual void setRenderTarget(RenderTarget::Ref renderTarget) = 0;
+        virtual void clearRenderTargetColorBuffer(RenderTarget::Ref renderTarget, uint32_t colorIndex, float(& color)[4]) = 0;
+        virtual void clearRenderTargetDepthStencilBuffer(RenderTarget::Ref renderTarget, float depth = 1.0f, uint32_t stencil = 0) = 0;
+        virtual void setViewport(const Viewport& viewport) = 0;
+        virtual void setTopology(Topology topology) = 0;
+        virtual void setVertexBuffer(Buffer::Ref buffer, uint32_t length, uint32_t stride) = 0;
+        virtual void setIndexBuffer(Buffer::Ref buffer, uint32_t length, Format format) = 0;
+        virtual void drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, uint32_t startInstanceLocation) = 0;
+        virtual void fillBuffer(StaticBuffer::Ref target, const void* data, uint32_t size) = 0;
+        virtual void fillTexture(Texture2D::Ref target, const std::vector<uint8_t>& source) = 0;
+        virtual void barrier(const std::vector<Barrier>& barriers) = 0;
+        virtual void close() = 0;
+    };
+    
+    constexpr uint32_t kFrameCount = 2;
+
+    struct Surface
+    {
+        using Ref = std::shared_ptr<Surface>;
+
+        virtual ~Surface() = default;
+        virtual void* getWindowHandle() const = 0;
+        virtual uint32_t getWidth() const = 0;
+        virtual uint32_t getHeight() const = 0;
+        virtual RenderTarget::Ref getActiveRenderTarget() = 0;
+        virtual void present() = 0;
+        virtual void resize(uint32_t width, uint32_t height) = 0;
+    };
+
+    struct Device
+    {
+        using Ref = std::shared_ptr<Device>;
+
+        virtual Surface::Ref createSurface(void* windowHandle, uint32_t windowWidth, uint32_t windowHeight) = 0;
+        virtual uint32_t getFrameIndex() const = 0;
+        virtual StaticBuffer::Ref createStaticBuffer(uint32_t length) = 0;
+        virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) = 0;
+        virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length) = 0;
+        virtual Texture2D::Ref createTexture2D(const TextureOptions& options) = 0;
+        virtual RenderTarget::Ref createRenderTarget(const RenderTargetOptions& options) = 0;
+        virtual ShaderProgram::Ref createShaderProgram(const ShaderOptions& options) = 0;
+        virtual PipelineObject::Ref createPipelineObject() = 0;
+        virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) = 0;
+        virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) = 0;
+        virtual CommandBuffer::Ref createCommandBuffer() = 0;
+        virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) = 0;
+        virtual void waitForGPU() = 0;
+        virtual void waitForNextFrame() = 0;
+    };
+    
+    struct GPUFactory
+    {
+        static Device::Ref createDevice();
+    };
+}
+
+#endif//_EOKAS_GPU_HEADER_H_
