@@ -128,6 +128,11 @@ function(eokas_add_unit_module MODULE_NAME)
         target_sources(${EXEC_NAME} PRIVATE "${EOKAS_PROJECT_DIR}/Test/Test-UI/FreetypeDepsStubs.cpp")
     endif()
 
+    if(MODULE_NAME STREQUAL "UI")
+        target_sources(${EXEC_NAME} PRIVATE "${EOKAS_PROJECT_DIR}/Test/Test-UI/UIHost.cpp")
+        target_include_directories(${EXEC_NAME} PRIVATE "${EOKAS_PROJECT_DIR}/Test/Test-UI")
+    endif()
+
     if(MODULE_NAME STREQUAL "FBX")
         file(GLOB FBX_DLLS "${EOKAS_RUNTIME_DIR}/FBX/fbxsdk/lib/x64/release/*.dll")
         foreach(dll ${FBX_DLLS})

@@ -1,13 +1,13 @@
 #include "Unit.h"
-#include "Native/Dialogs.h"
+#include "Native/NativeDialogs.h"
 
 using namespace eokas;
 
 EOKAS_TEST_CASE(dialogs) {
-    auto alert = &Dialogs::alert;
-    auto confirm = &Dialogs::confirm;
-    auto openFile = &Dialogs::openFileDialog;
-    auto openFolder = &Dialogs::openFolderDialog;
+    auto alert = &NativeDialogs::alert;
+    auto confirm = &NativeDialogs::confirm;
+    auto openFile = &NativeDialogs::openFileDialog;
+    auto openFolder = &NativeDialogs::openFolderDialog;
     EOKAS_EXPECT(alert != nullptr);
     EOKAS_EXPECT(confirm != nullptr);
     EOKAS_EXPECT(openFile != nullptr);

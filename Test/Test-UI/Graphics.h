@@ -9,7 +9,9 @@
 #include <memory>
 #include <vector>
 
+#include "Native/NativeWindow.h"
 #include "UI/Main.h"
+#include "UIHost.h"
 
 namespace eokas::ui {
 
@@ -20,68 +22,198 @@ namespace eokas::ui {
         widget->shape.origin = box.origin + widget->shape.pivot * widget->shape.size;
     }
 
+    namespace {
+
+        bool mapUIKey(int code, bool extended, UIKey& key)
+        {
+            switch (code) {
+            case VK_BACK: key = UIKey::Backspace; return true;
+            case VK_TAB: key = UIKey::Tab; return true;
+            case VK_RETURN: key = extended ? UIKey::KeypadEnter : UIKey::Enter; return true;
+            case VK_ESCAPE: key = UIKey::Escape; return true;
+            case VK_SPACE: key = UIKey::Space; return true;
+            case VK_INSERT: key = UIKey::Insert; return true;
+            case VK_DELETE: key = UIKey::Delete; return true;
+            case VK_HOME: key = UIKey::Home; return true;
+            case VK_END: key = UIKey::End; return true;
+            case VK_PRIOR: key = UIKey::PageUp; return true;
+            case VK_NEXT: key = UIKey::PageDown; return true;
+            case VK_LEFT: key = UIKey::Left; return true;
+            case VK_RIGHT: key = UIKey::Right; return true;
+            case VK_UP: key = UIKey::Up; return true;
+            case VK_DOWN: key = UIKey::Down; return true;
+            case VK_OEM_7: key = UIKey::Apostrophe; return true;
+            case VK_OEM_COMMA: key = UIKey::Comma; return true;
+            case VK_OEM_MINUS: key = UIKey::Minus; return true;
+            case VK_OEM_PERIOD: key = UIKey::Period; return true;
+            case VK_OEM_2: key = UIKey::Slash; return true;
+            case VK_OEM_1: key = UIKey::Semicolon; return true;
+            case VK_OEM_PLUS: key = UIKey::Equal; return true;
+            case VK_OEM_4: key = UIKey::LeftBracket; return true;
+            case VK_OEM_5: key = UIKey::Backslash; return true;
+            case VK_OEM_6: key = UIKey::RightBracket; return true;
+            case VK_OEM_3: key = UIKey::GraveAccent; return true;
+            case VK_CAPITAL: key = UIKey::CapsLock; return true;
+            case VK_SCROLL: key = UIKey::ScrollLock; return true;
+            case VK_NUMLOCK: key = UIKey::NumLock; return true;
+            case VK_SNAPSHOT: key = UIKey::PrintScreen; return true;
+            case VK_PAUSE: key = UIKey::Pause; return true;
+            case VK_DECIMAL: key = UIKey::KeypadDecimal; return true;
+            case VK_DIVIDE: key = UIKey::KeypadDivide; return true;
+            case VK_MULTIPLY: key = UIKey::KeypadMultiply; return true;
+            case VK_SUBTRACT: key = UIKey::KeypadSubtract; return true;
+            case VK_ADD: key = UIKey::KeypadAdd; return true;
+            case VK_OEM_NEC_EQUAL: key = UIKey::KeypadEqual; return true;
+            case VK_APPS: key = UIKey::Menu; return true;
+            default:
+                break;
+            }
+
+            if (code >= 'A' && code <= 'Z') {
+                key = static_cast<UIKey>(static_cast<int>(UIKey::A) + (code - 'A'));
+                return true;
+            }
+            if (code >= '0' && code <= '9') {
+                key = static_cast<UIKey>(static_cast<int>(UIKey::Digit0) + (code - '0'));
+                return true;
+            }
+            if (code >= VK_F1 && code <= VK_F12) {
+                key = static_cast<UIKey>(static_cast<int>(UIKey::F1) + (code - VK_F1));
+                return true;
+            }
+            if (code >= VK_NUMPAD0 && code <= VK_NUMPAD9) {
+                key = static_cast<UIKey>(static_cast<int>(UIKey::Keypad0) + (code - VK_NUMPAD0));
+                return true;
+            }
+            return false;
+        }
+
+        bool characterKey(UIKey key)
+        {
+            int value = static_cast<int>(key);
+            auto between = [value](UIKey begin, UIKey end)
+            {
+                return value >= static_cast<int>(begin) && value <= static_cast<int>(end);
+            };
+            if (between(UIKey::A, UIKey::Z)) return true;
+            if (between(UIKey::Digit0, UIKey::Digit9)) return true;
+            if (key == UIKey::Space) return true;
+            if (between(UIKey::Apostrophe, UIKey::GraveAccent)) return true;
+            if (between(UIKey::Keypad0, UIKey::Keypad9)) return true;
+            return key == UIKey::KeypadDecimal
+                || key == UIKey::KeypadDivide
+                || key == UIKey::KeypadMultiply
+                || key == UIKey::KeypadSubtract
+                || key == UIKey::KeypadAdd
+                || key == UIKey::KeypadEqual;
+        }
+
+    }
+
     class Graphics {
         Renderer mRenderer;
         Surface::Ref mSurface;
         struct FloatWindow
         {
-            HWND hwnd = nullptr;
+            NativeWindow native;
+            UIWindow* uiWindow = nullptr;
             Surface::Ref surface;
             Space space;
             Camera::Ref camera;
             Rect screenRect;
             bool shapeReady = false;
             bool shown = false;
+            bool closing = false;
         };
+        NativeWindow mNativeWindow;
         std::vector<std::unique_ptr<FloatWindow>> mFloatWindows;
         std::vector<std::unique_ptr<FloatWindow>> mClosingFloatWindows;
-        std::unique_ptr<UIApp> mHost;
+        std::unique_ptr<UIHost> mHost;
         Space mSpace;
         UIWindow* mWindow = nullptr;
         std::shared_ptr<UIMenu> mMenu;
         std::shared_ptr<UIView> mView;
         std::shared_ptr<UIDockSpace> mDock;
-        HWND mHostWindow = nullptr;
         std::shared_ptr<UIList> mSections;
         float mClientWidth = 0.0f;
         float mClientHeight = 0.0f;
 
     public:
+        ~Graphics()
+        {
+            this->quit();
+        }
+
         UIWindow& window() { return *mWindow; }
 
-        bool splitterCursor(HWND hwnd, float x, float y, bool& vertical) const
+        bool isOpen() const
         {
-            if (hwnd != mHostWindow || !mDock) return false;
-            return mDock->splitterAxis(x, y, vertical);
+            return mNativeWindow.isOpen();
         }
 
-        void hoverDock(HWND hwnd, float x, float y)
+        void pump()
         {
-            if (hwnd != mHostWindow || !mDock) return;
-            mDock->setHover(x, y);
+            mNativeWindow.pumpMessages();
+            std::vector<FloatWindow*> live;
+            live.reserve(mFloatWindows.size());
+            for (auto& item : mFloatWindows)
+            {
+                if (item) live.push_back(item.get());
+            }
+            for (FloatWindow* item : live)
+            {
+                item->native.pumpMessages();
+            }
+            std::vector<FloatWindow*> closing;
+            closing.reserve(mClosingFloatWindows.size());
+            for (auto& item : mClosingFloatWindows)
+            {
+                if (item) closing.push_back(item.get());
+            }
+            for (FloatWindow* item : closing)
+            {
+                item->native.pumpMessages();
+            }
         }
 
-        void init(HWND windowHandle, int32_t windowWidth, int32_t windowHeight) {
-            mHostWindow = windowHandle;
+        bool init(float logicalWidth, float logicalHeight) {
+            if (logicalWidth < 1.0f) logicalWidth = 1.0f;
+            if (logicalHeight < 1.0f) logicalHeight = 1.0f;
+            if (!mNativeWindow.create(String("test-ui"), logicalWidth, logicalHeight)) {
+                return false;
+            }
+            HWND windowHandle = (HWND)mNativeWindow.handle();
+            UINT dpi = GetDpiForWindow(windowHandle);
+            if (dpi == 0)
+            {
+                dpi = 96;
+            }
+            const float uiScale = (float)dpi / 96.0f;
+            mNativeWindow.setClientSize(logicalWidth * uiScale, logicalHeight * uiScale);
+            mNativeWindow.setPosition(80.0f, 40.0f);
+            Vector2 client = mNativeWindow.clientSize();
+            const float windowWidth = client.x >= 1.0f ? client.x : logicalWidth * uiScale;
+            const float windowHeight = client.y >= 1.0f ? client.y : logicalHeight * uiScale;
+
             mRenderer.create();
             mSurface = mRenderer.attach(windowHandle, (uint32_t)windowWidth, (uint32_t)windowHeight);
-            mHost = std::make_unique<UIApp>();
-            mHost->onCreateWindow = [this](const Rect& screenRect) -> void*
+            mHost = std::make_unique<UIHost>();
+            mHost->onCreateWindow = [this](UIWindow& window, const Rect& screenRect)
             {
-                return this->createFloatingWindow(screenRect);
+                this->createFloatingWindow(window, screenRect);
             };
-            mHost->onDestroyWindow = [this](void* handle)
+            mHost->onDestroyWindow = [this](UIWindow& window)
             {
-                this->destroyFloatingWindow(handle);
+                this->destroyFloatingWindow(window);
             };
-            mHost->onPlaceWindow = [this](void* handle, const Rect& screenRect)
+            mHost->onPlaceWindow = [this](UIWindow& window, const Rect& screenRect)
             {
                 for (auto& item : mFloatWindows)
                 {
-                    if (item && item->hwnd == handle) item->screenRect = screenRect;
+                    if (item && item->uiWindow == &window) item->screenRect = screenRect;
                 }
             };
-            mWindow = &mHost->open(windowHandle, (uint32_t)windowWidth, (uint32_t)windowHeight);
+            mWindow = &mHost->open((uint32_t)windowWidth, (uint32_t)windowHeight);
             const char* fallbacks[] = {
                 "C:/Windows/Fonts/msyh.ttc",
                 "C:/Windows/Fonts/msyh.ttf",
@@ -97,12 +229,6 @@ namespace eokas::ui {
                 }
             }
 
-            UINT dpi = GetDpiForWindow(windowHandle);
-            if (dpi == 0)
-            {
-                dpi = 96;
-            }
-            const float uiScale = (float)dpi / 96.0f;
             const float fontPx = 15.0f * uiScale;
             const char* fontPath = "Content/Fonts/RobotoRegular.ttf";
 
@@ -1191,21 +1317,29 @@ namespace eokas::ui {
             mSpace.add(camera);
             mSpace.activeCamera = camera;
             mSpace.add(mWindow->primitive());
+            this->bindInput();
+            mNativeWindow.show();
+            return true;
         }
 
-        void* createFloatingWindow(const Rect& screenRect)
+        void createFloatingWindow(UIWindow& window, const Rect& screenRect)
         {
             int w = (int)screenRect.size.x;
             int h = (int)screenRect.size.y;
             if (w < 1) w = 1;
             if (h < 1) h = 1;
-            HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW, L"test-ui", L"", WS_POPUP,
-                (int)screenRect.origin.x, (int)screenRect.origin.y, w, h, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
-            SetWindowLongPtrW(hwnd, GWLP_USERDATA, (LONG_PTR)this);
             auto item = std::make_unique<FloatWindow>();
-            item->hwnd = hwnd;
+            if (!item->native.create(String(), (float)w, (float)h, NativeWindowStyle::Borderless)) {
+                return;
+            }
+            item->native.setPosition(screenRect.origin.x, screenRect.origin.y);
+            void* handle = item->native.handle();
+            if (handle == nullptr) {
+                return;
+            }
+            item->uiWindow = &window;
             item->screenRect = screenRect;
-            item->surface = mRenderer.attach(hwnd, (uint32_t)w, (uint32_t)h);
+            item->surface = mRenderer.attach(handle, (uint32_t)w, (uint32_t)h);
             item->camera = std::make_shared<Camera>();
             item->camera->viewport.left = 0.0f;
             item->camera->viewport.top = 0.0f;
@@ -1216,21 +1350,21 @@ namespace eokas::ui {
             item->space.clearColor = mSpace.clearColor;
             item->space.add(item->camera);
             item->space.activeCamera = item->camera;
+            this->bindFloatInput(*item);
             mFloatWindows.push_back(std::move(item));
-            return hwnd;
         }
 
-        void destroyFloatingWindow(void* windowHandle)
+        void destroyFloatingWindow(UIWindow& window)
         {
-            HWND hwnd = (HWND)windowHandle;
             for (auto it = mFloatWindows.begin(); it != mFloatWindows.end(); ++it)
             {
-                if (it->get() == nullptr || (*it)->hwnd != hwnd) continue;
-                // Mouse-up on this window is still on the stack. Destroy the HWND
+                if (it->get() == nullptr || (*it)->uiWindow != &window) continue;
+                // Mouse-up on this window is still on the stack. Destroy it
                 // only after that handler returns.
+                (*it)->closing = true;
+                (*it)->native.hide();
                 mClosingFloatWindows.push_back(std::move(*it));
                 mFloatWindows.erase(it);
-                ShowWindow(hwnd, SW_HIDE);
                 return;
             }
         }
@@ -1243,46 +1377,21 @@ namespace eokas::ui {
             for (auto& item : closing)
             {
                 if (!item) continue;
-                HWND hwnd = item->hwnd;
-                item->hwnd = nullptr;
                 mRenderer.detach(item->surface);
-                if (!hwnd) continue;
-                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-                DestroyWindow(hwnd);
+                item->native.destroy();
             }
-        }
-
-        bool isClosingFloatWindow(HWND hwnd) const
-        {
-            for (auto& item : mClosingFloatWindows)
-            {
-                if (item && item->hwnd == hwnd) return true;
-            }
-            return false;
-        }
-
-        UIWindow* floatingWindow(HWND hwnd)
-        {
-            if (!mHost) return nullptr;
-            for (auto& item : mFloatWindows)
-            {
-                if (item && item->hwnd == hwnd) return mHost->find(hwnd);
-            }
-            return nullptr;
         }
 
         void placeFloatingWindows()
         {
             for (auto& item : mFloatWindows)
             {
-                if (!item || !item->hwnd) continue;
+                if (!item || item->closing || !item->native.isOpen()) continue;
                 int x = (int)std::floor(item->screenRect.origin.x + 0.5f);
                 int y = (int)std::floor(item->screenRect.origin.y + 0.5f);
-                RECT placed = {};
-                GetWindowRect(item->hwnd, &placed);
-                if (placed.left == x && placed.top == y) continue;
-                SetWindowPos(item->hwnd, nullptr, x, y, 0, 0,
-                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOREDRAW | SWP_NOCOPYBITS);
+                Vector2 placed = item->native.position();
+                if ((int)placed.x == x && (int)placed.y == y) continue;
+                item->native.setPosition((float)x, (float)y);
             }
         }
 
@@ -1291,16 +1400,15 @@ namespace eokas::ui {
             if (!mHost) return;
             for (auto& item : mFloatWindows)
             {
-                if (!item || !item->surface || !item->camera || !item->hwnd) continue;
-                UIWindow* uiWindow = mHost->find(item->hwnd);
+                if (!item || item->closing || !item->native.isOpen() || !item->surface || !item->camera) continue;
+                UIWindow* uiWindow = item->uiWindow;
                 if (!uiWindow || !uiWindow->root()) continue;
-                RECT client = {};
-                GetClientRect(item->hwnd, &client);
-                float w = (float)(client.right - client.left);
-                float h = (float)(client.bottom - client.top);
+                Vector2 client = item->native.clientSize();
+                float w = client.x;
+                float h = client.y;
                 if (w < 1.0f) w = 1.0f;
                 if (h < 1.0f) h = 1.0f;
-                mHost->layout(item->hwnd, w, h);
+                mHost->layout(*uiWindow, w, h);
                 item->camera->viewport.right = w;
                 item->camera->viewport.bottom = h;
                 if (!item->shapeReady)
@@ -1317,13 +1425,13 @@ namespace eokas::ui {
             if (!mHost) return;
             for (auto& item : mFloatWindows)
             {
-                if (!item || !item->surface || !item->camera || !item->hwnd) continue;
-                UIWindow* uiWindow = mHost->find(item->hwnd);
+                if (!item || item->closing || !item->native.isOpen() || !item->surface || !item->camera) continue;
+                UIWindow* uiWindow = item->uiWindow;
                 if (!uiWindow || !uiWindow->root()) continue;
                 if (!item->shown)
                 {
                     mRenderer.render(item->surface, item->space);
-                    ShowWindow(item->hwnd, SW_SHOWNOACTIVATE);
+                    item->native.show(false);
                     item->shown = true;
                     continue;
                 }
@@ -1331,16 +1439,32 @@ namespace eokas::ui {
             }
         }
 
-        void quit() {
+        void releasePresentation()
+        {
             if (mHost)
             {
                 mHost->closeAll();
                 this->flushClosingFloatWindows();
                 mHost->flushClosing();
-                mHost->close(mHostWindow);
+                if (mWindow) mHost->close(*mWindow);
                 mWindow = nullptr;
+                mHost.reset();
             }
+            else
+            {
+                this->flushClosingFloatWindows();
+            }
+            mMenu.reset();
+            mView.reset();
+            mDock.reset();
+            mSections.reset();
             mRenderer.detach(mSurface);
+            mSurface.reset();
+        }
+
+        void quit() {
+            this->releasePresentation();
+            mNativeWindow.destroy();
         }
 
         void tick(float delta) {
@@ -1367,6 +1491,97 @@ namespace eokas::ui {
             mRenderer.render(mSurface, mSpace);
             this->placeFloatingWindows();
             this->renderFloatingWindows();
+        }
+
+    private:
+        bool splitterCursor(float x, float y, bool& vertical) const
+        {
+            if (!mDock) return false;
+            return mDock->splitterAxis(x, y, vertical);
+        }
+
+        void hoverDock(float x, float y)
+        {
+            if (!mDock) return;
+            mDock->setHover(x, y);
+        }
+
+        void bindFloatInput(FloatWindow& item)
+        {
+            FloatWindow* raw = &item;
+            raw->native.onMouseMove = [raw](float x, float y)
+            {
+                if (raw->closing || raw->uiWindow == nullptr) return;
+                raw->uiWindow->onMouseMove(x, y);
+            };
+            raw->native.onMouseDown = [raw](float x, float y, int button)
+            {
+                if (raw->closing || raw->uiWindow == nullptr || button != 0) return;
+                raw->uiWindow->onMouseDown(x, y, button);
+            };
+            raw->native.onMouseUp = [raw](float x, float y, int button)
+            {
+                if (raw->closing || raw->uiWindow == nullptr || button != 0) return;
+                raw->uiWindow->onMouseUp(x, y, button);
+            };
+        }
+
+        void bindInput()
+        {
+            mNativeWindow.onClose = [this]()
+            {
+                this->releasePresentation();
+            };
+            mNativeWindow.onMouseMove = [this](float x, float y)
+            {
+                this->hoverDock(x, y);
+                if (mWindow) mWindow->onMouseMove(x, y);
+            };
+            mNativeWindow.onMouseDown = [this](float x, float y, int button)
+            {
+                if (mWindow) mWindow->onMouseDown(x, y, button);
+            };
+            mNativeWindow.onMouseUp = [this](float x, float y, int button)
+            {
+                if (mWindow) mWindow->onMouseUp(x, y, button);
+            };
+            mNativeWindow.onMouseWheel = [this](float x, float y, float deltaX, float deltaY)
+            {
+                if (mWindow) mWindow->onMouseWheel(x, y, deltaX, deltaY);
+            };
+            mNativeWindow.onCursor = [this](float x, float y, NativeCursor& cursor)
+            {
+                bool vertical = false;
+                if (!this->splitterCursor(x, y, vertical)) return false;
+                cursor = vertical ? NativeCursor::SizeNorthSouth : NativeCursor::SizeWestEast;
+                return true;
+            };
+            mNativeWindow.onKeyDown = [this](int keyCode, bool extended, bool ctrl, bool shift, bool alt)
+            {
+                if (!mWindow) return false;
+                UIKey key = UIKey::Enter;
+                if (!mapUIKey(keyCode, extended, key)) return false;
+                UIKeyMods mods;
+                mods.ctrl = ctrl;
+                mods.shift = shift;
+                mods.alt = alt;
+                if (!characterKey(key) || mods.ctrl || mods.alt)
+                {
+                    mWindow->onKeyDown(key, mods);
+                    return true;
+                }
+                return false;
+            };
+            mNativeWindow.onChar = [this](uint32_t codepoint)
+            {
+                if (!mWindow) return false;
+                if (codepoint >= 32 && codepoint != 127)
+                {
+                    mWindow->onChar(codepoint);
+                    return true;
+                }
+                return false;
+            };
         }
     };
 }

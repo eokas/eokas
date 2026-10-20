@@ -1,5 +1,6 @@
 #include "Unit.h"
 #include "UI/Main.h"
+#include "UIHost.h"
 #include <cmath>
 
 using namespace eokas;
@@ -365,17 +366,15 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(dock.previewMode() == UIDockMode::Bottom);
 
     int windows = 0;
-    UIApp app;
-    app.onCreateWindow = [&](const Rect&) {
+    UIHost app;
+    app.onCreateWindow = [&](UIWindow&, const Rect&) {
         windows += 1;
-        return (void*)1;
     };
-    void* nativeWindow = (void*)1;
-    UIWindow& opened = app.open(nativeWindow, 320, 240);
-    EOKAS_EXPECT(app.find(nativeWindow) == &opened);
-    app.layout(nativeWindow, 320, 240);
-    app.close(nativeWindow);
-    EOKAS_EXPECT(app.find(nativeWindow) == nullptr);
+    UIWindow& opened = app.open(320, 240);
+    app.layout(opened, 320, 240);
+    EOKAS_EXPECT(opened.root() == nullptr);
+    app.close(opened);
+    EOKAS_EXPECT(windows == 0);
 
     UIWidget scaled;
     EOKAS_EXPECT(_FloatEqual(scaled.shape.scale.x, 1.0f));
@@ -903,13 +902,12 @@ EOKAS_TEST_CASE(ui) {
     dockHost->shape.setBox(Vector2(0.0f, 40.0f), Vector2(800.0f, 560.0f));
     hostRoot->attachChild(dockHost);
     host.setRoot(hostRoot);
-    UIApp dockApp;
+    UIHost dockApp;
     int created = 0;
     int destroyed = 0;
-    dockApp.onCreateWindow = [&](const Rect&) -> void*
+    dockApp.onCreateWindow = [&](UIWindow&, const Rect&)
     {
         created += 1;
-        return (void*)(intptr_t)created;
     };
     dockApp.registerSpace(dockHost.get());
     auto makePage = [](const char* title)
@@ -929,7 +927,7 @@ EOKAS_TEST_CASE(ui) {
     };
     auto pageA = makePage("One");
     auto pageB = makePage("Two");
-    dockApp.onDestroyWindow = [&](void*)
+    dockApp.onDestroyWindow = [&](UIWindow&)
     {
         destroyed += 1;
         host.onMouseMove(420.0f, 320.0f);

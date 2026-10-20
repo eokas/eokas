@@ -16,6 +16,10 @@ eokas_runtime_module(UI)
 eokas_runtime_module(FBX)
 eokas_runtime_module(Elang)
 eokas_runtime_module(ImApp)
+eokas_runtime_module(Engine)
+
+eokas_toolkit_module(ToolBase)
+eokas_toolkit_module(MainEditor)
 
 include(CTest)
 eokas_test_module(Test-Units)

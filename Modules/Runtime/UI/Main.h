@@ -27,6 +27,5 @@
 #include "widgets/UIDropdown.h"
 #include "widgets/UIRegion.h"
 #include "widgets/UIDocking.h"
-#include "UIApp.h"
 
 #endif//_EOKAS_UI_MAIN_H_

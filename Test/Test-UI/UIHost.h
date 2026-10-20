@@ -1,9 +1,9 @@
-#ifndef _EOKAS_UI_APP_H_
-#define _EOKAS_UI_APP_H_
+#ifndef _EOKAS_UI_HOST_H_
+#define _EOKAS_UI_HOST_H_
 
-#include "UIWindow.h"
-#include "widgets/UIDocking.h"
-#include "UIFont.h"
+#include "UI/UIWindow.h"
+#include "UI/widgets/UIDocking.h"
+#include "UI/UIFont.h"
 #include <functional>
 #include <memory>
 #include <vector>
@@ -12,23 +12,22 @@ namespace eokas
 {
     class UIText;
 
-    class UIApp
+    class UIHost
     {
     public:
-        UIApp() = default;
-        ~UIApp();
+        UIHost() = default;
+        ~UIHost();
 
-        std::function<void*(const Rect& rect)> onCreateWindow;
-        std::function<void(void* nativeWindow, const Rect& rect)> onPlaceWindow;
-        std::function<void(void* nativeWindow)> onDestroyWindow;
+        std::function<void(UIWindow& window, const Rect& rect)> onCreateWindow;
+        std::function<void(UIWindow& window, const Rect& rect)> onPlaceWindow;
+        std::function<void(UIWindow& window)> onDestroyWindow;
 
-        UIWindow& open(void* nativeWindow, uint32_t width, uint32_t height);
-        void close(void* nativeWindow);
-        UIWindow* find(void* nativeWindow);
+        UIWindow& open(uint32_t width, uint32_t height);
+        void close(UIWindow& window);
         void setFallbackFontPath(const char* path);
         void prepare();
         void publishAtlas();
-        void layout(void* nativeWindow, float width, float height);
+        void layout(UIWindow& window, float width, float height);
         void flushClosing();
 
         void registerSpace(UIDockSpace* space);
@@ -39,9 +38,7 @@ namespace eokas
     private:
         struct Slot
         {
-            void* nativeWindow = nullptr;
             std::unique_ptr<UIWindow> uiWindow;
-            std::shared_ptr<UIDockPage> page;
             Rect screenRect;
         };
 
@@ -79,4 +76,4 @@ namespace eokas
     };
 }
 
-#endif//_EOKAS_UI_APP_H_
+#endif//_EOKAS_UI_HOST_H_

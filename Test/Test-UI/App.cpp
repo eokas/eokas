@@ -4,343 +4,15 @@
 
 #include "./Graphics.h"
 #include <dbghelp.h>
-#include <dwmapi.h>
 #include <cstdio>
 #include <cstring>
 #include <exception>
 #include <string>
 
 #pragma comment(lib, "dbghelp.lib")
-#pragma comment(lib, "dwmapi.lib")
 
-const wchar_t* windowTitle = L"test-ui";
-const wchar_t* windowClass = L"test-ui";
 const int windowWidth = 1000;
 const int windowHeight = 720;
-
-static bool mapUIKey(WPARAM wParam, LPARAM lParam, eokas::UIKey& key)
-{
-    switch (wParam)
-    {
-    case VK_BACK: key = eokas::UIKey::Backspace; return true;
-    case VK_TAB: key = eokas::UIKey::Tab; return true;
-    case VK_RETURN: key = (lParam & (1 << 24)) ? eokas::UIKey::KeypadEnter : eokas::UIKey::Enter; return true;
-    case VK_ESCAPE: key = eokas::UIKey::Escape; return true;
-    case VK_SPACE: key = eokas::UIKey::Space; return true;
-    case VK_INSERT: key = eokas::UIKey::Insert; return true;
-    case VK_DELETE: key = eokas::UIKey::Delete; return true;
-    case VK_HOME: key = eokas::UIKey::Home; return true;
-    case VK_END: key = eokas::UIKey::End; return true;
-    case VK_PRIOR: key = eokas::UIKey::PageUp; return true;
-    case VK_NEXT: key = eokas::UIKey::PageDown; return true;
-    case VK_LEFT: key = eokas::UIKey::Left; return true;
-    case VK_RIGHT: key = eokas::UIKey::Right; return true;
-    case VK_UP: key = eokas::UIKey::Up; return true;
-    case VK_DOWN: key = eokas::UIKey::Down; return true;
-    case 'A': key = eokas::UIKey::A; return true;
-    case 'B': key = eokas::UIKey::B; return true;
-    case 'C': key = eokas::UIKey::C; return true;
-    case 'D': key = eokas::UIKey::D; return true;
-    case 'E': key = eokas::UIKey::E; return true;
-    case 'F': key = eokas::UIKey::F; return true;
-    case 'G': key = eokas::UIKey::G; return true;
-    case 'H': key = eokas::UIKey::H; return true;
-    case 'I': key = eokas::UIKey::I; return true;
-    case 'J': key = eokas::UIKey::J; return true;
-    case 'K': key = eokas::UIKey::K; return true;
-    case 'L': key = eokas::UIKey::L; return true;
-    case 'M': key = eokas::UIKey::M; return true;
-    case 'N': key = eokas::UIKey::N; return true;
-    case 'O': key = eokas::UIKey::O; return true;
-    case 'P': key = eokas::UIKey::P; return true;
-    case 'Q': key = eokas::UIKey::Q; return true;
-    case 'R': key = eokas::UIKey::R; return true;
-    case 'S': key = eokas::UIKey::S; return true;
-    case 'T': key = eokas::UIKey::T; return true;
-    case 'U': key = eokas::UIKey::U; return true;
-    case 'V': key = eokas::UIKey::V; return true;
-    case 'W': key = eokas::UIKey::W; return true;
-    case 'X': key = eokas::UIKey::X; return true;
-    case 'Y': key = eokas::UIKey::Y; return true;
-    case 'Z': key = eokas::UIKey::Z; return true;
-    case '0': key = eokas::UIKey::Digit0; return true;
-    case '1': key = eokas::UIKey::Digit1; return true;
-    case '2': key = eokas::UIKey::Digit2; return true;
-    case '3': key = eokas::UIKey::Digit3; return true;
-    case '4': key = eokas::UIKey::Digit4; return true;
-    case '5': key = eokas::UIKey::Digit5; return true;
-    case '6': key = eokas::UIKey::Digit6; return true;
-    case '7': key = eokas::UIKey::Digit7; return true;
-    case '8': key = eokas::UIKey::Digit8; return true;
-    case '9': key = eokas::UIKey::Digit9; return true;
-    case VK_F1: key = eokas::UIKey::F1; return true;
-    case VK_F2: key = eokas::UIKey::F2; return true;
-    case VK_F3: key = eokas::UIKey::F3; return true;
-    case VK_F4: key = eokas::UIKey::F4; return true;
-    case VK_F5: key = eokas::UIKey::F5; return true;
-    case VK_F6: key = eokas::UIKey::F6; return true;
-    case VK_F7: key = eokas::UIKey::F7; return true;
-    case VK_F8: key = eokas::UIKey::F8; return true;
-    case VK_F9: key = eokas::UIKey::F9; return true;
-    case VK_F10: key = eokas::UIKey::F10; return true;
-    case VK_F11: key = eokas::UIKey::F11; return true;
-    case VK_F12: key = eokas::UIKey::F12; return true;
-    case VK_OEM_7: key = eokas::UIKey::Apostrophe; return true;
-    case VK_OEM_COMMA: key = eokas::UIKey::Comma; return true;
-    case VK_OEM_MINUS: key = eokas::UIKey::Minus; return true;
-    case VK_OEM_PERIOD: key = eokas::UIKey::Period; return true;
-    case VK_OEM_2: key = eokas::UIKey::Slash; return true;
-    case VK_OEM_1: key = eokas::UIKey::Semicolon; return true;
-    case VK_OEM_PLUS: key = eokas::UIKey::Equal; return true;
-    case VK_OEM_4: key = eokas::UIKey::LeftBracket; return true;
-    case VK_OEM_5: key = eokas::UIKey::Backslash; return true;
-    case VK_OEM_6: key = eokas::UIKey::RightBracket; return true;
-    case VK_OEM_3: key = eokas::UIKey::GraveAccent; return true;
-    case VK_CAPITAL: key = eokas::UIKey::CapsLock; return true;
-    case VK_SCROLL: key = eokas::UIKey::ScrollLock; return true;
-    case VK_NUMLOCK: key = eokas::UIKey::NumLock; return true;
-    case VK_SNAPSHOT: key = eokas::UIKey::PrintScreen; return true;
-    case VK_PAUSE: key = eokas::UIKey::Pause; return true;
-    case VK_NUMPAD0: key = eokas::UIKey::Keypad0; return true;
-    case VK_NUMPAD1: key = eokas::UIKey::Keypad1; return true;
-    case VK_NUMPAD2: key = eokas::UIKey::Keypad2; return true;
-    case VK_NUMPAD3: key = eokas::UIKey::Keypad3; return true;
-    case VK_NUMPAD4: key = eokas::UIKey::Keypad4; return true;
-    case VK_NUMPAD5: key = eokas::UIKey::Keypad5; return true;
-    case VK_NUMPAD6: key = eokas::UIKey::Keypad6; return true;
-    case VK_NUMPAD7: key = eokas::UIKey::Keypad7; return true;
-    case VK_NUMPAD8: key = eokas::UIKey::Keypad8; return true;
-    case VK_NUMPAD9: key = eokas::UIKey::Keypad9; return true;
-    case VK_DECIMAL: key = eokas::UIKey::KeypadDecimal; return true;
-    case VK_DIVIDE: key = eokas::UIKey::KeypadDivide; return true;
-    case VK_MULTIPLY: key = eokas::UIKey::KeypadMultiply; return true;
-    case VK_SUBTRACT: key = eokas::UIKey::KeypadSubtract; return true;
-    case VK_ADD: key = eokas::UIKey::KeypadAdd; return true;
-    case VK_OEM_NEC_EQUAL: key = eokas::UIKey::KeypadEqual; return true;
-    case VK_APPS: key = eokas::UIKey::Menu; return true;
-    default: return false;
-    }
-}
-
-static bool characterKey(eokas::UIKey key)
-{
-    int value = static_cast<int>(key);
-    auto between = [value](eokas::UIKey begin, eokas::UIKey end)
-    {
-        return value >= static_cast<int>(begin) && value <= static_cast<int>(end);
-    };
-    if (between(eokas::UIKey::A, eokas::UIKey::Z)) return true;
-    if (between(eokas::UIKey::Digit0, eokas::UIKey::Digit9)) return true;
-    if (key == eokas::UIKey::Space) return true;
-    if (between(eokas::UIKey::Apostrophe, eokas::UIKey::GraveAccent)) return true;
-    if (between(eokas::UIKey::Keypad0, eokas::UIKey::Keypad9)) return true;
-    return key == eokas::UIKey::KeypadDecimal
-        || key == eokas::UIKey::KeypadDivide
-        || key == eokas::UIKey::KeypadMultiply
-        || key == eokas::UIKey::KeypadSubtract
-        || key == eokas::UIKey::KeypadAdd
-        || key == eokas::UIKey::KeypadEqual;
-}
-
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    if (message == WM_ERASEBKGND)
-    {
-        return 1;
-    }
-    if (message == WM_PAINT)
-    {
-        PAINTSTRUCT ps;
-        BeginPaint(hWnd, &ps);
-        EndPaint(hWnd, &ps);
-        return 0;
-    }
-
-    eokas::ui::Graphics* graphics = reinterpret_cast<eokas::ui::Graphics*>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
-    if (graphics)
-    {
-        if (graphics->isClosingFloatWindow(hWnd))
-        {
-            if (message == WM_CLOSE) return 0;
-            return DefWindowProcW(hWnd, message, wParam, lParam);
-        }
-        if (eokas::UIWindow* floating = graphics->floatingWindow(hWnd))
-        {
-            if (message == WM_CLOSE) return 0;
-            if (message == WM_MOUSEMOVE)
-            {
-                floating->onMouseMove((float)(short)LOWORD(lParam), (float)(short)HIWORD(lParam));
-                return 0;
-            }
-            if (message == WM_LBUTTONDOWN)
-            {
-                SetCapture(hWnd);
-                floating->onMouseDown((float)(short)LOWORD(lParam), (float)(short)HIWORD(lParam), 0);
-                return 0;
-            }
-            if (message == WM_LBUTTONUP)
-            {
-                floating->onMouseUp((float)(short)LOWORD(lParam), (float)(short)HIWORD(lParam), 0);
-                if (IsWindow(hWnd) && GetCapture() == hWnd) ReleaseCapture();
-                return 0;
-            }
-        }
-    }
-
-    switch (message)
-    {
-    case WM_CLOSE:
-    {
-        PostQuitMessage(0);
-        return 0;
-    }
-    case WM_MOUSEWHEEL:
-    {
-        if (graphics)
-        {
-            POINT pt;
-            pt.x = (short)LOWORD(lParam);
-            pt.y = (short)HIWORD(lParam);
-            ScreenToClient(hWnd, &pt);
-            float notches = (float)(short)HIWORD(wParam) / 120.0f;
-            float step = -notches * 48.0f;
-            bool shift = (LOWORD(wParam) & MK_SHIFT) != 0;
-            if (shift)
-            {
-                graphics->window().onMouseWheel((float)pt.x, (float)pt.y, step, 0.0f);
-            }
-            else
-            {
-                graphics->window().onMouseWheel((float)pt.x, (float)pt.y, 0.0f, step);
-            }
-        }
-        return 0;
-    }
-    case WM_SETCURSOR:
-    {
-        if (graphics && LOWORD(lParam) == HTCLIENT)
-        {
-            POINT pt;
-            GetCursorPos(&pt);
-            ScreenToClient(hWnd, &pt);
-            bool vertical = false;
-            if (graphics->splitterCursor(hWnd, (float)pt.x, (float)pt.y, vertical))
-            {
-                SetCursor(LoadCursor(nullptr, vertical ? IDC_SIZENS : IDC_SIZEWE));
-                return TRUE;
-            }
-        }
-        return DefWindowProcW(hWnd, message, wParam, lParam);
-    }
-    case WM_MOUSEMOVE:
-    {
-        if (graphics)
-        {
-            float x = (float)(short)LOWORD(lParam);
-            float y = (float)(short)HIWORD(lParam);
-            graphics->hoverDock(hWnd, x, y);
-            graphics->window().onMouseMove(x, y);
-        }
-        return 0;
-    }
-    case WM_LBUTTONDOWN:
-    {
-        if (graphics)
-        {
-            SetCapture(hWnd);
-            float x = (float)(short)LOWORD(lParam);
-            float y = (float)(short)HIWORD(lParam);
-            graphics->window().onMouseDown(x, y, 0);
-        }
-        return 0;
-    }
-    case WM_LBUTTONUP:
-    {
-        if (graphics)
-        {
-            float x = (float)(short)LOWORD(lParam);
-            float y = (float)(short)HIWORD(lParam);
-            graphics->window().onMouseUp(x, y, 0);
-            ReleaseCapture();
-        }
-        return 0;
-    }
-    case WM_RBUTTONDOWN:
-    {
-        if (graphics)
-        {
-            float x = (float)(short)LOWORD(lParam);
-            float y = (float)(short)HIWORD(lParam);
-            graphics->window().onMouseDown(x, y, 1);
-        }
-        return 0;
-    }
-    case WM_RBUTTONUP:
-    {
-        if (graphics)
-        {
-            float x = (float)(short)LOWORD(lParam);
-            float y = (float)(short)HIWORD(lParam);
-            graphics->window().onMouseUp(x, y, 1);
-        }
-        return 0;
-    }
-    case WM_KEYDOWN:
-    {
-        if (graphics)
-        {
-            eokas::UIKey key = eokas::UIKey::Enter;
-            if (mapUIKey(wParam, lParam, key))
-            {
-                eokas::UIKeyMods mods;
-                mods.ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-                mods.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-                mods.alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
-                if (!characterKey(key) || mods.ctrl || mods.alt)
-                {
-                    graphics->window().onKeyDown(key, mods);
-                    return 0;
-                }
-            }
-        }
-        return DefWindowProcW(hWnd, message, wParam, lParam);
-    }
-    case WM_CHAR:
-    {
-        if (graphics)
-        {
-            static wchar_t pendingHigh = 0;
-            wchar_t unit = (wchar_t)wParam;
-            uint32_t codepoint = 0;
-            if (unit >= 0xD800 && unit <= 0xDBFF)
-            {
-                pendingHigh = unit;
-                return 0;
-            }
-            if (unit >= 0xDC00 && unit <= 0xDFFF && pendingHigh != 0)
-            {
-                codepoint = 0x10000 + (((uint32_t)pendingHigh - 0xD800) << 10) + ((uint32_t)unit - 0xDC00);
-                pendingHigh = 0;
-            }
-            else
-            {
-                pendingHigh = 0;
-                codepoint = (uint32_t)unit;
-            }
-
-            if (codepoint >= 32 && codepoint != 127)
-            {
-                graphics->window().onChar(codepoint);
-                return 0;
-            }
-        }
-        return DefWindowProcW(hWnd, message, wParam, lParam);
-    }
-    default:
-        return DefWindowProcW(hWnd, message, wParam, lParam);
-    }
-    return 0;
-}
 
 namespace
 {
@@ -507,8 +179,10 @@ namespace
 
 int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nCmdShow )
 {
+    UNREFERENCED_PARAMETER(hInstance);
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
+    UNREFERENCED_PARAMETER(nCmdShow);
 
 #if _WIN32
     ::ShowWindow(::GetConsoleWindow(), SW_HIDE);
@@ -516,67 +190,18 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
 
     try {
         [[maybe_unused]] VectoredExceptionGuard exceptionStack;
-        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-        UINT dpi = GetDpiForSystem();
-        if (dpi == 0)
-        {
-            dpi = 96;
-        }
-        const int clientWidth = MulDiv(windowWidth, (int)dpi, 96);
-        const int clientHeight = MulDiv(windowHeight, (int)dpi, 96);
 
-        WNDCLASSEXW wcex;
-        wcex.cbSize = sizeof(WNDCLASSEXW);
-        wcex.style = CS_GLOBALCLASS;
-        wcex.lpfnWndProc = WndProc;
-        wcex.cbClsExtra = 0;
-        wcex.cbWndExtra = 0;
-        wcex.hInstance = hInstance;
-        wcex.hIcon = NULL;
-        wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
-        wcex.hbrBackground = nullptr;
-        wcex.lpszMenuName = NULL;
-        wcex.lpszClassName = windowClass;
-        wcex.hIconSm = NULL;
-        RegisterClassExW(&wcex);
-
-        RECT windowRect = { 0, 0, clientWidth, clientHeight };
-        AdjustWindowRectExForDpi(&windowRect, WS_OVERLAPPEDWINDOW, FALSE, 0, dpi);
-        HWND hWnd = CreateWindowW(windowClass, windowTitle, WS_OVERLAPPEDWINDOW,
-            80, 40, windowRect.right - windowRect.left, windowRect.bottom - windowRect.top,
-            nullptr, nullptr, hInstance, nullptr);
-        if (!hWnd)
+        eokas::ui::Graphics graphics;
+        if (!graphics.init((float)windowWidth, (float)windowHeight))
         {
             return FALSE;
         }
-        BOOL useDarkCaption = TRUE;
-        DwmSetWindowAttribute(hWnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &useDarkCaption, sizeof(useDarkCaption));
-        COLORREF captionColor = RGB(0, 0, 0);
-        DwmSetWindowAttribute(hWnd, DWMWA_CAPTION_COLOR, &captionColor, sizeof(captionColor));
-        COLORREF captionText = RGB(255, 255, 255);
-        DwmSetWindowAttribute(hWnd, DWMWA_TEXT_COLOR, &captionText, sizeof(captionText));
-        ShowWindow(hWnd, nCmdShow);
-        UpdateWindow(hWnd);
-
-        eokas::ui::Graphics graphics;
-        graphics.init(hWnd, clientWidth, clientHeight);
-        SetWindowLongPtrW(hWnd, GWLP_USERDATA, (LONG_PTR)&graphics);
 
         eokas::Timer timer;
-
-        MSG msg = {};
-        while (msg.message != WM_QUIT)
+        while (graphics.isOpen())
         {
-            while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
-            {
-                if (msg.message == WM_QUIT)
-                {
-                    break;
-                }
-                TranslateMessage(&msg);
-                DispatchMessageW(&msg);
-            }
-            if (msg.message == WM_QUIT)
+            graphics.pump();
+            if (!graphics.isOpen())
             {
                 break;
             }
@@ -585,8 +210,7 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
         }
 
         graphics.quit();
-
-        return (int)msg.wParam;
+        return 0;
     }
     catch (const std::exception& e)
     {

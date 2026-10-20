@@ -31,7 +31,12 @@ if(WIN32)
 
 elseif(APPLE)
 
-elseif(UNIX AND NOT APPLE)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(X11 REQUIRED)
+    find_package(Threads REQUIRED)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0 gdk-x11-3.0)
+    list(APPEND EOKAS_LIBRARY_FILES X11::X11 PkgConfig::GTK3 Threads::Threads)
 
 elseif(IOS)
 
@@ -48,7 +53,7 @@ message("EOKAS_LIBRARY_FILES = ${EOKAS_LIBRARY_FILES}")
 add_library(${EOKAS_TARGET_NAME} STATIC ${EOKAS_HEADER_FILES} ${EOKAS_SOURCE_FILES})
 target_include_directories(${EOKAS_TARGET_NAME} PRIVATE ${EOKAS_HEADER_DIRS})
 target_link_directories(${EOKAS_TARGET_NAME} PRIVATE ${EOKAS_LIBRARY_DIRS})
-target_link_libraries(${EOKAS_TARGET_NAME} ${EOKAS_LIBRARY_FILES})
+target_link_libraries(${EOKAS_TARGET_NAME} PUBLIC ${EOKAS_LIBRARY_FILES})
 
 
 install(FILES ${EOKAS_HEADER_FILES} DESTINATION include/${EOKAS_TARGET_NAME})

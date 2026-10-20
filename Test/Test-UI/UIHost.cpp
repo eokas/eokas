@@ -1,5 +1,5 @@
-#include "UIApp.h"
-#include "widgets/UIText.h"
+#include "UIHost.h"
+#include "UI/widgets/UIText.h"
 
 #include <map>
 #include <stdexcept>
@@ -16,7 +16,7 @@ namespace
 
 namespace eokas
 {
-    UIApp::~UIApp()
+    UIHost::~UIHost()
     {
         this->closeAll();
         for (auto& slot : mWindows)
@@ -31,58 +31,35 @@ namespace eokas
         this->closeFonts();
     }
 
-    UIWindow& UIApp::open(void* nativeWindow, uint32_t width, uint32_t height)
+    UIWindow& UIHost::open(uint32_t width, uint32_t height)
     {
         Slot slot;
-        slot.nativeWindow = nativeWindow;
         slot.uiWindow = std::make_unique<UIWindow>();
         slot.uiWindow->init(width, height);
         mWindows.push_back(std::move(slot));
         return *mWindows.back().uiWindow;
     }
 
-    void UIApp::close(void* nativeWindow)
+    void UIHost::close(UIWindow& window)
     {
         for (auto it = mWindows.begin(); it != mWindows.end(); ++it)
         {
-            if (it->nativeWindow != nativeWindow)
+            if (!it->uiWindow || it->uiWindow.get() != &window)
             {
                 continue;
             }
-            if (it->uiWindow)
-            {
-                it->uiWindow->quit();
-            }
+            it->uiWindow->quit();
             mWindows.erase(it);
             return;
         }
     }
 
-    UIWindow* UIApp::find(void* nativeWindow)
-    {
-        for (auto& slot : mWindows)
-        {
-            if (slot.nativeWindow == nativeWindow && slot.uiWindow)
-            {
-                return slot.uiWindow.get();
-            }
-        }
-        for (auto& slot : mFloating)
-        {
-            if (slot.nativeWindow == nativeWindow && slot.uiWindow)
-            {
-                return slot.uiWindow.get();
-            }
-        }
-        return nullptr;
-    }
-
-    void UIApp::setFallbackFontPath(const char* path)
+    void UIHost::setFallbackFontPath(const char* path)
     {
         mFallbackFontPath = path != nullptr ? path : "";
     }
 
-    void UIApp::prepare()
+    void UIHost::prepare()
     {
         this->closeFonts();
 
@@ -141,7 +118,7 @@ namespace eokas
         }
     }
 
-    void UIApp::publishAtlas()
+    void UIHost::publishAtlas()
     {
         std::vector<UIFont*> dirty;
         for (auto& font : mFonts)
@@ -172,20 +149,25 @@ namespace eokas
         }
     }
 
-    void UIApp::layout(void* nativeWindow, float width, float height)
+    void UIHost::layout(UIWindow& window, float width, float height)
     {
         for (auto& slot : mFloating)
         {
-            if (slot.nativeWindow != nativeWindow || !slot.page)
+            if (!slot.uiWindow || slot.uiWindow.get() != &window)
             {
                 continue;
             }
-            slot.page->layoutInWindow(width, height);
+            auto page = std::dynamic_pointer_cast<UIDockPage>(slot.uiWindow->root());
+            if (!page)
+            {
+                continue;
+            }
+            page->layoutInWindow(width, height);
             return;
         }
     }
 
-    void UIApp::flushClosing()
+    void UIHost::flushClosing()
     {
         auto closing = std::move(mClosing);
         mClosing.clear();
@@ -198,7 +180,7 @@ namespace eokas
         }
     }
 
-    void UIApp::registerSpace(UIDockSpace* space)
+    void UIHost::registerSpace(UIDockSpace* space)
     {
         if (!space) return;
         for (auto* item : mSpaces) if (item == space) return;
@@ -206,7 +188,7 @@ namespace eokas
         mSpaces.push_back(space);
     }
 
-    void UIApp::unregisterSpace(UIDockSpace* space)
+    void UIHost::unregisterSpace(UIDockSpace* space)
     {
         for (auto it = mSpaces.begin(); it != mSpaces.end(); ++it)
         {
@@ -218,7 +200,7 @@ namespace eokas
         if (mSourceSpace == space) mSourceSpace = nullptr;
     }
 
-    void UIApp::observe(const std::shared_ptr<UIDockPage>& page)
+    void UIHost::observe(const std::shared_ptr<UIDockPage>& page)
     {
         if (!page) return;
         page->onDrag = [this](UIDockPage& target, float x, float y, int button)
@@ -228,7 +210,7 @@ namespace eokas
         page->onDragEnd = [this](UIDockPage& target) { this->releasePage(&target); };
     }
 
-    void UIApp::closeAll()
+    void UIHost::closeAll()
     {
         mDragging = false;
         mDragPage = nullptr;
@@ -240,7 +222,7 @@ namespace eokas
         mFloating.clear();
     }
 
-    std::vector<UIWindow*> UIApp::liveWindows()
+    std::vector<UIWindow*> UIHost::liveWindows()
     {
         std::vector<UIWindow*> uiWindows;
         for (auto& slot : mWindows)
@@ -254,16 +236,20 @@ namespace eokas
         return uiWindows;
     }
 
-    UIApp::Slot* UIApp::slotOf(UIDockPage* page)
+    UIHost::Slot* UIHost::slotOf(UIDockPage* page)
     {
-        for (auto& slot : mFloating) if (slot.page.get() == page) return &slot;
+        if (!page) return nullptr;
+        for (auto& slot : mFloating)
+        {
+            if (slot.uiWindow && slot.uiWindow->root().get() == page) return &slot;
+        }
         return nullptr;
     }
 
-    void UIApp::destroySlot(Slot& slot, bool deferWindow)
+    void UIHost::destroySlot(Slot& slot, bool deferWindow)
     {
-        void* nativeWindow = slot.nativeWindow;
-        slot.nativeWindow = nullptr;
+        UIWindow* window = slot.uiWindow.get();
+        if (window && onDestroyWindow) onDestroyWindow(*window);
         if (slot.uiWindow)
         {
             slot.uiWindow->setRoot(nullptr);
@@ -276,11 +262,9 @@ namespace eokas
                 slot.uiWindow->quit();
             }
         }
-        slot.page.reset();
-        if (nativeWindow && onDestroyWindow) onDestroyWindow(nativeWindow);
     }
 
-    void UIApp::closeFonts()
+    void UIHost::closeFonts()
     {
         for (auto& font : mFonts)
         {
@@ -292,7 +276,7 @@ namespace eokas
         mFonts.clear();
     }
 
-    void UIApp::clientToScreen(UIDockPage* page, float x, float y, float& screenX, float& screenY)
+    void UIHost::clientToScreen(UIDockPage* page, float x, float y, float& screenX, float& screenY)
     {
         if (mHostDrag && mSourceSpace)
         {
@@ -311,7 +295,7 @@ namespace eokas
         screenY = y;
     }
 
-    void UIApp::beginFloat(UIDockPage* page, float screenX, float screenY)
+    void UIHost::beginFloat(UIDockPage* page, float screenX, float screenY)
     {
         if (!page) return;
         if (Slot* slot = this->slotOf(page))
@@ -330,8 +314,6 @@ namespace eokas
             held = space->takePage(page);
         }
         if (!held) return;
-        void* windowHandle = nullptr;
-        if (onCreateWindow) windowHandle = onCreateWindow(window);
         auto uiWindow = std::make_unique<UIWindow>();
         uint32_t width = (uint32_t)window.size.x;
         uint32_t height = (uint32_t)window.size.y;
@@ -343,22 +325,23 @@ namespace eokas
         mGrabScreenX = screenX - window.origin.x;
         mGrabScreenY = screenY - window.origin.y;
         Slot created;
-        created.nativeWindow = windowHandle;
-        created.uiWindow = std::move(uiWindow);
-        created.page = held;
         created.screenRect = window;
+        created.uiWindow = std::move(uiWindow);
         mFloating.push_back(std::move(created));
+        UIWindow& createdWindow = *mFloating.back().uiWindow;
         this->prepare();
-        if (windowHandle && onPlaceWindow) onPlaceWindow(windowHandle, window);
+        if (onCreateWindow) onCreateWindow(createdWindow, window);
     }
 
-    void UIApp::updateFloat(UIDockPage* page, float screenX, float screenY)
+    void UIHost::updateFloat(UIDockPage* page, float screenX, float screenY)
     {
         Slot* slot = this->slotOf(page);
         if (!slot) return;
         slot->screenRect.origin.x = screenX - mGrabScreenX;
         slot->screenRect.origin.y = screenY - mGrabScreenY;
-        if (slot->nativeWindow && onPlaceWindow) onPlaceWindow(slot->nativeWindow, slot->screenRect);
+        if (slot->screenRect.size.x < 1.0f) slot->screenRect.size.x = page->shape.size.x;
+        if (slot->screenRect.size.y < 1.0f) slot->screenRect.size.y = page->shape.size.y;
+        if (slot->uiWindow && onPlaceWindow) onPlaceWindow(*slot->uiWindow, slot->screenRect);
         UIDockSpace* hit = nullptr;
         for (auto* space : mSpaces)
         {
@@ -376,7 +359,7 @@ namespace eokas
         mPreviewSpace = hit;
     }
 
-    bool UIApp::dragPage(UIDockPage* page, float x, float y, int button)
+    bool UIHost::dragPage(UIDockPage* page, float x, float y, int button)
     {
         if (mReleasing || button != 0 || !page) return false;
         if (!mDragging || mDragPage != page)
@@ -401,7 +384,7 @@ namespace eokas
         return true;
     }
 
-    void UIApp::releasePage(UIDockPage* page)
+    void UIHost::releasePage(UIDockPage* page)
     {
         if (mDragPage != page || mReleasing) return;
         ReleaseGuard releasing(mReleasing);
@@ -412,14 +395,18 @@ namespace eokas
         Slot* slot = this->slotOf(page);
         if (mDragMoved && mPreviewSpace && slot)
         {
-            auto held = slot->page;
-            void* nativeWindow = slot->nativeWindow;
+            std::shared_ptr<UIDockPage> held;
+            if (slot->uiWindow)
+            {
+                held = std::dynamic_pointer_cast<UIDockPage>(slot->uiWindow->root());
+            }
             std::unique_ptr<UIWindow> uiWindow = std::move(slot->uiWindow);
+            UIWindow* closingWindow = uiWindow.get();
             UIDockSpace* space = mPreviewSpace;
             mPreviewSpace = nullptr;
             for (auto it = mFloating.begin(); it != mFloating.end(); ++it)
             {
-                if (it->page.get() != page) continue;
+                if (&*it != slot) continue;
                 mFloating.erase(it);
                 break;
             }
@@ -430,7 +417,7 @@ namespace eokas
                 mClosing.push_back(std::move(uiWindow));
             }
             this->prepare();
-            if (nativeWindow && onDestroyWindow) onDestroyWindow(nativeWindow);
+            if (closingWindow && onDestroyWindow) onDestroyWindow(*closingWindow);
         }
         else if (mPreviewSpace)
         {
@@ -440,7 +427,7 @@ namespace eokas
         mDragMoved = false;
     }
 
-    void UIApp::collectTexts(UIWidget* widget, std::vector<UIText*>& texts)
+    void UIHost::collectTexts(UIWidget* widget, std::vector<UIText*>& texts)
     {
         if (widget == nullptr)
         {
@@ -459,7 +446,7 @@ namespace eokas
         }
     }
 
-    String UIApp::resolveAssetPath(const char* relativePath) const
+    String UIHost::resolveAssetPath(const char* relativePath) const
     {
         String given = relativePath;
         if (File::exists(given))
@@ -483,7 +470,7 @@ namespace eokas
         return given;
     }
 
-    UIFont* UIApp::loadFont(const char* fontPath, uint32_t pixelSize)
+    UIFont* UIHost::loadFont(const char* fontPath, uint32_t pixelSize)
     {
         String path = this->resolveAssetPath(fontPath);
         auto font = std::make_unique<UIFont>();
