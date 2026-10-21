@@ -99,7 +99,7 @@ namespace eokas
         UIWidget::render(primitive);
     }
 
-    bool UIDropdownItem::handlePointerRelease(float screenX, float screenY, int button)
+    bool UIDropdownItem::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         const bool activate = isPressed();
         bool handled = UIWidget::handlePointerRelease(screenX, screenY, button);
@@ -445,7 +445,7 @@ namespace eokas
         UIWidget::render(primitive);
     }
 
-    bool UIDropdown::handlePointerRelease(float screenX, float screenY, int button)
+    bool UIDropdown::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         if (isPressed() && pickable)
         {
@@ -454,23 +454,22 @@ namespace eokas
         return UIWidget::handlePointerRelease(screenX, screenY, button);
     }
 
-    bool UIDropdown::handleKeyPress(const UIKey& key, const UIKeyMods& mods)
+    bool UIDropdown::handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt)
     {
-        (void)mods;
         if (!pickable)
         {
-            return UIWidget::handleKeyPress(key, mods);
+            return UIWidget::handleKeyPress(key, ctrl, shift, alt);
         }
-        if (key == UIKey::Enter)
+        if (key == UIKeyCode::Enter)
         {
             this->setExpanded(!expanded);
-            return UIWidget::handleKeyPress(key, mods);
+            return UIWidget::handleKeyPress(key, ctrl, shift, alt);
         }
-        if (key == UIKey::Up || key == UIKey::Down)
+        if (key == UIKeyCode::Up || key == UIKeyCode::Down)
         {
-            int next = this->neighbor(key == UIKey::Up ? -1 : 1);
+            int next = this->neighbor(key == UIKeyCode::Up ? -1 : 1);
             this->setValue(next);
         }
-        return UIWidget::handleKeyPress(key, mods);
+        return UIWidget::handleKeyPress(key, ctrl, shift, alt);
     }
 }

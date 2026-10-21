@@ -25,7 +25,7 @@ namespace eokas
     public:
         Color tabMark { Color(0.32f, 0.44f, 0.68f, 1.0f) };
         Color activeFill { Color(0.32f, 0.40f, 0.56f, 1.0f) };
-        std::function<bool(UIDockPage&, float, float, int)> onDrag;
+        std::function<bool(UIDockPage&, float, float, UIMouseButton)> onDrag;
         std::function<void(UIDockPage&)> onDragEnd;
 
         UIDockPage();
@@ -95,7 +95,7 @@ namespace eokas
         void layout() override;
         void render(UIPrimitive& primitive) override;
         bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
-        bool handlePointerRelease(float screenX, float screenY, int button) override;
+        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
 
     private:
         struct Node;

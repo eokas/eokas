@@ -235,7 +235,7 @@ namespace eokas
             {
                 screen = this->mHead->parent()->pivotToScreen(position);
             }
-            if (this->onDrag) engaged = this->onDrag(*this, screen.x, screen.y, 0);
+            if (this->onDrag) engaged = this->onDrag(*this, screen.x, screen.y, UIMouseButton::Left);
             if (engaged) this->mSuppressClick = true;
         };
         mHead->onPointerRelease = [this]()
@@ -1029,7 +1029,7 @@ namespace eokas
         mDragSplitter->ratio = this->fitRatio(first / inner, span);
         return true;
     }
-    bool UIDockSpace::handlePointerRelease(float screenX, float screenY, int button)
+    bool UIDockSpace::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         mSplitterTracking = false;
         mDragSplitter = nullptr;

@@ -32,7 +32,7 @@ if(WIN32)
 endif()
 
 set(EOKAS_LIBRARY_FILES
-        "ToolBase" "Base" "Native" "GPU" "Mesh" "Render" "UI" "freetype"
+        "Engine" "Base" "Native" "GPU" "Mesh" "Render" "UI" "freetype"
 )
 
 if(WIN32)

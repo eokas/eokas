@@ -14,53 +14,53 @@ namespace eokas
             return floorf(v + 0.5f);
         }
 
-        bool textOfKey(UIKey key, const UIKeyMods& mods, String& out)
+        bool textOfKey(UIKeyCode key, bool ctrl, bool shift, bool alt, String& out)
         {
-            if (mods.ctrl || mods.alt)
+            if (ctrl || alt)
             {
                 return false;
             }
             int value = static_cast<int>(key);
-            if (value >= static_cast<int>(UIKey::A) && value <= static_cast<int>(UIKey::Z))
+            if (value >= static_cast<int>(UIKeyCode::A) && value <= static_cast<int>(UIKeyCode::Z))
             {
-                char base = mods.shift ? 'A' : 'a';
-                out = String(static_cast<char>(base + (value - static_cast<int>(UIKey::A))));
+                char base = shift ? 'A' : 'a';
+                out = String(static_cast<char>(base + (value - static_cast<int>(UIKeyCode::A))));
                 return true;
             }
-            if (value >= static_cast<int>(UIKey::Digit0) && value <= static_cast<int>(UIKey::Digit9))
+            if (value >= static_cast<int>(UIKeyCode::Digit0) && value <= static_cast<int>(UIKeyCode::Digit9))
             {
                 static const char plain[] = "0123456789";
                 static const char shifted[] = ")!@#$%^&*(";
-                int index = value - static_cast<int>(UIKey::Digit0);
-                out = String(mods.shift ? shifted[index] : plain[index]);
+                int index = value - static_cast<int>(UIKeyCode::Digit0);
+                out = String(shift ? shifted[index] : plain[index]);
                 return true;
             }
-            if (key == UIKey::Space)
+            if (key == UIKeyCode::Space)
             {
                 out = String(' ');
                 return true;
             }
-            if (value >= static_cast<int>(UIKey::Apostrophe) && value <= static_cast<int>(UIKey::GraveAccent))
+            if (value >= static_cast<int>(UIKeyCode::Apostrophe) && value <= static_cast<int>(UIKeyCode::GraveAccent))
             {
                 static const char plain[] = "\',-./;=[\\]`";
                 static const char shifted[] = "\"<_>?:+{|}~";
-                int index = value - static_cast<int>(UIKey::Apostrophe);
-                out = String(mods.shift ? shifted[index] : plain[index]);
+                int index = value - static_cast<int>(UIKeyCode::Apostrophe);
+                out = String(shift ? shifted[index] : plain[index]);
                 return true;
             }
-            if (value >= static_cast<int>(UIKey::Keypad0) && value <= static_cast<int>(UIKey::Keypad9))
+            if (value >= static_cast<int>(UIKeyCode::Keypad0) && value <= static_cast<int>(UIKeyCode::Keypad9))
             {
-                out = String(static_cast<char>('0' + (value - static_cast<int>(UIKey::Keypad0))));
+                out = String(static_cast<char>('0' + (value - static_cast<int>(UIKeyCode::Keypad0))));
                 return true;
             }
             switch (key)
             {
-            case UIKey::KeypadDecimal: out = String('.'); return true;
-            case UIKey::KeypadDivide: out = String('/'); return true;
-            case UIKey::KeypadMultiply: out = String('*'); return true;
-            case UIKey::KeypadSubtract: out = String('-'); return true;
-            case UIKey::KeypadAdd: out = String('+'); return true;
-            case UIKey::KeypadEqual: out = String('='); return true;
+            case UIKeyCode::KeypadDecimal: out = String('.'); return true;
+            case UIKeyCode::KeypadDivide: out = String('/'); return true;
+            case UIKeyCode::KeypadMultiply: out = String('*'); return true;
+            case UIKeyCode::KeypadSubtract: out = String('-'); return true;
+            case UIKeyCode::KeypadAdd: out = String('+'); return true;
+            case UIKeyCode::KeypadEqual: out = String('='); return true;
             default: break;
             }
             return false;
@@ -982,7 +982,7 @@ namespace eokas
         primitive.addQuad(localToScreen, Rect(x, content.origin.y, 1.0f, content.size.y), UIFont::solidUV(), caret.color);
     }
 
-    bool UIInput::handlePointerPress(float screenX, float screenY, int button)
+    bool UIInput::handlePointerPress(float screenX, float screenY, UIMouseButton button)
     {
         mPointerSelecting = true;
         mCaretPlaced = false;
@@ -1011,59 +1011,59 @@ namespace eokas
         return true;
     }
 
-    bool UIInput::handlePointerRelease(float screenX, float screenY, int button)
+    bool UIInput::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         mPointerSelecting = false;
         mCaretPlaced = false;
         return UIWidget::handlePointerRelease(screenX, screenY, button);
     }
 
-    bool UIInput::handleKeyPress(const UIKey& key, const UIKeyMods& mods)
+    bool UIInput::handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt)
     {
         switch (key)
         {
-        case UIKey::Backspace:
+        case UIKeyCode::Backspace:
             this->deleteCaret(true);
             break;
-        case UIKey::Delete:
+        case UIKeyCode::Delete:
             this->deleteCaret(false);
             break;
-        case UIKey::Left:
-            this->moveCaretBy(-1, mods.shift);
+        case UIKeyCode::Left:
+            this->moveCaretBy(-1, shift);
             break;
-        case UIKey::Right:
-            this->moveCaretBy(1, mods.shift);
+        case UIKeyCode::Right:
+            this->moveCaretBy(1, shift);
             break;
-        case UIKey::Up:
-            this->moveCaretVertically(-1, mods.shift);
+        case UIKeyCode::Up:
+            this->moveCaretVertically(-1, shift);
             break;
-        case UIKey::Down:
-            this->moveCaretVertically(1, mods.shift);
+        case UIKeyCode::Down:
+            this->moveCaretVertically(1, shift);
             break;
-        case UIKey::Home:
-            if (multiline && !mods.ctrl)
+        case UIKeyCode::Home:
+            if (multiline && !ctrl)
             {
                 std::vector<TextLine> lines = splitLines(text);
-                this->moveCaret(lines[lineOf(lines, mCaret)].begin, mods.shift);
+                this->moveCaret(lines[lineOf(lines, mCaret)].begin, shift);
             }
             else
             {
-                this->moveCaret(0, mods.shift);
+                this->moveCaret(0, shift);
             }
             break;
-        case UIKey::End:
-            if (multiline && !mods.ctrl)
+        case UIKeyCode::End:
+            if (multiline && !ctrl)
             {
                 std::vector<TextLine> lines = splitLines(text);
-                this->moveCaret(lines[lineOf(lines, mCaret)].end, mods.shift);
+                this->moveCaret(lines[lineOf(lines, mCaret)].end, shift);
             }
             else
             {
-                this->moveCaret(text.length(), mods.shift);
+                this->moveCaret(text.length(), shift);
             }
             break;
-        case UIKey::Enter:
-            if (multiline && !mods.ctrl)
+        case UIKeyCode::Enter:
+            if (multiline && !ctrl)
             {
                 this->insertText("\n");
             }
@@ -1072,8 +1072,8 @@ namespace eokas
                 onSubmit(text);
             }
             break;
-        case UIKey::A:
-            if (mods.ctrl)
+        case UIKeyCode::A:
+            if (ctrl)
             {
                 mAnchor = 0;
                 mCaret = text.length();
@@ -1082,33 +1082,33 @@ namespace eokas
                 this->resetCaretBlink();
             }
             break;
-        case UIKey::C:
-            if (mods.ctrl && writeClipboard && this->hasSelection())
+        case UIKeyCode::C:
+            if (ctrl && writeClipboard && this->hasSelection())
             {
                 writeClipboard(this->selectedText());
             }
             break;
-        case UIKey::X:
-            if (mods.ctrl && writeClipboard && this->hasSelection())
+        case UIKeyCode::X:
+            if (ctrl && writeClipboard && this->hasSelection())
             {
                 writeClipboard(this->selectedText());
                 this->insertText(String());
             }
             break;
-        case UIKey::V:
-            if (mods.ctrl && readClipboard)
+        case UIKeyCode::V:
+            if (ctrl && readClipboard)
             {
                 this->insertText(readClipboard());
             }
             break;
-        case UIKey::Escape:
+        case UIKeyCode::Escape:
             break;
         }
         String typed;
-        if (textOfKey(key, mods, typed))
+        if (textOfKey(key, ctrl, shift, alt, typed))
         {
             this->insertText(typed);
         }
-        return UIWidget::handleKeyPress(key, mods);
+        return UIWidget::handleKeyPress(key, ctrl, shift, alt);
     }
 }

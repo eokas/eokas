@@ -14,4 +14,12 @@ namespace eokas {
         (void)deltaTime;
     }
 
+    Renderer& Engine::renderer() {
+        return mRenderer;
+    }
+
+    const Renderer& Engine::renderer() const {
+        return mRenderer;
+    }
+
 }

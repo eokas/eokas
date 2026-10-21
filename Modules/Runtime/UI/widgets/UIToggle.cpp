@@ -27,7 +27,7 @@ namespace eokas
         }
     }
 
-    bool UIToggle::handlePointerRelease(float screenX, float screenY, int button)
+    bool UIToggle::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         if (isPressed())
         {

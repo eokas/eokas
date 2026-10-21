@@ -65,7 +65,7 @@ namespace eokas
         return (value - minValue) / span;
     }
 
-    bool UISlider::handlePointerRelease(float screenX, float screenY, int button)
+    bool UISlider::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         mTracking = false;
         return UIWidget::handlePointerRelease(screenX, screenY, button);

@@ -24,7 +24,7 @@ namespace eokas
         void endDrag();
 
         bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
-        bool handlePointerRelease(float screenX, float screenY, int button) override;
+        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
         bool handleDrag(float screenX, float screenY, const Vector2& delta) override;
         bool handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta) override;
         bool handleWheel(float screenX, float screenY, float deltaX, float deltaY) override;

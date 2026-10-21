@@ -30,10 +30,10 @@ namespace eokas
         void setText(const String& value);
         UIText* label() const;
         void render(UIPrimitive& primitive) override;
-        bool handlePointerPress(float screenX, float screenY, int button) override;
+        bool handlePointerPress(float screenX, float screenY, UIMouseButton button) override;
         bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
-        bool handlePointerRelease(float screenX, float screenY, int button) override;
-        bool handleKeyPress(const UIKey& key, const UIKeyMods& mods) override;
+        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
+        bool handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt) override;
 
     private:
         std::shared_ptr<UIText> mLabel;

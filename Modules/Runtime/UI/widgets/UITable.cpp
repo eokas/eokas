@@ -476,7 +476,7 @@ namespace eokas
         }
         return item->content();
     }
-    bool UITableRow::handlePointerRelease(float screenX, float screenY, int button)
+    bool UITableRow::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         if (isPressed() && this->rowCount() > 0)
         {

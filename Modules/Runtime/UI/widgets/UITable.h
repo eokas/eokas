@@ -85,7 +85,7 @@ namespace eokas
         void removeCell(int index);
         void collect(bool visibleOnly, std::vector<std::shared_ptr<UITableRow>>& out) const;
 
-        bool handlePointerRelease(float screenX, float screenY, int button) override;
+        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
 
     private:
         void syncCells();

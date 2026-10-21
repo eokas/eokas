@@ -12,6 +12,9 @@ namespace eokas {
         void quit();
         void tick(f32_t deltaTime);
 
+        Renderer& renderer();
+        const Renderer& renderer() const;
+
     private:
         Renderer mRenderer;
     };

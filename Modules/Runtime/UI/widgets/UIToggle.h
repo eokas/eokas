@@ -20,7 +20,7 @@ namespace eokas
 
         void setValue(bool v);
         void render(UIPrimitive& primitive) override;
-        bool handlePointerRelease(float screenX, float screenY, int button) override;
+        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
 
     private:
         Color capsuleColor() const;

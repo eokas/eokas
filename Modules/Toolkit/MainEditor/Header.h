@@ -3,7 +3,7 @@
 
 #include "Base/Main.h"
 
-namespace eokas {
+namespace eokas::MainEditor {
 
 }
 

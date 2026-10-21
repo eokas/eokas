@@ -10,6 +10,7 @@ set(EOKAS_HEADER_DIRS
 
 set(EOKAS_LIBRARY_DIRS
         "${EOKAS_DEPS_DIR}/lib/${EOKAS_OS_NAME}/${CMAKE_BUILD_TYPE}"
+        "${EOKAS_DEPS_DIR}/FreeType2/lib/${EOKAS_OS_NAME}"
 )
 
 
@@ -23,8 +24,12 @@ file(GLOB EOKAS_SOURCE_FILES
 )
 
 set(EOKAS_LIBRARY_FILES
-    "Base" "GPU" "Mesh" "Render"
+    "Base" "Native" "GPU" "Mesh" "Render" "UI" "freetype"
 )
+
+if(WIN32)
+    list(APPEND EOKAS_LIBRARY_FILES "user32.lib" "dwmapi.lib" "dxguid.lib" "dxgi.lib" "d3d12.lib" "d3dcompiler.lib")
+endif()
 
 message("EOKAS_HEADER_DIRS = ${EOKAS_HEADER_DIRS}")
 message("EOKAS_LIBRARY_DIRS = ${EOKAS_LIBRARY_DIRS}")

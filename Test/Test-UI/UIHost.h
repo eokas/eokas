@@ -68,7 +68,7 @@ namespace eokas
         void clientToScreen(UIDockPage* page, float x, float y, float& screenX, float& screenY);
         void beginFloat(UIDockPage* page, float screenX, float screenY);
         void updateFloat(UIDockPage* page, float screenX, float screenY);
-        bool dragPage(UIDockPage* page, float x, float y, int button);
+        bool dragPage(UIDockPage* page, float x, float y, UIMouseButton button);
         void releasePage(UIDockPage* page);
         void collectTexts(UIWidget* widget, std::vector<UIText*>& texts);
         String resolveAssetPath(const char* relativePath) const;

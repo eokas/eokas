@@ -2,6 +2,7 @@
 #define _EOKAS_NATIVE_WINDOW_H_
 
 #include "./Header.h"
+#include "./NativeInput.h"
 
 #include <functional>
 #include <memory>
@@ -77,12 +78,13 @@ namespace eokas
         std::function<void()> onClose;
         std::function<void(float width, float height)> onClientSize;
         std::function<void(float x, float y)> onMouseMove;
-        std::function<void(float x, float y, int button)> onMouseDown;
-        std::function<void(float x, float y, int button)> onMouseUp;
+        // button is NativeMouseButton::Unknown when the platform button is unknown.
+        std::function<void(float x, float y, NativeMouseButton button)> onMouseDown;
+        std::function<void(float x, float y, NativeMouseButton button)> onMouseUp;
         std::function<void(float x, float y, float deltaX, float deltaY)> onMouseWheel;
         // Return true when the key is consumed.
-        // keyCode is the platform virtual-key code: Win32 VK_*, macOS keyCode, X11 KeySym.
-        std::function<bool(int keyCode, bool extended, bool ctrl, bool shift, bool alt)> onKeyDown;
+        // keyCode is NativeKeyCode::Unknown when the platform key is unknown.
+        std::function<bool(NativeKeyCode keyCode, bool extended, bool ctrl, bool shift, bool alt)> onKeyDown;
         // Return true when the character is consumed.
         std::function<bool(uint32_t codepoint)> onChar;
         // Client-area cursor. Return true to apply `cursor`.

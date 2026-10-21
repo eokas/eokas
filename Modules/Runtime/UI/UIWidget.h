@@ -41,8 +41,8 @@ namespace eokas
         std::function<void()> onPointerRelease;
         std::function<void(const Vector2& position, const Vector2& delta)> onPointerMove;
         std::function<void(const Vector2& position, f32_t delta)> onWheel;
-        std::function<void(const UIKey&, const UIKeyMods&)> onKeyPress;
-        std::function<void(const UIKey&, const UIKeyMods&)> onKeyRelease;
+        std::function<void(const UIKeyCode&, bool ctrl, bool shift, bool alt)> onKeyPress;
+        std::function<void(const UIKeyCode&, bool ctrl, bool shift, bool alt)> onKeyRelease;
 
         std::function<void()> onClick;
         std::function<void()> onDoubleClick;
@@ -72,16 +72,16 @@ namespace eokas
         virtual bool handlePointerEnter(float screenX, float screenY);
         virtual bool handlePointerLeave(float screenX, float screenY);
         virtual bool handlePointerMove(float screenX, float screenY, const Vector2& delta);
-        virtual bool handlePointerPress(float screenX, float screenY, int button);
-        virtual bool handlePointerRelease(float screenX, float screenY, int button);
+        virtual bool handlePointerPress(float screenX, float screenY, UIMouseButton button);
+        virtual bool handlePointerRelease(float screenX, float screenY, UIMouseButton button);
         virtual void handleFocusGain();
         virtual void handleFocusLoss();
         virtual bool handleClick(float screenX, float screenY);
         virtual bool handleDoubleClick(float screenX, float screenY);
         virtual bool handleDrag(float screenX, float screenY, const Vector2& delta);
         virtual bool handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta);
-        virtual bool handleKeyPress(const UIKey& key, const UIKeyMods& mods);
-        virtual bool handleKeyRelease(const UIKey& key, const UIKeyMods& mods);
+        virtual bool handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt);
+        virtual bool handleKeyRelease(const UIKeyCode& key, bool ctrl, bool shift, bool alt);
         virtual bool handleWheel(float screenX, float screenY, float deltaX, float deltaY);
 
         virtual void endActiveDrag();

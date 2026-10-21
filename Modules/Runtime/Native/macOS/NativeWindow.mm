@@ -196,7 +196,7 @@ namespace eokas
     float x = 0.0f;
     float y = 0.0f;
     [self clientPointFromEvent:event x:&x y:&y];
-    window->onMouseDown(x, y, (int)event.buttonNumber);
+    window->onMouseDown(x, y, eokas::transferMouseButton((int)event.buttonNumber));
 }
 
 - (void)emitUp:(NSEvent*)event
@@ -208,7 +208,7 @@ namespace eokas
     float x = 0.0f;
     float y = 0.0f;
     [self clientPointFromEvent:event x:&x y:&y];
-    window->onMouseUp(x, y, (int)event.buttonNumber);
+    window->onMouseUp(x, y, eokas::transferMouseButton((int)event.buttonNumber));
 }
 
 - (void)mouseMoved:(NSEvent*)event
@@ -298,7 +298,7 @@ namespace eokas
     bool ctrl = (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl)) != 0;
     bool shift = (event.modifierFlags & NSEventModifierFlagShift) != 0;
     bool alt = (event.modifierFlags & NSEventModifierFlagOption) != 0;
-    if (window->onKeyDown && window->onKeyDown((int)event.keyCode, false, ctrl, shift, alt)) {
+    if (window->onKeyDown && window->onKeyDown(eokas::transferKeyCode((int)event.keyCode, false), false, ctrl, shift, alt)) {
         return;
     }
 

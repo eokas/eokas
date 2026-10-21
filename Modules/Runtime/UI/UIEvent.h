@@ -7,13 +7,18 @@ namespace eokas
 {
     class UIWidget;
 
-    enum class UIKey
+    // Generic key codes. Integer values match NativeKeyCode.
+    // 0 is unused. Unknown is used when a key has no generic code.
+    enum class UIKeyCode : int
     {
-        Backspace,
+        Unknown = -1,
+
+        Backspace = 1,
         Tab,
         Enter,
         Escape,
         Space,
+
         Insert,
         Delete,
         Home,
@@ -65,11 +70,16 @@ namespace eokas
         Menu,
     };
 
-    struct UIKeyMods
+    // Generic mouse buttons. Integer values match NativeMouseButton.
+    // Unknown is used when a button has no generic button.
+    enum class UIMouseButton : int
     {
-        bool ctrl = false;
-        bool shift = false;
-        bool alt = false;
+        Unknown = -1,
+        Left = 0,
+        Right,
+        Middle,
+        X1,
+        X2,
     };
 
     enum class UIInputEvent
@@ -92,7 +102,7 @@ namespace eokas
         float x = 0.0f;
         float y = 0.0f;
         std::chrono::steady_clock::time_point time {};
-        int button = 0;
+        UIMouseButton button = UIMouseButton::Unknown;
         float wheelDeltaX = 0.0f;
         float wheelDeltaY = 0.0f;
     };

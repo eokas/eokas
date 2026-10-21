@@ -5,12 +5,13 @@ namespace eokas {
     namespace {
 
         const Color kCanvas(0.102f, 0.110f, 0.133f, 1.0f);
+        const char* kFontPath = "Content/Fonts/RobotoRegular.ttf";
+        const float kFontSize = 15.0f;
 
     }
 
     class MainWindow::Frame : public UIWidget {
     public:
-        std::shared_ptr<MainMenu> menu;
         std::shared_ptr<UIWidget> content;
 
         Frame() {
@@ -24,20 +25,8 @@ namespace eokas {
                 return;
             }
 
-            float barHeight = 0.0f;
-            if (menu) {
-                menu->resize(Vector2(shape.size.x, menu->shape.size.y));
-                menu->layout();
-                barHeight = menu->shape.size.y;
-                this->placeChild(*menu, Vector2(0.0f, 0.0f), Vector2(shape.size.x, barHeight));
-            }
-
             if (content) {
-                float contentHeight = shape.size.y - barHeight;
-                if (contentHeight < 0.0f) {
-                    contentHeight = 0.0f;
-                }
-                this->placeChild(*content, Vector2(0.0f, barHeight), Vector2(shape.size.x, contentHeight));
+                this->placeChild(*content, Vector2(0.0f, 0.0f), shape.size);
                 content->layout();
             }
         }
@@ -55,17 +44,14 @@ namespace eokas {
         mTitle = String("eokas");
 
         mFrame = std::make_shared<Frame>();
-        mFrame->menu = std::make_shared<MainMenu>();
-        mFrame->attachChild(mFrame->menu);
-
         mFrame->content = std::make_shared<UIWidget>();
         mFrame->content->shape.pivot = Vector2(0.0f, 0.0f);
         mFrame->content->pickable = false;
         mFrame->attachChild(mFrame->content);
 
         mFont = std::make_unique<UIFont>();
-        if (File::exists(MainMenu::kFontPath) && mFont->open(MainMenu::kFontPath, (uint32_t)MainMenu::kFontSize)) {
-            UIFont::bind(MainMenu::kFontPath, mFont.get());
+        if (File::exists(kFontPath) && mFont->open(kFontPath, (uint32_t)kFontSize)) {
+            UIFont::bind(kFontPath, mFont.get());
         }
 
         this->bindNativeInput();
@@ -230,14 +216,6 @@ namespace eokas {
         }
         mFrame->layout();
         this->ensureSurface();
-    }
-
-    MainMenu& MainWindow::menu() {
-        return *mFrame->menu;
-    }
-
-    const MainMenu& MainWindow::menu() const {
-        return *mFrame->menu;
     }
 
     UIWidget& MainWindow::content() {

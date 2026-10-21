@@ -249,7 +249,7 @@ namespace eokas
         return true;
     }
 
-    bool UICanvas::handlePointerRelease(float screenX, float screenY, int button)
+    bool UICanvas::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         this->endDrag();
         return UIWidget::handlePointerRelease(screenX, screenY, button);

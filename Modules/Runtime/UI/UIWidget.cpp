@@ -266,7 +266,7 @@ namespace eokas
         return false;
     }
 
-    bool UIWidget::handlePointerPress(float screenX, float screenY, int button)
+    bool UIWidget::handlePointerPress(float screenX, float screenY, UIMouseButton button)
     {
         (void)screenX;
         (void)screenY;
@@ -280,7 +280,7 @@ namespace eokas
         return false;
     }
 
-    bool UIWidget::handlePointerRelease(float screenX, float screenY, int button)
+    bool UIWidget::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         (void)screenX;
         (void)screenY;
@@ -377,21 +377,21 @@ namespace eokas
         return false;
     }
 
-    bool UIWidget::handleKeyPress(const UIKey& key, const UIKeyMods& mods)
+    bool UIWidget::handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt)
     {
         if (onKeyPress)
         {
-            onKeyPress(key, mods);
+            onKeyPress(key, ctrl, shift, alt);
             return true;
         }
         return false;
     }
 
-    bool UIWidget::handleKeyRelease(const UIKey& key, const UIKeyMods& mods)
+    bool UIWidget::handleKeyRelease(const UIKeyCode& key, bool ctrl, bool shift, bool alt)
     {
         if (onKeyRelease)
         {
-            onKeyRelease(key, mods);
+            onKeyRelease(key, ctrl, shift, alt);
             return true;
         }
         return false;
@@ -466,7 +466,7 @@ namespace eokas
         mPressed = false;
         if (active)
         {
-            this->handlePointerRelease(0.0f, 0.0f, 0);
+            this->handlePointerRelease(0.0f, 0.0f, UIMouseButton::Left);
         }
         for (auto& child : mChildren)
         {

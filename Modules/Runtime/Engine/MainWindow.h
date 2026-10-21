@@ -1,7 +1,6 @@
-#ifndef _EOKAS_TOOL_BASE_MAIN_WINDOW_H_
-#define _EOKAS_TOOL_BASE_MAIN_WINDOW_H_
+#ifndef _EOKAS_ENGINE_MAIN_WINDOW_H_
+#define _EOKAS_ENGINE_MAIN_WINDOW_H_
 
-#include "./MainMenu.h"
 #include "Native/NativeWindow.h"
 #include "Render/Renderer.h"
 #include "Render/Space.h"
@@ -24,8 +23,6 @@ namespace eokas {
         bool isOpen() const;
         void* handle() const;
 
-        MainMenu& menu();
-        const MainMenu& menu() const;
         UIWidget& content();
         const UIWidget& content() const;
         const Surface::Ref& surface() const;
@@ -58,4 +55,4 @@ namespace eokas {
 
 }
 
-#endif//_EOKAS_TOOL_BASE_MAIN_WINDOW_H_
+#endif//_EOKAS_ENGINE_MAIN_WINDOW_H_

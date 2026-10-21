@@ -118,17 +118,25 @@ namespace eokas
             return utf8 ? String::utf8ToUnicode(utf8, false) : std::wstring();
         }
 
-        int mouseButton(UINT message)
+        int platformMouseButton(UINT message, WPARAM wParam)
         {
             switch (message) {
+            case WM_LBUTTONDOWN:
+            case WM_LBUTTONDBLCLK:
+            case WM_LBUTTONUP:
+                return VK_LBUTTON;
             case WM_RBUTTONDOWN:
             case WM_RBUTTONDBLCLK:
             case WM_RBUTTONUP:
-                return 1;
+                return VK_RBUTTON;
             case WM_MBUTTONDOWN:
             case WM_MBUTTONDBLCLK:
             case WM_MBUTTONUP:
-                return 2;
+                return VK_MBUTTON;
+            case WM_XBUTTONDOWN:
+            case WM_XBUTTONDBLCLK:
+            case WM_XBUTTONUP:
+                return GET_XBUTTON_WPARAM(wParam) == XBUTTON2 ? VK_XBUTTON2 : VK_XBUTTON1;
             default:
                 return 0;
             }
@@ -238,21 +246,26 @@ namespace eokas
             case WM_RBUTTONDBLCLK:
             case WM_MBUTTONDOWN:
             case WM_MBUTTONDBLCLK:
+            case WM_XBUTTONDOWN:
+            case WM_XBUTTONDBLCLK:
                 SetCapture(hwnd);
                 if (window->onMouseDown) {
-                    window->onMouseDown((float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam), mouseButton(message));
+                    NativeMouseButton button = transferMouseButton(platformMouseButton(message, wParam));
+                    window->onMouseDown((float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam), button);
                 }
-                return 0;
+                return (message == WM_XBUTTONDOWN || message == WM_XBUTTONDBLCLK) ? TRUE : 0;
             case WM_LBUTTONUP:
             case WM_RBUTTONUP:
             case WM_MBUTTONUP:
+            case WM_XBUTTONUP:
                 if (window->onMouseUp) {
-                    window->onMouseUp((float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam), mouseButton(message));
+                    NativeMouseButton button = transferMouseButton(platformMouseButton(message, wParam));
+                    window->onMouseUp((float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam), button);
                 }
                 if (GetCapture() == hwnd) {
                     ReleaseCapture();
                 }
-                return 0;
+                return message == WM_XBUTTONUP ? TRUE : 0;
             case WM_SETCURSOR:
                 if (LOWORD(lParam) == HTCLIENT && applyCursor(*window, hwnd)) {
                     return TRUE;
@@ -277,7 +290,7 @@ namespace eokas
                     bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
                     bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
                     bool alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
-                    if (window->onKeyDown((int)wParam, extended, ctrl, shift, alt)) {
+                    if (window->onKeyDown(transferKeyCode((int)wParam, extended), extended, ctrl, shift, alt)) {
                         return 0;
                     }
                 }

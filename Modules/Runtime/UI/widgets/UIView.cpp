@@ -532,7 +532,7 @@ namespace eokas
         return true;
     }
 
-    bool UIView::handlePointerRelease(float screenX, float screenY, int button)
+    bool UIView::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
     {
         mDrag = BarDrag::None;
         return UIWidget::handlePointerRelease(screenX, screenY, button);

@@ -23,11 +23,11 @@ namespace eokas
 
         UIWidget* hitTest(float x, float y);
         void onMouseMove(float x, float y);
-        void onMouseDown(float x, float y, int button);
-        void onMouseUp(float x, float y, int button);
+        void onMouseDown(float x, float y, UIMouseButton button);
+        void onMouseUp(float x, float y, UIMouseButton button);
         void onMouseWheel(float x, float y, float deltaX, float deltaY);
         void onChar(uint32_t codepoint);
-        void onKeyDown(UIKey key, const UIKeyMods& mods);
+        void onKeyDown(UIKeyCode key, bool ctrl, bool shift, bool alt);
         void setFocus(UIWidget* widget);
         UIWidget* focus() const;
 
@@ -38,11 +38,11 @@ namespace eokas
         bool focusAlive();
         void appendRawInput(const UIInputInfo& info);
         void clearRawInputEvents();
-        void dispatchPointerGesture(UIWidget* pressed, UIWidget* hit, int button, float x, float y);
+        void dispatchPointerGesture(UIWidget* pressed, UIWidget* hit, UIMouseButton button, float x, float y);
         bool pointerDragged(const std::vector<UIInputInfo>& events) const;
         bool pointerPressOrigin(const std::vector<UIInputInfo>& events, float& x, float& y) const;
         const UIInputInfo* findPointerPress(const std::vector<UIInputInfo>& events) const;
-        bool isClickGesture(const std::vector<UIInputInfo>& events, UIWidget* pressed, UIWidget* hit, int button) const;
+        bool isClickGesture(const std::vector<UIInputInfo>& events, UIWidget* pressed, UIWidget* hit, UIMouseButton button) const;
         bool isDragGesture(const std::vector<UIInputInfo>& events) const;
         Vector2 dropDelta(const std::vector<UIInputInfo>& events) const;
 
@@ -54,7 +54,7 @@ namespace eokas
 
         UIWidget* mHovered = nullptr;
         UIWidget* mPressed = nullptr;
-        int mPressedButton = -1;
+        UIMouseButton mPressedButton = UIMouseButton::Unknown;
         std::vector<UIInputInfo> mRawInputEvents;
         Vector2 mLastParentPivot { 0.0f, 0.0f };
         UIWidget* mLastWidget = nullptr;

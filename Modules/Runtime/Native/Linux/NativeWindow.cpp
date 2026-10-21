@@ -366,16 +366,6 @@ namespace eokas
             }
         }
 
-        int pointerButton(unsigned int button)
-        {
-            if (button == 1) return 0;
-            if (button == 3) return 1;
-            if (button == 2) return 2;
-            if (button == 8) return 3;
-            if (button == 9) return 4;
-            return static_cast<int>(button) - 1;
-        }
-
         Bool matchWindow(::Display*, XEvent* event, XPointer arg)
         {
             auto window = *reinterpret_cast<::Window*>(arg);
@@ -530,7 +520,7 @@ namespace eokas
                         GrabModeAsync, GrabModeAsync, None, None, event.xbutton.time) == GrabSuccess;
                 }
                 if (window.onMouseDown) {
-                    window.onMouseDown(x, y, pointerButton(button));
+                    window.onMouseDown(x, y, transferMouseButton(static_cast<int>(button)));
                 }
                 applyCursor(window, x, y);
                 return;
@@ -550,7 +540,7 @@ namespace eokas
                 return;
             }
             if (window.onMouseUp) {
-                window.onMouseUp(static_cast<float>(event.xbutton.x), static_cast<float>(event.xbutton.y), pointerButton(button));
+                window.onMouseUp(static_cast<float>(event.xbutton.x), static_cast<float>(event.xbutton.y), transferMouseButton(static_cast<int>(button)));
             }
             NativeWindowState& platform = platform(window);
             if (platform.grabbed) {
@@ -588,7 +578,8 @@ namespace eokas
             bool shift = (event.xkey.state & ShiftMask) != 0;
             bool alt = (event.xkey.state & Mod1Mask) != 0;
             if (keysym != NoSymbol && window.onKeyDown) {
-                window.onKeyDown(static_cast<int>(keysym), extendedKey(keysym), ctrl, shift, alt);
+                NativeKeyCode keyCode = transferKeyCode(static_cast<int>(keysym), false);
+                window.onKeyDown(keyCode, extendedKey(keysym), ctrl, shift, alt);
             }
             emitChars(&window, chars, length);
             return;

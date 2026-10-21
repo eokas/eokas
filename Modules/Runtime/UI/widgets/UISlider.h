@@ -33,7 +33,7 @@ namespace eokas
         void setRange(float minV, float maxV);
         void render(UIPrimitive& primitive) override;
         bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
-        bool handlePointerRelease(float screenX, float screenY, int button) override;
+        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
 
     private:
         bool mTracking = false;

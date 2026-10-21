@@ -18,48 +18,48 @@ namespace eokas
             return widget.parent()->screenToPivot(screen);
         }
 
-        bool keyFromCodepoint(uint32_t codepoint, UIKey& key, UIKeyMods& mods)
+        bool keyFromCodepoint(uint32_t codepoint, UIKeyCode& key, bool& shift)
         {
-            mods = UIKeyMods();
+            shift = false;
             if (codepoint >= 'a' && codepoint <= 'z')
             {
-                key = static_cast<UIKey>(static_cast<int>(UIKey::A) + static_cast<int>(codepoint - 'a'));
+                key = static_cast<UIKeyCode>(static_cast<int>(UIKeyCode::A) + static_cast<int>(codepoint - 'a'));
                 return true;
             }
             if (codepoint >= 'A' && codepoint <= 'Z')
             {
-                key = static_cast<UIKey>(static_cast<int>(UIKey::A) + static_cast<int>(codepoint - 'A'));
-                mods.shift = true;
+                key = static_cast<UIKeyCode>(static_cast<int>(UIKeyCode::A) + static_cast<int>(codepoint - 'A'));
+                shift = true;
                 return true;
             }
             if (codepoint >= '0' && codepoint <= '9')
             {
-                key = static_cast<UIKey>(static_cast<int>(UIKey::Digit0) + static_cast<int>(codepoint - '0'));
+                key = static_cast<UIKeyCode>(static_cast<int>(UIKeyCode::Digit0) + static_cast<int>(codepoint - '0'));
                 return true;
             }
             if (codepoint == ' ')
             {
-                key = UIKey::Space;
+                key = UIKeyCode::Space;
                 return true;
             }
             struct Punct
             {
                 uint32_t plain;
                 uint32_t shifted;
-                UIKey key;
+                UIKeyCode key;
             };
             static const Punct punct[] = {
-                {'\'', '"', UIKey::Apostrophe},
-                {',', '<', UIKey::Comma},
-                {'-', '_', UIKey::Minus},
-                {'.', '>', UIKey::Period},
-                {'/', '?', UIKey::Slash},
-                {';', ':', UIKey::Semicolon},
-                {'=', '+', UIKey::Equal},
-                {'[', '{', UIKey::LeftBracket},
-                {'\\', '|', UIKey::Backslash},
-                {']', '}', UIKey::RightBracket},
-                {'`', '~', UIKey::GraveAccent},
+                {'\'', '"', UIKeyCode::Apostrophe},
+                {',', '<', UIKeyCode::Comma},
+                {'-', '_', UIKeyCode::Minus},
+                {'.', '>', UIKeyCode::Period},
+                {'/', '?', UIKeyCode::Slash},
+                {';', ':', UIKeyCode::Semicolon},
+                {'=', '+', UIKeyCode::Equal},
+                {'[', '{', UIKeyCode::LeftBracket},
+                {'\\', '|', UIKeyCode::Backslash},
+                {']', '}', UIKeyCode::RightBracket},
+                {'`', '~', UIKeyCode::GraveAccent},
             };
             for (const Punct& item : punct)
             {
@@ -71,33 +71,33 @@ namespace eokas
                 if (codepoint == item.shifted)
                 {
                     key = item.key;
-                    mods.shift = true;
+                    shift = true;
                     return true;
                 }
             }
             struct Digit
             {
                 uint32_t shifted;
-                UIKey key;
+                UIKeyCode key;
             };
             static const Digit digits[] = {
-                {')', UIKey::Digit0},
-                {'!', UIKey::Digit1},
-                {'@', UIKey::Digit2},
-                {'#', UIKey::Digit3},
-                {'$', UIKey::Digit4},
-                {'%', UIKey::Digit5},
-                {'^', UIKey::Digit6},
-                {'&', UIKey::Digit7},
-                {'*', UIKey::Digit8},
-                {'(', UIKey::Digit9},
+                {')', UIKeyCode::Digit0},
+                {'!', UIKeyCode::Digit1},
+                {'@', UIKeyCode::Digit2},
+                {'#', UIKeyCode::Digit3},
+                {'$', UIKeyCode::Digit4},
+                {'%', UIKeyCode::Digit5},
+                {'^', UIKeyCode::Digit6},
+                {'&', UIKeyCode::Digit7},
+                {'*', UIKeyCode::Digit8},
+                {'(', UIKeyCode::Digit9},
             };
             for (const Digit& item : digits)
             {
                 if (codepoint == item.shifted)
                 {
                     key = item.key;
-                    mods.shift = true;
+                    shift = true;
                     return true;
                 }
             }
@@ -127,7 +127,7 @@ namespace eokas
         mHeight = (float)height;
         mHovered = nullptr;
         mPressed = nullptr;
-        mPressedButton = -1;
+        mPressedButton = UIMouseButton::Unknown;
         mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
@@ -171,7 +171,7 @@ namespace eokas
         this->resetPointerState(mRoot.get());
         mHovered = nullptr;
         mPressed = nullptr;
-        mPressedButton = -1;
+        mPressedButton = UIMouseButton::Unknown;
         mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
@@ -195,7 +195,7 @@ namespace eokas
         this->resetPointerState(mRoot.get());
         mHovered = nullptr;
         mPressed = nullptr;
-        mPressedButton = -1;
+        mPressedButton = UIMouseButton::Unknown;
         mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
@@ -275,12 +275,12 @@ namespace eokas
         }
     }
 
-    void UIWindow::onMouseDown(float x, float y, int button)
+    void UIWindow::onMouseDown(float x, float y, UIMouseButton button)
     {
         this->onMouseMove(x, y);
         if (mPressed != nullptr || mHovered == nullptr)
         {
-            if (mPressed == nullptr && button == 0)
+            if (mPressed == nullptr && button == UIMouseButton::Left)
             {
                 this->setFocus(nullptr);
             }
@@ -288,7 +288,7 @@ namespace eokas
         }
         mPressed = mHovered;
         mPressedButton = button;
-        if (button == 0)
+        if (button == UIMouseButton::Left)
         {
             bool insideFocus = mFocused != nullptr && mFocused->containsDescendant(mPressed);
             if (mPressed->onKeyPress != nullptr || mPressed->onGotFocus != nullptr)
@@ -313,13 +313,13 @@ namespace eokas
         this->dispatchDrag(x, y);
     }
 
-    void UIWindow::onMouseUp(float x, float y, int button)
+    void UIWindow::onMouseUp(float x, float y, UIMouseButton button)
     {
         UIWidget* hit = this->hitTest(x, y);
         UIWidget* pressed = mPressed;
-        const int pressedButton = mPressedButton;
+        const UIMouseButton pressedButton = mPressedButton;
         mPressed = nullptr;
-        mPressedButton = -1;
+        mPressedButton = UIMouseButton::Unknown;
         if (pressed != nullptr && button == pressedButton)
         {
             endActiveDrags(mRoot.get());
@@ -375,7 +375,7 @@ namespace eokas
             }
             walker = walker->parent();
         }
-        if (mPressedButton != 0)
+        if (mPressedButton != UIMouseButton::Left)
         {
             return;
         }
@@ -402,18 +402,18 @@ namespace eokas
         {
             return;
         }
-        UIKey key = UIKey::Space;
-        UIKeyMods mods;
-        if (!keyFromCodepoint(codepoint, key, mods))
+        UIKeyCode key = UIKeyCode::Space;
+        bool shift = false;
+        if (!keyFromCodepoint(codepoint, key, shift))
         {
             return;
         }
-        mFocused->handleKeyPress(key, mods);
+        mFocused->handleKeyPress(key, false, shift, false);
     }
 
-    void UIWindow::onKeyDown(UIKey key, const UIKeyMods& mods)
+    void UIWindow::onKeyDown(UIKeyCode key, bool ctrl, bool shift, bool alt)
     {
-        if (key == UIKey::Escape)
+        if (key == UIKeyCode::Escape)
         {
             this->setFocus(nullptr);
             return;
@@ -422,7 +422,7 @@ namespace eokas
         {
             return;
         }
-        mFocused->handleKeyPress(key, mods);
+        mFocused->handleKeyPress(key, ctrl, shift, alt);
     }
 
     void UIWindow::setFocus(UIWidget* widget)
@@ -481,7 +481,7 @@ namespace eokas
         mRawInputEvents.clear();
     }
 
-    void UIWindow::dispatchPointerGesture(UIWidget* pressed, UIWidget* hit, int button, float x, float y)
+    void UIWindow::dispatchPointerGesture(UIWidget* pressed, UIWidget* hit, UIMouseButton button, float x, float y)
     {
         const Vector2 delta = this->dropDelta(mRawInputEvents);
         if (this->isClickGesture(mRawInputEvents, pressed, hit, button))
@@ -550,9 +550,9 @@ namespace eokas
         return false;
     }
 
-    bool UIWindow::isClickGesture(const std::vector<UIInputInfo>& events, UIWidget* pressed, UIWidget* hit, int button) const
+    bool UIWindow::isClickGesture(const std::vector<UIInputInfo>& events, UIWidget* pressed, UIWidget* hit, UIMouseButton button) const
     {
-        if (this->pointerDragged(events) || hit != pressed || button != 0)
+        if (this->pointerDragged(events) || hit != pressed || button != UIMouseButton::Left)
         {
             return false;
         }
