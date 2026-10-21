@@ -2,7 +2,7 @@
 #define _EOKAS_ENGINE_HEADER_H_
 
 #include "Base/Main.h"
-#include "./MainWindow.h"
+#include "./Stage.h"
 
 namespace eokas {
 

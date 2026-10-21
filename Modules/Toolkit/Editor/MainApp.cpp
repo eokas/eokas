@@ -1,6 +1,6 @@
 #include "./MainApp.h"
 
-namespace eokas::MainEditor {
+namespace eokas::Editor {
 
     bool MainApp::init() {
         this->quit();
@@ -9,11 +9,11 @@ namespace eokas::MainEditor {
             return false;
         }
 
-        mMainWindow = std::make_shared<MainWindow>();
-        mMainWindow->setRenderer(mEngine.renderer());
-        mMainWindow->setTitle("MainEditor");
-        mMainWindow->setSize(1280.0f, 720.0f);
-        if (!mMainWindow->isOpen()) {
+        mStage = std::make_shared<Stage>();
+        mStage->setRenderer(mEngine.renderer());
+        mStage->setTitle("Editor");
+        mStage->setSize(1280.0f, 720.0f);
+        if (!mStage->isOpen()) {
             this->quit();
             return false;
         }
@@ -21,14 +21,14 @@ namespace eokas::MainEditor {
     }
 
     void MainApp::quit() {
-        mMainWindow.reset();
+        mStage.reset();
         mEngine.quit();
     }
 
     void MainApp::tick(f32_t deltaTime) {
         mEngine.tick(deltaTime);
-        if (mMainWindow) {
-            mMainWindow->tick(deltaTime);
+        if (mStage) {
+            mStage->tick(deltaTime);
         }
     }
 
@@ -40,14 +40,14 @@ namespace eokas::MainEditor {
         return mEngine;
     }
 
-    MainWindow* MainApp::mainWindow() const {
-        return mMainWindow.get();
+    Stage* MainApp::stage() const {
+        return mStage.get();
     }
 
 }
 
 int main(int, char**) {
-    eokas::MainEditor::MainApp mainApp;
+    eokas::Editor::MainApp mainApp;
     if (!mainApp.init())
         return 1;
 

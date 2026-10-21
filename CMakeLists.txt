@@ -19,7 +19,7 @@ eokas_runtime_module(ImApp)
 eokas_runtime_module(Engine)
 
 eokas_toolkit_module(ToolBase)
-eokas_toolkit_module(MainEditor)
+eokas_toolkit_module(Editor)
 
 include(CTest)
 eokas_test_module(Test-Units)

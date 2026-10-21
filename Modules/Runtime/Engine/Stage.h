@@ -1,5 +1,5 @@
-#ifndef _EOKAS_ENGINE_MAIN_WINDOW_H_
-#define _EOKAS_ENGINE_MAIN_WINDOW_H_
+#ifndef _EOKAS_ENGINE_STAGE_H_
+#define _EOKAS_ENGINE_STAGE_H_
 
 #include "Native/NativeWindow.h"
 #include "Render/Renderer.h"
@@ -11,10 +11,10 @@
 
 namespace eokas {
 
-    class MainWindow {
+    class Stage {
     public:
-        MainWindow();
-        ~MainWindow();
+        Stage();
+        ~Stage();
 
         void setTitle(const char* title);
         void setSize(float width, float height);
@@ -55,4 +55,4 @@ namespace eokas {
 
 }
 
-#endif//_EOKAS_ENGINE_MAIN_WINDOW_H_
+#endif//_EOKAS_ENGINE_STAGE_H_

@@ -1,13 +1,13 @@
-#ifndef _EOKAS_MAIN_EDITOR_MAINAPP_H_
-#define _EOKAS_MAIN_EDITOR_MAINAPP_H_
+#ifndef _EOKAS_EDITOR_MAINAPP_H_
+#define _EOKAS_EDITOR_MAINAPP_H_
 
 #include "./Header.h"
 #include "Engine/Main.h"
-#include "Engine/MainWindow.h"
+#include "Engine/Stage.h"
 
 #include <memory>
 
-namespace eokas::MainEditor {
+namespace eokas::Editor {
 
     class MainApp {
     public:
@@ -17,13 +17,13 @@ namespace eokas::MainEditor {
 
         Engine& engine();
         const Engine& engine() const;
-        MainWindow* mainWindow() const;
+        Stage* stage() const;
 
     private:
         Engine mEngine;
-        std::shared_ptr<MainWindow> mMainWindow;
+        std::shared_ptr<Stage> mStage;
     };
 
 }
 
-#endif//_EOKAS_MAIN_EDITOR_MAINAPP_H_
+#endif//_EOKAS_EDITOR_MAINAPP_H_

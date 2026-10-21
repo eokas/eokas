@@ -1,4 +1,4 @@
-#include "./MainWindow.h"
+#include "./Stage.h"
 
 namespace eokas {
 
@@ -36,7 +36,7 @@ namespace eokas {
 
     }
 
-    class MainWindow::Frame : public UIWidget {
+    class Stage::Frame : public UIWidget {
     public:
         std::shared_ptr<UIWidget> content;
 
@@ -66,7 +66,7 @@ namespace eokas {
         }
     };
 
-    MainWindow::MainWindow() {
+    Stage::Stage() {
         mTitle = String("eokas");
 
         mFrame = std::make_shared<Frame>();
@@ -83,7 +83,7 @@ namespace eokas {
         this->bindNativeInput();
     }
 
-    void MainWindow::bindNativeInput() {
+    void Stage::bindNativeInput() {
         mNativeWindow.onClose = [this]() {
             this->releaseSurface();
         };
@@ -139,7 +139,7 @@ namespace eokas {
         };
     }
 
-    MainWindow::~MainWindow() {
+    Stage::~Stage() {
         this->closeNative();
         if (mUiReady) {
             mUIWindow.quit();
@@ -148,7 +148,7 @@ namespace eokas {
         mRenderer = nullptr;
     }
 
-    void MainWindow::setTitle(const char* title) {
+    void Stage::setTitle(const char* title) {
         if (title == nullptr || title[0] == '\0') {
             mTitle = String("eokas");
         } else {
@@ -159,7 +159,7 @@ namespace eokas {
         }
     }
 
-    void MainWindow::setSize(float width, float height) {
+    void Stage::setSize(float width, float height) {
         if (width < 0.0f) {
             width = 0.0f;
         }
@@ -175,7 +175,7 @@ namespace eokas {
         this->applyClientSize(width, height);
     }
 
-    void MainWindow::setRenderer(Renderer& renderer) {
+    void Stage::setRenderer(Renderer& renderer) {
         if (mRenderer != &renderer) {
             this->releaseSurface();
             mRenderer = &renderer;
@@ -183,7 +183,7 @@ namespace eokas {
         this->ensureSurface();
     }
 
-    void MainWindow::tick(f32_t deltaTime) {
+    void Stage::tick(f32_t deltaTime) {
         mNativeWindow.pumpMessages();
         if (!this->isOpen() || !mUiReady) {
             return;
@@ -195,7 +195,7 @@ namespace eokas {
         }
     }
 
-    void MainWindow::ensureSurface() {
+    void Stage::ensureSurface() {
         void* windowHandle = this->handle();
         if (mRenderer == nullptr || windowHandle == nullptr || !mUiReady) {
             return;
@@ -247,7 +247,7 @@ namespace eokas {
         mSpace.add(primitive);
     }
 
-    void MainWindow::releaseSurface() {
+    void Stage::releaseSurface() {
         if (mCamera) {
             mSpace.remove(mCamera);
             mCamera.reset();
@@ -259,7 +259,7 @@ namespace eokas {
         mAtlasReady = false;
     }
 
-    void MainWindow::publishFont() {
+    void Stage::publishFont() {
         if (!mFont || !mFont->isOpen()) {
             return;
         }
@@ -274,7 +274,7 @@ namespace eokas {
         }
     }
 
-    void MainWindow::applyClientSize(float width, float height) {
+    void Stage::applyClientSize(float width, float height) {
         if (width < 0.0f) {
             width = 0.0f;
         }
@@ -293,27 +293,27 @@ namespace eokas {
         this->ensureSurface();
     }
 
-    UIWidget& MainWindow::content() {
+    UIWidget& Stage::content() {
         return *mFrame->content;
     }
 
-    const UIWidget& MainWindow::content() const {
+    const UIWidget& Stage::content() const {
         return *mFrame->content;
     }
 
-    const Surface::Ref& MainWindow::surface() const {
+    const Surface::Ref& Stage::surface() const {
         return mSurface;
     }
 
-    UIWindow& MainWindow::uiWindow() {
+    UIWindow& Stage::uiWindow() {
         return mUIWindow;
     }
 
-    const UIWindow& MainWindow::uiWindow() const {
+    const UIWindow& Stage::uiWindow() const {
         return mUIWindow;
     }
 
-    void MainWindow::ensureOpen(float width, float height) {
+    void Stage::ensureOpen(float width, float height) {
         if (mNativeWindow.isOpen()) {
             return;
         }
@@ -331,15 +331,15 @@ namespace eokas {
         this->applyClientSize(size.x, size.y);
     }
 
-    void MainWindow::closeNative() {
+    void Stage::closeNative() {
         mNativeWindow.destroy();
     }
 
-    bool MainWindow::isOpen() const {
+    bool Stage::isOpen() const {
         return mNativeWindow.isOpen();
     }
 
-    void* MainWindow::handle() const {
+    void* Stage::handle() const {
         return mNativeWindow.handle();
     }
 
