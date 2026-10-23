@@ -38,6 +38,7 @@ namespace eokas {
         
         MD5();
         String compute(const String& input);
+        String compute(const u8_t* data, size_t length);
     
     private:
         static const u32_t blocksize = 64;
@@ -108,7 +109,13 @@ namespace eokas {
         static const u32_t DIGEST_SIZE = (256 / 8);
         
         SHA256();
+        
+        void reset();
+        void update(const u8_t* data, u32_t length);
+        String finish();
+
         String compute(const String& input);
+        String compute(const u8_t* data, size_t length);
     
     private:
         static const u32_t sha256_k[];
@@ -116,10 +123,9 @@ namespace eokas {
         
         void init();
         void transform(const u8_t* message, u32_t block_nb);
-        void update(const u8_t* message, u32_t len);
         void finalize(u8_t* digest);
         
-        u32_t m_tot_len;
+        u64_t m_tot_len;
         u32_t m_len;
         u8_t m_block[2 * SHA224_256_BLOCK_SIZE];
         u32_t m_h[8];

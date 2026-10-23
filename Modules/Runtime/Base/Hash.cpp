@@ -114,6 +114,32 @@ namespace eokas {
         return String{buf};
     }
 
+    String MD5::compute(const u8_t* data, size_t length)
+    {
+        u8_t digest[DIGEST_SIZE];
+        memset(digest, 0, DIGEST_SIZE);
+
+        this->init();
+        size_t offset = 0;
+        while (offset < length)
+        {
+            size_t remain = length - offset;
+            u32_t step = remain > 0xFFFFFFFFu ? 0xFFFFFFFFu : (u32_t) remain;
+            this->update(data + offset, step);
+            offset += step;
+        }
+        this->finalize(digest);
+
+        char buf[DIGEST_SIZE * 2 + 1];
+        for (int i = 0; i < DIGEST_SIZE; i++)
+        {
+            snprintf(buf + i * 2, 3, "%02x", digest[i]);
+        }
+        buf[DIGEST_SIZE * 2] = 0;
+
+        return String{buf};
+    }
+
     void MD5::init()
     {
         count[0] = 0;
@@ -335,17 +361,20 @@ namespace eokas {
     };
 
     SHA256::SHA256()
-    { }
+    {
+        reset();
+    }
 
-    String SHA256::compute(const eokas::String& input)
+    void SHA256::reset()
+    {
+        init();
+    }
+
+    String SHA256::finish()
     {
         u8_t digest[SHA256::DIGEST_SIZE];
-        memset(digest,0,SHA256::DIGEST_SIZE);
-
-        SHA256 ctx = SHA256();
-        ctx.init();
-        ctx.update((const u8_t*)input.cstr(), (u32_t)input.length());
-        ctx.finalize(digest);
+        memset(digest, 0, SHA256::DIGEST_SIZE);
+        finalize(digest);
 
         char buf[SHA256::DIGEST_SIZE * 2 + 1];
         for (int i = 0; i < SHA256::DIGEST_SIZE; i++)
@@ -353,8 +382,26 @@ namespace eokas {
             snprintf(buf + i * 2, 3, "%02x", digest[i]);
         }
         buf[SHA256::DIGEST_SIZE * 2] = 0;
-
         return String(buf);
+    }
+
+    String SHA256::compute(const eokas::String& input)
+    {
+        return compute((const u8_t*) input.cstr(), input.length());
+    }
+
+    String SHA256::compute(const u8_t* data, size_t length)
+    {
+        reset();
+        size_t offset = 0;
+        while (offset < length)
+        {
+            size_t remain = length - offset;
+            u32_t step = remain > 0x7fffffffu ? 0x7fffffffu : (u32_t) remain;
+            update(data + offset, step);
+            offset += step;
+        }
+        return finish();
     }
 
     void SHA256::init()
@@ -422,17 +469,18 @@ namespace eokas {
         rem_len = new_len % SHA224_256_BLOCK_SIZE;
         memcpy(m_block, &shifted_message[block_nb << 6], rem_len);
         m_len = rem_len;
-        m_tot_len += (block_nb + 1) << 6;
+        m_tot_len += ((u64_t) block_nb + 1) << 6;
     }
 
     void SHA256::finalize(u8_t* digest)
     {
         u32_t block_nb = (1 + ((SHA224_256_BLOCK_SIZE - 9) < (m_len % SHA224_256_BLOCK_SIZE)));
-        u32_t len_b = (m_tot_len + m_len) << 3;
+        u64_t len_b = (m_tot_len + m_len) << 3;
         u32_t pm_len = block_nb << 6;
         memset(m_block + m_len, 0, pm_len - m_len);
         m_block[m_len] = 0x80;
-        SHA2_UNPACK32(len_b, m_block + pm_len - 4);
+        SHA2_UNPACK32((u32_t) (len_b >> 32), m_block + pm_len - 8);
+        SHA2_UNPACK32((u32_t) len_b, m_block + pm_len - 4);
         transform(m_block, block_nb);
         for (int i = 0 ; i < 8; i++) {
             SHA2_UNPACK32(m_h[i], &digest[i << 2]);
