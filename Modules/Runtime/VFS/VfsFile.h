@@ -21,8 +21,8 @@ namespace eokas
         End
     };
 
-    class VfsChunkStore;
-    struct VfsManifest;
+    class VfsScheme;
+    class VfsSchemeFile;
 
     class VfsFile
     {
@@ -47,15 +47,11 @@ namespace eokas
         bool isOpen() const;
 
     private:
-        friend class Vfs;
+        friend class VfsScheme;
 
-        struct State;
-        std::unique_ptr<State> mState;
+        std::unique_ptr<VfsSchemeFile> mBody;
 
-        VfsResult prepare(std::shared_ptr<VfsChunkStore> readStore, std::shared_ptr<VfsChunkStore> writeStore, const VfsManifest& manifest, const VfsManifest* baseline, VfsMode mode, bool materialized, bool dirty, u64_t pos);
-        static VfsResult spillResident(State& state);
-        static VfsResult ensureResident(State& state, size_t index);
-        static VfsResult growZero(State& state, u64_t target);
+        VfsResult openScheme(std::unique_ptr<VfsSchemeFile> file);
     };
 }
 

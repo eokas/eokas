@@ -1,5 +1,5 @@
 
-#include "./Os.h"
+#include "./OS.h"
 #include "./String.h"
 #include <cstdlib>
 #include <iostream>

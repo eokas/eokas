@@ -1,13 +1,7 @@
 #include "VfsPath.h"
-#include "VfsHash.h"
 
 namespace eokas
 {
-    static bool isSeparator(char chr)
-    {
-        return chr == '/';
-    }
-
     VfsResult VfsPath::normalize(const String& in, String& out)
     {
         if (in.isEmpty() || in.at(0) != '/')
@@ -69,10 +63,5 @@ namespace eokas
         if (dir == "/")
             return String("/") + child;
         return dir + "/" + child;
-    }
-
-    String VfsPath::hash(const String& normalizedPath)
-    {
-        return vfsHash(normalizedPath.cstr(), normalizedPath.length());
     }
 }

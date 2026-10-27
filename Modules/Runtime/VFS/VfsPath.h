@@ -12,7 +12,6 @@ namespace eokas
         static String parent(const String& path);
         static String name(const String& path);
         static String join(const String& dir, const String& name);
-        static String hash(const String& normalizedPath);
     };
 }
 

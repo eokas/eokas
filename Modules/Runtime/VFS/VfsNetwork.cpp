@@ -565,10 +565,8 @@ namespace eokas
             }
             else if (request.op == kPut)
             {
-                const void* data = response.payload.empty() ? nullptr : request.payload.data();
                 VfsResult result = mBackend->put(request.key, request.payload.empty() ? nullptr : request.payload.data(), request.payload.size());
                 response.status = (u16_t) result;
-                (void) data;
             }
             else if (request.op == kRemove)
             {

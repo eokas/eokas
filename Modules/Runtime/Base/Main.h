@@ -23,5 +23,5 @@
 #include "./Cli.h"
 #include "./Timer.h"
 #include "./Memory.h"
-#include "./Os.h"
+#include "./OS.h"
 #include "./Dll.h"
