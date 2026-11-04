@@ -37,7 +37,7 @@ namespace eokas::rose
         return mType != other.mType || mName != other.mName;
     }
 
-    void Schema::setElement(Schema *schema)
+    void Schema::setElementSchema(Schema *schema)
     {
         if (schema == this)
             return;
@@ -47,7 +47,7 @@ namespace eokas::rose
         }
     }
 
-    Schema *Schema::getElement() const
+    Schema *Schema::getElementSchema() const
     {
         if (mType == SchemaType::List)
         {

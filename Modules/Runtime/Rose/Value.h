@@ -49,6 +49,11 @@ namespace eokas::rose {
     {
         std::vector<Value> elements;
 
+        u32_t count() const
+        {
+            return u32_t(elements.size());
+        }
+
         Value& get(u32_t index)
         {
             return elements.at(index);
@@ -57,6 +62,22 @@ namespace eokas::rose {
         void set(u32_t index, const Value& value)
         {
             elements.at(index) = value;
+        }
+
+        bool insert(u32_t index, const Value& value)
+        {
+            if(index > elements.size())
+                return false;
+            elements.insert(elements.begin() + index, value);
+            return true;
+        }
+
+        bool remove(u32_t index)
+        {
+            if(index >= elements.size())
+                return false;
+            elements.erase(elements.begin() + index);
+            return true;
         }
 
         void push(const Value& value)
@@ -74,6 +95,11 @@ namespace eokas::rose {
             elements.pop_back();
             return true;
         }
+
+        void clear()
+        {
+            elements.clear();
+        }
     };
     
     struct Object
@@ -85,9 +111,13 @@ namespace eokas::rose {
             return members.at(name);
         }
 
-        void set(const String& name, const Value& value)
+        bool set(const String& name, const Value& value)
         {
-            members.at(name) = value;
+            auto found = members.find(name);
+            if (found == members.end())
+                return false;
+            found->second = value;
+            return true;
         }
     };
     
@@ -113,8 +143,11 @@ namespace eokas::rose {
         Value* make(const String& val);
         Value* make(Schema* schema);
 
+        u32_t count(Value* list);
         Value* get(Value* list, u32_t index);
         bool set(Value* list, u32_t index, Value* val);
+        bool insert(Value* list, u32_t index, Value* val);
+        bool remove(Value* list, u32_t index);
         bool push(Value* list, Value* val);
         bool pop(Value* list, Value* val);
 
@@ -133,6 +166,7 @@ namespace eokas::rose {
         bool set(Value* ptr, bool val);
         bool set(Value* ptr, const String& val);
 
+        bool clear(Value* value);
         void clear();
 
     private:

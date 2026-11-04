@@ -62,6 +62,8 @@ namespace eokas::rose
         void set(const String& name, const String& val);
         
         
+        u32_t count(Value* list);
+
         Value* get(Value* list, u32_t index);
         bool get(Value* list, u32_t index, i32_t& val);
         bool get(Value* list, u32_t index, i64_t& val);
@@ -76,6 +78,9 @@ namespace eokas::rose
         bool set(Value* list, u32_t index, bool val);
         bool set(Value* list, u32_t index, const String& val);
 
+        bool insert(Value* list, u32_t index, Value* val);
+        bool remove(Value* list, u32_t index);
+
         bool push(Value* list, Value* val);
         bool push(Value* list, i32_t val);
         bool push(Value* list, i64_t val);
@@ -89,6 +94,8 @@ namespace eokas::rose
         bool pop(Value* list, f64_t& val);
         bool pop(Value* list, bool& val);
         bool pop(Value* list, String& val);
+
+        bool clear(Value* list);
 
         Value* get(Value* object, const String& field);
         bool get(Value* object, const String& field, i32_t& val);

@@ -128,7 +128,7 @@ namespace eokas::rose
             {
                 auto *member = schema->getMember(i);
                 Value *v = this->make(member->schema);
-                object.members.insert(std::make_pair(member->name, *v));
+                object.members.emplace(member->name, *v);
             }
 
             return &value;
@@ -137,6 +137,19 @@ namespace eokas::rose
         return nullptr;
     }
 
+    u32_t ValueHeap::count(Value *list)
+    {
+        if (list == nullptr)
+            return 0;
+        if (!list->schema->is(SchemaType::List))
+            return 0;
+        if (list->value.i64 < 0 || list->value.i64 >= this->lists.size())
+            return 0;
+        List &ref = this->lists.at(list->value.i64);
+        return ref.count();
+    }
+
+    // Returned element pointers are invalidated by insert, remove, and a growing push.
     Value *ValueHeap::get(Value *list, u32_t index)
     {
         if (list == nullptr)
@@ -162,7 +175,20 @@ namespace eokas::rose
         return true;
     }
 
-    bool ValueHeap::push(Value *list, Value *val)
+    bool ValueHeap::insert(Value *list, u32_t index, Value *val)
+    {
+        if (list == nullptr || val == nullptr)
+            return false;
+        if (!list->schema->is(SchemaType::List))
+            return false;
+        if (list->value.i64 < 0 || list->value.i64 >= this->lists.size())
+            return false;
+        List &ref = this->lists.at(list->value.i64);
+        Value copy = *val;
+        return ref.insert(index, copy);
+    }
+
+    bool ValueHeap::remove(Value *list, u32_t index)
     {
         if (list == nullptr)
             return false;
@@ -171,7 +197,20 @@ namespace eokas::rose
         if (list->value.i64 < 0 || list->value.i64 >= this->lists.size())
             return false;
         List &ref = this->lists.at(list->value.i64);
-        ref.push(*val);
+        return ref.remove(index);
+    }
+
+    bool ValueHeap::push(Value *list, Value *val)
+    {
+        if (list == nullptr || val == nullptr)
+            return false;
+        if (!list->schema->is(SchemaType::List))
+            return false;
+        if (list->value.i64 < 0 || list->value.i64 >= this->lists.size())
+            return false;
+        List &ref = this->lists.at(list->value.i64);
+        Value copy = *val;
+        ref.push(copy);
         return true;
     }
 
@@ -201,15 +240,14 @@ namespace eokas::rose
 
     bool ValueHeap::set(Value *object, const String &field, Value *val)
     {
-        if (object == nullptr)
+        if (object == nullptr || val == nullptr)
             return false;
         if (!object->schema->is(SchemaType::Struct))
             return false;
         if (object->value.i64 < 0 || object->value.i64 >= this->objects.size())
             return false;
         Object &ref = this->objects.at(object->value.i64);
-        ref.set(field, *val);
-        return true;
+        return ref.set(field, *val);
     }
 
     bool ValueHeap::get(Value *ptr, i32_t &val)
@@ -328,6 +366,20 @@ namespace eokas::rose
 
         ptr->value.u64 = u32_t(index);
 
+        return true;
+    }
+
+    bool ValueHeap::clear(Value *value)
+    {
+        if (value == nullptr)
+            return false;
+
+        if (!value->schema->is(SchemaType::List))
+            return false;
+        if (value->value.i64 < 0 || value->value.i64 >= this->lists.size())
+            return false;
+        List &ref = this->lists.at(value->value.i64);
+        ref.clear();
         return true;
     }
 

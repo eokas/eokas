@@ -74,7 +74,7 @@ namespace eokas::rose
                 u32_t elementSchemaIndex = -1;
                 if (!stream.read(elementSchemaIndex)) return false;
                 Schema *elementSchema = mSchemas.get(elementSchemaIndex);
-                schema->setElement(elementSchema);
+                schema->setElementSchema(elementSchema);
             } else if (type == SchemaType::Struct)
             {
                 u32_t memberCount = 0;
@@ -198,7 +198,7 @@ namespace eokas::rose
 
             if (type == SchemaType::List)
             {
-                Schema *elementSchema = schema->getElement();
+                Schema *elementSchema = schema->getElementSchema();
                 stream.write(mSchemas.indexOf(elementSchema->name()));
             } else if (type == SchemaType::Struct)
             {
@@ -449,6 +449,11 @@ namespace eokas::rose
         mRoot[name] = value;
     }
 
+    u32_t Library::count(Value *list)
+    {
+        return mValues.count(list);
+    }
+
     Value *Library::get(Value *list, u32_t index)
     {
         return mValues.get(list, index);
@@ -517,6 +522,16 @@ namespace eokas::rose
     {
         Value *value = mValues.make(val);
         return mValues.set(list, index, value);
+    }
+
+    bool Library::insert(Value *list, u32_t index, Value *val)
+    {
+        return mValues.insert(list, index, val);
+    }
+
+    bool Library::remove(Value *list, u32_t index)
+    {
+        return mValues.remove(list, index);
     }
 
     bool Library::push(Value *list, Value *val)
@@ -597,6 +612,11 @@ namespace eokas::rose
         if (!mValues.pop(list, &ptr))
             return false;
         return mValues.get(&ptr, val);
+    }
+
+    bool Library::clear(Value *list)
+    {
+        return mValues.clear(list);
     }
 
     Value *Library::get(Value *object, const String &field)

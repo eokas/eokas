@@ -44,8 +44,8 @@ namespace eokas::rose
         String name() const { return mName; }
         bool is(SchemaType type) const { return mType == type; }
 
-        void setElement(Schema* schema);
-        Schema* getElement() const;
+        void setElementSchema(Schema* schema);
+        Schema* getElementSchema() const;
 
         void addMember(const String& name, Schema* schema);
         void setMember(const String& name, Schema* schema);
