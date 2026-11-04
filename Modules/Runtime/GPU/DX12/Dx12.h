@@ -246,18 +246,27 @@ namespace eokas
         virtual void end() override;
     };
     
+    struct DX12Upload
+    {
+        ComPtr<ID3D12Resource> resource;
+        u64_t fence = 0;
+    };
+
     struct DX12CommandBuffer : public CommandBuffer
     {
         DX12Device& mDevice;
         ComPtr <ID3D12GraphicsCommandList> mCommandList;
         ComPtr<ID3D12CommandAllocator> mCommandAllocator;
         
-        std::vector<ComPtr<ID3D12Resource>> mUploadResources;
+        std::vector<DX12Upload> mUploads;
         PipelineObject::Ref mCurrentPipeline;
         bool mClosed = false;
 
         DX12CommandBuffer(DX12Device& device);
         ~DX12CommandBuffer();
+        void releaseCompletedUploads();
+        void retainUpload(ComPtr<ID3D12Resource> resource);
+        void setUploadFence(u64_t fenceValue);
         void releaseResourceReferences();
         
         virtual void open() override;

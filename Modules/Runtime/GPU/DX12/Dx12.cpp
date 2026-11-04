@@ -613,11 +613,53 @@ namespace eokas
         return mDevice.getFrameIndex() * mFrameSize;
     }
 
+    static void dumpDeviceFailure(ID3D12Device* device, HRESULT hr, const char* where)
+    {
+        FILE* file = nullptr;
+        if (fopen_s(&file, "E:\\Cheelin\\Projects\\eokas\\eokas\\rosepad-gpu.txt", "a") != 0 || file == nullptr)
+        {
+            return;
+        }
+        fprintf(file, "fail %s hr=0x%08lX\n", where, static_cast<unsigned long>(hr));
+        if (device != nullptr)
+        {
+            fprintf(file, "removed=0x%08lX\n", static_cast<unsigned long>(device->GetDeviceRemovedReason()));
+            ComPtr<ID3D12InfoQueue> queue;
+            if (SUCCEEDED(device->QueryInterface(IID_PPV_ARGS(&queue))))
+            {
+                const UINT64 count = queue->GetNumStoredMessages();
+                fprintf(file, "messages=%llu\n", static_cast<unsigned long long>(count));
+                const UINT64 start = count > 40 ? count - 40 : 0;
+                for (UINT64 i = start; i < count; ++i)
+                {
+                    SIZE_T length = 0;
+                    if (FAILED(queue->GetMessage(i, nullptr, &length)) || length == 0)
+                    {
+                        continue;
+                    }
+                    std::vector<uint8_t> storage(length);
+                    auto* message = reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+                    if (FAILED(queue->GetMessage(i, message, &length)) || message->pDescription == nullptr)
+                    {
+                        continue;
+                    }
+                    fprintf(file, "[%u] %s\n", static_cast<unsigned>(message->ID), message->pDescription);
+                }
+            }
+        }
+        fclose(file);
+    }
+
     void* DX12DynamicBuffer::map()
     {
         void* base = nullptr;
         D3D12_RANGE readRange = {0, 0};
-        _ThrowIfFailed(mResource->Map(0, &readRange, &base));
+        const HRESULT hr = mResource->Map(0, &readRange, &base);
+        if (FAILED(hr))
+        {
+            dumpDeviceFailure(mDevice.mDevice.Get(), hr, "DynamicBuffer::map");
+            throw HRException(hr, __FILE__, __LINE__);
+        }
         return static_cast<uint8_t*>(base) + getBindOffset();
     }
 
@@ -1164,9 +1206,47 @@ namespace eokas
             mDevice.ReleaseCommandAllocator(std::move(mCommandAllocator), 0);
     }
 
+    void DX12CommandBuffer::releaseCompletedUploads()
+    {
+        const u64_t completed = mDevice.mFence.completedValue();
+        std::vector<DX12Upload> live;
+        live.reserve(mUploads.size());
+        for (DX12Upload& upload : mUploads)
+        {
+            if (upload.fence != 0 && completed >= upload.fence)
+            {
+                continue;
+            }
+            live.push_back(std::move(upload));
+        }
+        mUploads.swap(live);
+    }
+
+    void DX12CommandBuffer::retainUpload(ComPtr<ID3D12Resource> resource)
+    {
+        if (!resource)
+        {
+            return;
+        }
+        DX12Upload upload;
+        upload.resource = std::move(resource);
+        mUploads.push_back(std::move(upload));
+    }
+
+    void DX12CommandBuffer::setUploadFence(u64_t fenceValue)
+    {
+        for (DX12Upload& upload : mUploads)
+        {
+            if (upload.fence == 0)
+            {
+                upload.fence = fenceValue;
+            }
+        }
+    }
+
     void DX12CommandBuffer::releaseResourceReferences()
     {
-        mUploadResources.clear();
+        mUploads.clear();
         mCurrentPipeline.reset();
         if (!mCommandList)
             return;
@@ -1186,7 +1266,10 @@ namespace eokas
     
     void DX12CommandBuffer::open()
     {
-        mUploadResources.clear();
+        // Upload heaps are still referenced by the previous submission until its
+        // fence completes. Dropping them here used to remove the device the next
+        // time a texture was updated, such as the font atlas for a new menu.
+        this->releaseCompletedUploads();
         mCommandAllocator = mDevice.AcquireCommandAllocator();
         ID3D12PipelineState* pso = nullptr;
         if (auto* current = dynamic_cast<DX12PipelineObject*>(mCurrentPipeline.get()))
@@ -1415,7 +1498,7 @@ namespace eokas
         mCommandList->ResourceBarrier(1, &onFinish);
         dxTarget->mState = D3D12_RESOURCE_STATE_GENERIC_READ;
 
-        mUploadResources.push_back(upload);
+        this->retainUpload(upload);
     }
     
     void DX12CommandBuffer::drawIndexedInstanced(uint32_t indexCountPerInstance, uint32_t instanceCount, uint32_t startIndexLocation, uint32_t baseVertexLocation, uint32_t startInstanceLocation)
@@ -1487,13 +1570,18 @@ namespace eokas
         }
         
         // 3. 将数据从 std::vector<UINT8> 复制到上传堆中
+        const UINT64 rowPitch = uploadFootprint.Footprint.RowPitch;
+        if (rowSizeInBytes > rowPitch || source.size() < rowSizeInBytes * numRows)
+        {
+            throw std::runtime_error("CommandBuffer: fillTexture source does not match the texture footprint.");
+        }
         const UINT8* srcPtr = source.data();
         UINT8* dstPtr;
         _ThrowIfFailed(upload->Map(0, nullptr, (void**) &dstPtr));
         for (UINT row = 0; row < numRows; ++row)
         {
-            memcpy(dstPtr, srcPtr, rowSizeInBytes);
-            dstPtr += uploadFootprint.Footprint.RowPitch;
+            memcpy(dstPtr, srcPtr, static_cast<size_t>(rowSizeInBytes));
+            dstPtr += rowPitch;
             srcPtr += rowSizeInBytes;
         }
         upload->Unmap(0, nullptr);
@@ -1534,7 +1622,7 @@ namespace eokas
             dxTarget->mState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
         }
 
-        mUploadResources.push_back(upload);
+        this->retainUpload(upload);
     }
 
     void DX12Fence::create(ID3D12Device* device)
@@ -1856,6 +1944,7 @@ namespace eokas
         ID3D12CommandList* commandLists[] = {dxCommandBuffer->mCommandList.Get()};
         mCommandQueue->ExecuteCommandLists(_countof(commandLists), commandLists);
         const u64_t executeFence = mFence.signal(mCommandQueue.Get());
+        dxCommandBuffer->setUploadFence(executeFence);
         mFenceValues[mFrameIndex] = executeFence;
         ReleaseCommandAllocator(std::move(dxCommandBuffer->mCommandAllocator), executeFence);
     }
