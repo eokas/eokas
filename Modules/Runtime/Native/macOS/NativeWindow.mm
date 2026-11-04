@@ -298,13 +298,13 @@ namespace eokas
     bool ctrl = (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl)) != 0;
     bool shift = (event.modifierFlags & NSEventModifierFlagShift) != 0;
     bool alt = (event.modifierFlags & NSEventModifierFlagOption) != 0;
-    if (window->onKeyDown && window->onKeyDown(eokas::transferKeyCode((int)event.keyCode, false), false, ctrl, shift, alt)) {
+    if (window->onKeyPress && window->onKeyPress(eokas::transferKeyCode((int)event.keyCode, false), false, ctrl, shift, alt, event.isARepeat)) {
         return;
     }
 
     bool consumed = false;
     NSString* chars = event.characters;
-    if (window->onChar && chars != nil) {
+    if (window->onKeyChar && chars != nil) {
         NSUInteger count = chars.length;
         for (NSUInteger index = 0; index < count;) {
             unichar unit = [chars characterAtIndex:index];
@@ -323,13 +323,28 @@ namespace eokas
             if (codepoint >= 0xF700 && codepoint <= 0xF8FF) {
                 continue;
             }
-            if (window->onChar(codepoint)) {
+            if (window->onKeyChar(codepoint)) {
                 consumed = true;
             }
         }
     }
     if (!consumed) {
         [super keyDown:event];
+    }
+}
+
+- (void)keyUp:(NSEvent*)event
+{
+    eokas::NativeWindow* window = [self nativeWindow];
+    if (window == nullptr || !window->onKeyRelease) {
+        [super keyUp:event];
+        return;
+    }
+    bool ctrl = (event.modifierFlags & (NSEventModifierFlagCommand | NSEventModifierFlagControl)) != 0;
+    bool shift = (event.modifierFlags & NSEventModifierFlagShift) != 0;
+    bool alt = (event.modifierFlags & NSEventModifierFlagOption) != 0;
+    if (!window->onKeyRelease(eokas::transferKeyCode((int)event.keyCode, false), false, ctrl, shift, alt)) {
+        [super keyUp:event];
     }
 }
 

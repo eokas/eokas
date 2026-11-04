@@ -321,7 +321,7 @@ namespace eokas
 
         void emitChars(NativeWindow* owner, const char* bytes, int length)
         {
-            if (owner == nullptr || !owner->onChar || bytes == nullptr || length <= 0) {
+            if (owner == nullptr || !owner->onKeyChar || bytes == nullptr || length <= 0) {
                 return;
             }
             const auto* data = reinterpret_cast<const unsigned char*>(bytes);
@@ -362,7 +362,7 @@ namespace eokas
                     continue;
                 }
                 index += need;
-                owner->onChar(codepoint);
+                owner->onKeyChar(codepoint);
             }
         }
 
@@ -577,11 +577,21 @@ namespace eokas
             bool ctrl = (event.xkey.state & ControlMask) != 0;
             bool shift = (event.xkey.state & ShiftMask) != 0;
             bool alt = (event.xkey.state & Mod1Mask) != 0;
-            if (keysym != NoSymbol && window.onKeyDown) {
+            if (keysym != NoSymbol && window.onKeyPress) {
                 NativeKeyCode keyCode = transferKeyCode(static_cast<int>(keysym), false);
-                window.onKeyDown(keyCode, extendedKey(keysym), ctrl, shift, alt);
+                window.onKeyPress(keyCode, extendedKey(keysym), ctrl, shift, alt, false);
             }
             emitChars(&window, chars, length);
+            return;
+        }
+        case KeyRelease: {
+            bool ctrl = (event.xkey.state & ControlMask) != 0;
+            bool shift = (event.xkey.state & ShiftMask) != 0;
+            bool alt = (event.xkey.state & Mod1Mask) != 0;
+            ::KeySym keysym = XLookupKeysym(&event.xkey, 0);
+            if (keysym != NoSymbol && window.onKeyRelease) {
+                window.onKeyRelease(transferKeyCode(static_cast<int>(keysym), false), extendedKey(keysym), ctrl, shift, alt);
+            }
             return;
         }
         case FocusIn:

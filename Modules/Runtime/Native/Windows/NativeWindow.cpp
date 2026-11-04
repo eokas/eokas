@@ -181,7 +181,7 @@ namespace eokas
                 state.pendingHigh = 0;
                 codepoint = (uint32_t)unit;
             }
-            return window.onChar && window.onChar(codepoint);
+            return window.onKeyChar && window.onKeyChar(codepoint);
         }
 
         LRESULT CALLBACK windowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -285,12 +285,24 @@ namespace eokas
                 return 0;
             }
             case WM_KEYDOWN:
-                if (window->onKeyDown) {
+                if (window->onKeyPress) {
                     bool extended = (lParam & (1 << 24)) != 0;
                     bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
                     bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
                     bool alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
-                    if (window->onKeyDown(transferKeyCode((int)wParam, extended), extended, ctrl, shift, alt)) {
+                    bool repeat = (lParam & (1 << 30)) != 0;
+                    if (window->onKeyPress(transferKeyCode((int)wParam, extended), extended, ctrl, shift, alt, repeat)) {
+                        return 0;
+                    }
+                }
+                return DefWindowProcW(hwnd, message, wParam, lParam);
+            case WM_KEYUP:
+                if (window->onKeyRelease) {
+                    bool extended = (lParam & (1 << 24)) != 0;
+                    bool ctrl = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                    bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                    bool alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
+                    if (window->onKeyRelease(transferKeyCode((int)wParam, extended), extended, ctrl, shift, alt)) {
                         return 0;
                     }
                 }

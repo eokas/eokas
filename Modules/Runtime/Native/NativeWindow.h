@@ -84,9 +84,10 @@ namespace eokas
         std::function<void(float x, float y, float deltaX, float deltaY)> onMouseWheel;
         // Return true when the key is consumed.
         // keyCode is NativeKeyCode::Unknown when the platform key is unknown.
-        std::function<bool(NativeKeyCode keyCode, bool extended, bool ctrl, bool shift, bool alt)> onKeyDown;
+        std::function<bool(NativeKeyCode keyCode, bool extended, bool ctrl, bool shift, bool alt, bool repeat)> onKeyPress;
+        std::function<bool(NativeKeyCode keyCode, bool extended, bool ctrl, bool shift, bool alt)> onKeyRelease;
         // Return true when the character is consumed.
-        std::function<bool(uint32_t codepoint)> onChar;
+        std::function<bool(uint32_t character)> onKeyChar;
         // Client-area cursor. Return true to apply `cursor`.
         std::function<bool(float x, float y, NativeCursor& cursor)> onCursor;
     };

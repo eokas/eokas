@@ -6,7 +6,7 @@
 namespace eokas
 {
     // Generic key codes shared by every platform.
-    // NativeWindow::onKeyDown receives these values.
+    // NativeWindow::onKeyPress receives these values.
     // 0 is unused. Unknown is returned when a platform key has no generic code.
     enum class NativeKeyCode : int
     {
