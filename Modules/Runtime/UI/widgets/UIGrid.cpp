@@ -1,15 +1,9 @@
 #include "UIGrid.h"
-#include "../UIFont.h"
 #include <cmath>
 #include <vector>
 
 namespace eokas
 {
-    void UIGrid::addChild(const std::shared_ptr<UIWidget>& child)
-    {
-        this->attachChild(child);
-    }
-
     void UIGrid::layout()
     {
         if (!visible)
@@ -106,10 +100,6 @@ namespace eokas
         if (!visible)
         {
             return;
-        }
-        if (color.a > 0.0f)
-        {
-            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

@@ -9,7 +9,7 @@ namespace eokas
         this->setContent(std::make_shared<UIText>());
     }
 
-    void UIMenuItem::setContent(const std::shared_ptr<UIWidget>& widget)
+    void UIMenuItem::setContent(const UIWidget::Ref& widget)
     {
         content = widget;
         this->detachChildren();
@@ -72,6 +72,7 @@ namespace eokas
 
     UIMenu::UIMenu()
     {
+        color = Color(1.0f, 1.0f, 1.0f, 1.0f);
         list = std::make_shared<UIList>();
         list->direction = direction;
         list->padding = padding;
@@ -84,7 +85,7 @@ namespace eokas
     {
         if (list && item)
         {
-            list->addChild(item);
+            list->attachChild(item);
         }
     }
 
@@ -156,15 +157,29 @@ namespace eokas
         UIWidget::layout();
     }
 
+    bool UIMenu::handlePointerPressAnywhere(const UIPointerEvent& event)
+    {
+        if (overlay && visible)
+        {
+            const Vector2 screen = event.position;
+            bool inside = this->pick(this->screenToParentPivot(screen)) != nullptr;
+            if (!inside && host != nullptr)
+            {
+                inside = host->pick(host->screenToParentPivot(screen)) != nullptr;
+            }
+            if (!inside)
+            {
+                visible = false;
+            }
+        }
+        return UIWidget::handlePointerPressAnywhere(event);
+    }
+
     void UIMenu::render(UIPrimitive& primitive)
     {
         if (!visible)
         {
             return;
-        }
-        if (color.a > 0.0f)
-        {
-            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

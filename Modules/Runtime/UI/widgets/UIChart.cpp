@@ -153,7 +153,7 @@ namespace eokas
     UIChart::UIChart()
     {
         pickable = true;
-        dragable = true;
+        draggable = true;
         stroke.color = Color(0.95f, 0.97f, 1.0f, 1.0f);
         stroke.thickness = 2.0f;
     }
@@ -307,7 +307,7 @@ namespace eokas
         shape.setScaleAround(focal, Vector2(next, next));
         if (next != previous && onZoom)
         {
-            onZoom(value - previous, focal.x, focal.y);
+            onZoom(next - previous, focal.x, focal.y);
         }
     }
 
@@ -368,7 +368,7 @@ namespace eokas
         {
             canvas->applyCanvasSelection(this);
         }
-        return UIWidget::handleClick(screenX, screenY) || true;
+        return UIWidget::handleClick(screenX, screenY);
     }
 
     bool UIChart::handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta)
@@ -385,7 +385,7 @@ namespace eokas
         }
         if (onChartDrop)
         {
-            Vector2 dropPoint = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
+            Vector2 dropPoint = this->screenToParentPivot(Vector2(screenX, screenY));
             onChartDrop(target, dropPoint.x, dropPoint.y);
             return true;
         }
@@ -399,7 +399,7 @@ namespace eokas
         {
             return false;
         }
-        Vector2 focal = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
+        Vector2 focal = this->screenToParentPivot(Vector2(screenX, screenY));
         Vector2 local = shape.pivotToLocal(focal);
         if (!this->contains(local))
         {

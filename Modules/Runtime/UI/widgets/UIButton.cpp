@@ -9,7 +9,7 @@ namespace eokas
         this->setContent(std::make_shared<UIText>());
     }
 
-    void UIButton::setContent(const std::shared_ptr<UIWidget>& widget)
+    void UIButton::setContent(const UIWidget::Ref& widget)
     {
         content = widget;
         this->detachChildren();

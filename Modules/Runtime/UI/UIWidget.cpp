@@ -1,4 +1,5 @@
 #include "UIWidget.h"
+#include "UIFont.h"
 
 namespace eokas
 {
@@ -124,6 +125,15 @@ namespace eokas
         return UIShape::transformPoint(this->matrixScreenToLocal(), screen);
     }
 
+    Vector2 UIWidget::screenToParentPivot(const Vector2& screen) const
+    {
+        if (mParent == nullptr)
+        {
+            return screen;
+        }
+        return mParent->screenToPivot(screen);
+    }
+
     Rect UIWidget::screenBounds() const
     {
         return shape.bounds(this->matrixLocalToScreen());
@@ -155,9 +165,13 @@ namespace eokas
         {
             return;
         }
+        if (color.a > 0.0f)
+        {
+            this->addQuad(primitive, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
+        }
         for (auto& child : mChildren)
         {
-            if (!child || child->floating)
+            if (!child || child->overlay)
             {
                 continue;
             }
@@ -166,11 +180,37 @@ namespace eokas
                 child->render(primitive);
             }
         }
+        if (!deferOverlay)
+        {
+            for (auto& child : mChildren)
+            {
+                if (child && child->overlay)
+                {
+                    child->render(primitive);
+                }
+            }
+        }
+    }
+
+    void UIWidget::renderOverlay(UIPrimitive& primitive)
+    {
+        if (!visible)
+        {
+            return;
+        }
         for (auto& child : mChildren)
         {
-            if (child && child->floating)
+            if (!child || !child->visible)
+            {
+                continue;
+            }
+            if (child->overlay)
             {
                 child->render(primitive);
+            }
+            else
+            {
+                child->renderOverlay(primitive);
             }
         }
     }
@@ -192,7 +232,7 @@ namespace eokas
         Vector2 childPoint = local - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
         for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)
         {
-            if (*it && (*it)->floating)
+            if (*it && (*it)->overlay)
             {
                 if (UIWidget* hit = (*it)->pick(childPoint))
                 {
@@ -202,7 +242,7 @@ namespace eokas
         }
         for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)
         {
-            if (*it && !(*it)->floating)
+            if (*it && !(*it)->overlay)
             {
                 if (UIWidget* hit = (*it)->pick(childPoint))
                 {
@@ -217,78 +257,75 @@ namespace eokas
         return nullptr;
     }
 
-    namespace
+    bool UIWidget::handlePointerPressAnywhere(const UIPointerEvent& event)
     {
-        Vector2 screenToParentPivot(const UIWidget& widget, const Vector2& screen)
+        if (onPointerPressAnywhere)
         {
-            if (widget.parent() == nullptr)
-            {
-                return screen;
-            }
-            return widget.parent()->screenToPivot(screen);
+            onPointerPressAnywhere(event);
+            return true;
         }
+        return false;
     }
 
-    bool UIWidget::handlePointerEnter(float screenX, float screenY)
+    bool UIWidget::handlePointerReleaseAnywhere(const UIPointerEvent& event)
     {
-        (void)screenX;
-        (void)screenY;
+        if (onPointerReleaseAnywhere)
+        {
+            onPointerReleaseAnywhere(event);
+            return true;
+        }
+        return false;
+    }
+
+    bool UIWidget::handlePointerEnter(const UIPointerEvent& event)
+    {
         mHovered = true;
         if (onPointerEnter)
         {
-            onPointerEnter();
+            onPointerEnter(event);
             return true;
         }
         return false;
     }
 
-    bool UIWidget::handlePointerLeave(float screenX, float screenY)
+    bool UIWidget::handlePointerLeave(const UIPointerEvent& event)
     {
-        (void)screenX;
-        (void)screenY;
         mHovered = false;
         if (onPointerLeave)
         {
-            onPointerLeave();
+            onPointerLeave(event);
             return true;
         }
         return false;
     }
 
-    bool UIWidget::handlePointerMove(float screenX, float screenY, const Vector2& delta)
+    bool UIWidget::handlePointerMove(const UIPointerEvent& event)
     {
         if (onPointerMove)
         {
-            Vector2 position = screenToParentPivot(*this, Vector2(screenX, screenY));
-            onPointerMove(position, delta);
+            onPointerMove(event);
             return true;
         }
         return false;
     }
 
-    bool UIWidget::handlePointerPress(float screenX, float screenY, UIMouseButton button)
+    bool UIWidget::handlePointerPress(const UIPointerEvent& event)
     {
-        (void)screenX;
-        (void)screenY;
-        (void)button;
         mPressed = true;
         if (onPointerPress)
         {
-            onPointerPress();
+            onPointerPress(event);
             return true;
         }
         return false;
     }
 
-    bool UIWidget::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UIWidget::handlePointerRelease(const UIPointerEvent& event)
     {
-        (void)screenX;
-        (void)screenY;
-        (void)button;
         mPressed = false;
         if (onPointerRelease)
         {
-            onPointerRelease();
+            onPointerRelease(event);
             return true;
         }
         return false;
@@ -301,9 +338,9 @@ namespace eokas
             return;
         }
         mFocused = true;
-        if (onGotFocus)
+        if (onFocusGain)
         {
-            onGotFocus();
+            onFocusGain();
         }
     }
 
@@ -314,9 +351,9 @@ namespace eokas
             return;
         }
         mFocused = false;
-        if (onLostFocus)
+        if (onFocusLoss)
         {
-            onLostFocus();
+            onFocusLoss();
         }
     }
 
@@ -329,7 +366,10 @@ namespace eokas
         if (mLastClickTime.has_value() && now - *mLastClickTime < interval)
         {
             mLastClickTime.reset();
-            return this->handleDoubleClick(screenX, screenY);
+            if (onDoubleClick)
+            {
+                return this->handleDoubleClick(screenX, screenY);
+            }
         }
         mLastClickTime = now;
         if (onClick)
@@ -358,7 +398,7 @@ namespace eokas
         (void)screenY;
         if (onDrag)
         {
-            Vector2 position = screenToParentPivot(*this, Vector2(screenX, screenY));
+            Vector2 position = this->screenToParentPivot(Vector2(screenX, screenY));
             onDrag(position, delta);
             return true;
         }
@@ -370,28 +410,38 @@ namespace eokas
         (void)hitUnderCursor;
         if (onDrop)
         {
-            Vector2 position = screenToParentPivot(*this, Vector2(screenX, screenY));
+            Vector2 position = this->screenToParentPivot(Vector2(screenX, screenY));
             onDrop(position, delta);
             return true;
         }
         return false;
     }
 
-    bool UIWidget::handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt)
+    bool UIWidget::handleKeyPress(const UIKeyEvent& event)
     {
         if (onKeyPress)
         {
-            onKeyPress(key, ctrl, shift, alt);
+            onKeyPress(event);
             return true;
         }
         return false;
     }
 
-    bool UIWidget::handleKeyRelease(const UIKeyCode& key, bool ctrl, bool shift, bool alt)
+    bool UIWidget::handleKeyRelease(const UIKeyEvent& event)
     {
         if (onKeyRelease)
         {
-            onKeyRelease(key, ctrl, shift, alt);
+            onKeyRelease(event);
+            return true;
+        }
+        return false;
+    }
+
+    bool UIWidget::handleKeyChar(uint32_t character)
+    {
+        if (onKeyChar)
+        {
+            onKeyChar(character);
             return true;
         }
         return false;
@@ -399,39 +449,13 @@ namespace eokas
 
     bool UIWidget::handleWheel(float screenX, float screenY, float deltaX, float deltaY)
     {
-        if (!visible || shape.scale.x == 0.0f || shape.scale.y == 0.0f)
+        if (!visible || !onWheel)
         {
             return false;
         }
-        Vector2 point(screenX, screenY);
-        for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)
-        {
-            if (*it && (*it)->floating && (*it)->handleWheel(screenX, screenY, deltaX, deltaY))
-            {
-                return true;
-            }
-        }
-        for (auto it = mChildren.rbegin(); it != mChildren.rend(); ++it)
-        {
-            if (*it && !(*it)->floating && (*it)->handleWheel(screenX, screenY, deltaX, deltaY))
-            {
-                return true;
-            }
-        }
-        if (UIWidget* hit = this->pick(screenToParentPivot(*this, point)))
-        {
-            if (hit != this && hit->handleWheel(screenX, screenY, deltaX, deltaY))
-            {
-                return true;
-            }
-            Vector2 parentPivot = screenToParentPivot(*hit, point);
-            if (hit->onWheel)
-            {
-                hit->onWheel(parentPivot, deltaY);
-                return true;
-            }
-        }
-        return false;
+        Vector2 position = this->screenToParentPivot(Vector2(screenX, screenY));
+        onWheel(position, Vector2(deltaX, deltaY));
+        return true;
     }
 
     void UIWidget::endActiveDrag()
@@ -461,12 +485,13 @@ namespace eokas
     void UIWidget::resetPointerStateRecursive()
     {
         this->endActiveDrag();
-        const bool active = mHovered || mPressed;
-        mHovered = false;
-        mPressed = false;
-        if (active)
+        if (mHovered)
         {
-            this->handlePointerRelease(0.0f, 0.0f, UIMouseButton::Left);
+            this->handlePointerLeave(UIPointerEvent{});
+        }
+        if (mPressed)
+        {
+            this->handlePointerRelease(UIPointerEvent{});
         }
         for (auto& child : mChildren)
         {

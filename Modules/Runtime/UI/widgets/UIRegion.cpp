@@ -1,5 +1,4 @@
 #include "UIRegion.h"
-#include "../UIFont.h"
 #include <cmath>
 
 namespace eokas
@@ -21,6 +20,7 @@ namespace eokas
         {
             onExpandedChanged(mExpanded);
         }
+        this->layout();
     }
 
     void UIRegion::setSpacing(float value)
@@ -32,7 +32,7 @@ namespace eokas
         mSpacing = value;
     }
 
-    void UIRegion::setHead(const std::shared_ptr<UIWidget>& widget)
+    void UIRegion::setHead(const UIWidget::Ref& widget)
     {
         if (mHead == widget)
         {
@@ -52,7 +52,7 @@ namespace eokas
         this->syncChildren();
     }
 
-    void UIRegion::setBody(const std::shared_ptr<UIWidget>& widget)
+    void UIRegion::setBody(const UIWidget::Ref& widget)
     {
         if (mBody == widget)
         {
@@ -148,10 +148,6 @@ namespace eokas
         if (!visible)
         {
             return;
-        }
-        if (color.a > 0.0f)
-        {
-            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

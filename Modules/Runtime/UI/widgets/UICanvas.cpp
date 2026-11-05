@@ -1,6 +1,5 @@
 #include "UICanvas.h"
 #include "UIChart.h"
-#include "../UIFont.h"
 
 #include <cmath>
 
@@ -78,21 +77,13 @@ namespace eokas
         {
             return scale.x != 0.0f && scale.y != 0.0f;
         }
-
-        Vector2 screenToParentPivot(const UIWidget& widget, const Vector2& screen)
-        {
-            if (widget.parent() == nullptr)
-            {
-                return screen;
-            }
-            return widget.parent()->screenToPivot(screen);
-        }
     }
 
     UICanvas::UICanvas()
     {
         pickable = true;
-        dragable = true;
+        draggable = true;
+        color = Color(1.0f, 1.0f, 1.0f, 1.0f);
     }
 
     void UICanvas::scaleAt(const Vector2& focal, float value)
@@ -100,11 +91,6 @@ namespace eokas
         float next = clampScale(value, minScale, maxScale);
         shape.setScaleAround(focal, Vector2(next, next));
         this->refit();
-    }
-
-    void UICanvas::addChild(const std::shared_ptr<UIWidget>& child)
-    {
-        this->attachChild(child);
     }
 
     void UICanvas::layout()
@@ -122,10 +108,6 @@ namespace eokas
         if (!visible)
         {
             return;
-        }
-        if (color.a > 0.0f)
-        {
-            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }
@@ -166,13 +148,13 @@ namespace eokas
         this->resize(Vector2(maxX - minX, maxY - minY));
     }
 
-    void UICanvas::dragChild(UIWidget* widget, float localX, float localY)
+    void UICanvas::dragChild(UIWidget* widget, float parentPivotX, float parentPivotY)
     {
         if (widget == nullptr || widget == this)
         {
             return;
         }
-        Vector2 local(localX, localY);
+        Vector2 local(parentPivotX, parentPivotY);
         if (mDragWidget != widget)
         {
             mDragWidget = widget;
@@ -206,7 +188,7 @@ namespace eokas
                 found = deeper;
             }
         }
-        if (node != this && node->isPressed() && node->dragable)
+        if (node != this && node->isPressed() && node->draggable)
         {
             return node;
         }
@@ -229,30 +211,30 @@ namespace eokas
         }
     }
 
-    bool UICanvas::handlePointerMove(float screenX, float screenY, const Vector2& delta)
+    bool UICanvas::handlePointerMove(const UIPointerEvent& event)
     {
-        Vector2 position = screenToParentPivot(*this, Vector2(screenX, screenY));
-        if (!isPressed() || !dragable)
+        Vector2 position = this->screenToParentPivot(event.position);
+        if (!isPressed() || !draggable)
         {
-            return UIWidget::handlePointerMove(screenX, screenY, delta);
+            return UIWidget::handlePointerMove(event);
         }
         if (!mSelfDrag)
         {
             mSelfDrag = true;
             mGrab = position;
-            return UIWidget::handlePointerMove(screenX, screenY, delta);
+            return UIWidget::handlePointerMove(event);
         }
         shape.origin += position - mGrab;
         mGrab = position;
         this->refit();
-        UIWidget::handlePointerMove(screenX, screenY, delta);
+        UIWidget::handlePointerMove(event);
         return true;
     }
 
-    bool UICanvas::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UICanvas::handlePointerRelease(const UIPointerEvent& event)
     {
         this->endDrag();
-        return UIWidget::handlePointerRelease(screenX, screenY, button);
+        return UIWidget::handlePointerRelease(event);
     }
 
     bool UICanvas::handleDrag(float screenX, float screenY, const Vector2& delta)
@@ -260,7 +242,7 @@ namespace eokas
         UIWidget* target = this->findPressedDragable(this);
         if (target != nullptr && target != this)
         {
-            Vector2 parentPivot = screenToParentPivot(*target, Vector2(screenX, screenY));
+            Vector2 parentPivot = target->screenToParentPivot(Vector2(screenX, screenY));
             this->dragChild(target, parentPivot.x, parentPivot.y);
             return true;
         }
@@ -275,42 +257,20 @@ namespace eokas
         return UIWidget::handleDrop(screenX, screenY, hitUnderCursor, delta);
     }
 
-    bool UICanvas::routeNestedWheel(float screenX, float screenY, float deltaX, float deltaY, UIWidget* widget) const
-    {
-        if (widget == nullptr || !widget->visible || !liveScale(widget->shape.scale))
-        {
-            return false;
-        }
-        return widget->handleWheel(screenX, screenY, deltaX, deltaY);
-    }
-
     bool UICanvas::handleWheel(float screenX, float screenY, float deltaX, float deltaY)
     {
+        (void)deltaX;
         if (!visible || !liveScale(shape.scale))
         {
             return false;
         }
         Vector2 point(screenX, screenY);
-        for (auto it = children().rbegin(); it != children().rend(); ++it)
-        {
-            if (*it && this->routeNestedWheel(screenX, screenY, deltaX, deltaY, it->get()))
-            {
-                return true;
-            }
-        }
         Vector2 local = this->screenToLocal(point);
         if (!Rect(0.0f, 0.0f, shape.size.x, shape.size.y).contains(local))
         {
             return false;
         }
-        Vector2 parentPivot = screenToParentPivot(*this, point);
-        if (UIWidget* hit = this->pick(parentPivot))
-        {
-            if (hit != this && hit->handleWheel(screenX, screenY, deltaX, deltaY))
-            {
-                return true;
-            }
-        }
+        Vector2 parentPivot = this->screenToParentPivot(point);
         float current = shape.scale.x;
         if (current == 0.0f)
         {

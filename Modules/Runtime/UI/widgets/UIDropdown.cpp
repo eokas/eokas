@@ -26,19 +26,29 @@ namespace eokas
             UIFont* font = UIFont::find(text->style.fontPath);
             if (font != nullptr && font->isOpen())
             {
-                textH = font->measure(text->text.cstr(), text->text.length(), text->style.fontSize).y;
+                textH = font->measure(text->text, text->style.fontSize).y;
             }
             return textH;
         }
 
-        void placeLabel(UIWidget& parent, UIText* text, const Vector2& areaSize, float paddingX, float paddingY)
+        void placeLabel(UIWidget& parent, UIText* text, const Vector2& areaSize, float paddingX, float paddingY, float reserveX = 0.0f)
         {
             if (text == nullptr)
             {
                 return;
             }
-            float height = snap(lineHeight(text));
-            float width = areaSize.x;
+            float inner = areaSize.x - paddingX * 2.0f - reserveX;
+            if (inner < 0.0f)
+            {
+                inner = 0.0f;
+            }
+            text->maxWidth = inner;
+            text->layout();
+            float height = snap(text->shape.size.y);
+            if (height < 1.0f)
+            {
+                height = snap(lineHeight(text));
+            }
             float x = snap(paddingX);
             float innerH = areaSize.y - paddingY * 2.0f;
             if (innerH < 0.0f)
@@ -46,7 +56,7 @@ namespace eokas
                 innerH = 0.0f;
             }
             float y = snap(paddingY + (innerH - height) * 0.5f);
-            parent.placeChild(*text, Vector2(x, y), Vector2(width, height));
+            parent.placeChild(*text, Vector2(x, y), Vector2(text->shape.size.x, height));
         }
     }
 
@@ -99,10 +109,10 @@ namespace eokas
         UIWidget::render(primitive);
     }
 
-    bool UIDropdownItem::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UIDropdownItem::handlePointerRelease(const UIPointerEvent& event)
     {
         const bool activate = isPressed();
-        bool handled = UIWidget::handlePointerRelease(screenX, screenY, button);
+        bool handled = UIWidget::handlePointerRelease(event);
         if (activate && owner != nullptr)
         {
             owner->setValue(index);
@@ -116,14 +126,14 @@ namespace eokas
         mCaption = std::make_shared<UIText>();
         this->attachChild(mCaption);
         auto panel = std::make_shared<UIWidget>();
-        panel->floating = true;
+        panel->overlay = true;
         panel->visible = false;
         panel->pickable = true;
         dropdown = panel.get();
         this->attachChild(panel);
         this->syncCaption();
-        onGotFocus = []() {};
-        onLostFocus = [this]() { this->setExpanded(false); };
+        focusable = true;
+        onFocusLoss = [this]() { this->setExpanded(false); };
     }
 
     UIDropdown::~UIDropdown()
@@ -369,7 +379,12 @@ namespace eokas
 
     void UIDropdown::layoutCaption()
     {
-        placeLabel(*this, mCaption.get(), shape.size, paddingX, paddingY);
+        float chevron = snap(Math::min_s(shape.size.y * 0.28f, 8.0f));
+        if (chevron < 4.0f)
+        {
+            chevron = 4.0f;
+        }
+        placeLabel(*this, mCaption.get(), shape.size, paddingX, paddingY, chevron);
     }
 
     void UIDropdown::drawBorder(UIPrimitive& primitive, const Matrix3& localToScreen, const Rect& area) const
@@ -423,6 +438,15 @@ namespace eokas
         this->layoutCaption();
     }
 
+    bool UIDropdown::handlePointerPressAnywhere(const UIPointerEvent& event)
+    {
+        if (expanded && this->pick(this->screenToParentPivot(event.position)) == nullptr)
+        {
+            this->setExpanded(false);
+        }
+        return UIWidget::handlePointerPressAnywhere(event);
+    }
+
     void UIDropdown::render(UIPrimitive& primitive)
     {
         if (!visible)
@@ -445,31 +469,34 @@ namespace eokas
         UIWidget::render(primitive);
     }
 
-    bool UIDropdown::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UIDropdown::handlePointerRelease(const UIPointerEvent& event)
     {
         if (isPressed() && pickable)
         {
             this->setExpanded(!expanded);
         }
-        return UIWidget::handlePointerRelease(screenX, screenY, button);
+        return UIWidget::handlePointerRelease(event);
     }
 
-    bool UIDropdown::handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt)
+    bool UIDropdown::handleKeyPress(const UIKeyEvent& event)
     {
         if (!pickable)
         {
-            return UIWidget::handleKeyPress(key, ctrl, shift, alt);
+            return UIWidget::handleKeyPress(event);
         }
-        if (key == UIKeyCode::Enter)
+        if (event.key == UIKeyCode::Enter)
         {
             this->setExpanded(!expanded);
-            return UIWidget::handleKeyPress(key, ctrl, shift, alt);
+            UIWidget::handleKeyPress(event);
+            return true;
         }
-        if (key == UIKeyCode::Up || key == UIKeyCode::Down)
+        if (event.key == UIKeyCode::Up || event.key == UIKeyCode::Down)
         {
-            int next = this->neighbor(key == UIKeyCode::Up ? -1 : 1);
+            int next = this->neighbor(event.key == UIKeyCode::Up ? -1 : 1);
             this->setValue(next);
+            UIWidget::handleKeyPress(event);
+            return true;
         }
-        return UIWidget::handleKeyPress(key, ctrl, shift, alt);
+        return UIWidget::handleKeyPress(event);
     }
 }

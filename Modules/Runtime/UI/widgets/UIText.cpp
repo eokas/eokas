@@ -15,8 +15,20 @@ namespace eokas
         {
             return;
         }
-        Vector2 measured = font->measure(text.cstr(), text.length(), style.fontSize);
-        this->resize(Vector2(floorf(measured.x + 0.5f), floorf(measured.y + 0.5f)));
+        mShown = text;
+        Vector2 measured = font->measure(text, style.fontSize);
+        float width = measured.x;
+        float height = measured.y;
+        if (maxWidth > 0.0f && width > maxWidth)
+        {
+            mShown = font->cut(text, style.fontSize, maxWidth);
+            width = font->measure(mShown, style.fontSize).x;
+            if (width > maxWidth)
+            {
+                width = maxWidth;
+            }
+        }
+        this->resize(Vector2(floorf(width + 0.5f), floorf(height + 0.5f)));
     }
 
     void UIText::render(UIPrimitive& primitive)
@@ -34,11 +46,12 @@ namespace eokas
         font->drawMetrics(style.fontSize, scale, ascender, descender);
         float baseline = floorf(ascender + 0.5f);
         float cursorX = floorf(0.5f);
+        const String& shown = mShown.isEmpty() && !text.isEmpty() ? text : mShown;
         size_t index = 0;
-        while (index < text.length())
+        while (index < shown.length())
         {
             uint32_t codepoint = 0;
-            if (!UIFont::nextUtf8(text.cstr(), text.length(), index, codepoint))
+            if (!UIFont::nextUtf8(shown.cstr(), shown.length(), index, codepoint))
             {
                 continue;
             }

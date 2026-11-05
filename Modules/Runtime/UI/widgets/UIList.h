@@ -14,11 +14,10 @@ namespace eokas
     class UIList : public UIWidget
     {
     public:
-        UIList() { pickable = false; }
+        UIList() { pickable = false; color = Color(1.0f, 1.0f, 1.0f, 1.0f); }
         UIDirection direction = UIDirection::Vertical;
         float padding = 8.0f;
         float spacing = 8.0f;
-        void addChild(const std::shared_ptr<UIWidget>& child);
         void refit();
         void layout() override;
         void render(UIPrimitive& primitive) override;

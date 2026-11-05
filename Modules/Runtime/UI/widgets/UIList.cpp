@@ -4,11 +4,6 @@
 
 namespace eokas
 {
-    void UIList::addChild(const std::shared_ptr<UIWidget>& child)
-    {
-        this->attachChild(child);
-    }
-
     void UIList::refit()
     {
         float main = padding;
@@ -50,6 +45,64 @@ namespace eokas
         {
             return;
         }
+        float main = padding;
+        float cross = 0.0f;
+        bool any = false;
+        for (auto& child : children())
+        {
+            if (!child || !child->visible)
+            {
+                continue;
+            }
+            child->layout();
+            float childMain = direction == UIDirection::Horizontal ? child->shape.size.x : child->shape.size.y;
+            float childCross = direction == UIDirection::Horizontal ? child->shape.size.y : child->shape.size.x;
+            if (childCross > cross)
+            {
+                cross = childCross;
+            }
+            if (any)
+            {
+                main += spacing;
+            }
+            any = true;
+            main += childMain;
+        }
+        main += padding;
+        float width = shape.size.x;
+        float height = shape.size.y;
+        bool grow = false;
+        if (direction == UIDirection::Horizontal)
+        {
+            if (width <= 0.0f)
+            {
+                width = main;
+                grow = true;
+            }
+            if (height <= 0.0f)
+            {
+                height = cross + padding * 2.0f;
+                grow = true;
+            }
+        }
+        else
+        {
+            if (height <= 0.0f)
+            {
+                height = main;
+                grow = true;
+            }
+            if (width <= 0.0f)
+            {
+                width = cross + padding * 2.0f;
+                grow = true;
+            }
+        }
+        if (grow)
+        {
+            Vector2 topLeft = shape.origin - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
+            shape.setBox(topLeft, Vector2(width, height));
+        }
         Vector2 cursor(padding, padding);
         bool first = true;
         for (auto& child : children())
@@ -70,7 +123,6 @@ namespace eokas
                 }
             }
             first = false;
-            child->layout();
             this->placeChild(*child, Vector2(floorf(cursor.x + 0.5f), floorf(cursor.y + 0.5f)));
             if (direction == UIDirection::Horizontal)
             {
@@ -93,6 +145,23 @@ namespace eokas
         {
             primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
-        UIWidget::render(primitive);
+        for (auto& child : children())
+        {
+            if (!child || child->overlay || !child->visible)
+            {
+                continue;
+            }
+            bool saved = child->deferOverlay;
+            child->deferOverlay = true;
+            if (!primitive.outsideClip(child->screenBounds()))
+            {
+                child->render(primitive);
+            }
+            child->deferOverlay = saved;
+        }
+        if (!deferOverlay)
+        {
+            this->renderOverlay(primitive);
+        }
     }
 }

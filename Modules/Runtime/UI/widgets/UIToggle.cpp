@@ -27,13 +27,13 @@ namespace eokas
         }
     }
 
-    bool UIToggle::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UIToggle::handlePointerRelease(const UIPointerEvent& event)
     {
         if (isPressed())
         {
             this->setValue(!value);
         }
-        return UIWidget::handlePointerRelease(screenX, screenY, button);
+        return UIWidget::handlePointerRelease(event);
     }
 
     Color UIToggle::capsuleColor() const

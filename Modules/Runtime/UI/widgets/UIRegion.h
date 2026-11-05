@@ -13,10 +13,10 @@ namespace eokas
         void setExpanded(bool next);
         float spacing() const { return mSpacing; }
         void setSpacing(float value);
-        const std::shared_ptr<UIWidget>& head() const { return mHead; }
-        void setHead(const std::shared_ptr<UIWidget>& widget);
-        const std::shared_ptr<UIWidget>& body() const { return mBody; }
-        void setBody(const std::shared_ptr<UIWidget>& widget);
+        const UIWidget::Ref& head() const { return mHead; }
+        void setHead(const UIWidget::Ref& widget);
+        const UIWidget::Ref& body() const { return mBody; }
+        void setBody(const UIWidget::Ref& widget);
         void layout() override;
         void render(UIPrimitive& primitive) override;
 
@@ -25,8 +25,8 @@ namespace eokas
     private:
         bool mExpanded = true;
         float mSpacing = 0.0f;
-        std::shared_ptr<UIWidget> mHead;
-        std::shared_ptr<UIWidget> mBody;
+        UIWidget::Ref mHead;
+        UIWidget::Ref mBody;
 
         void syncChildren();
     };

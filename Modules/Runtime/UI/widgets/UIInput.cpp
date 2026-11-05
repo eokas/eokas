@@ -14,58 +14,6 @@ namespace eokas
             return floorf(v + 0.5f);
         }
 
-        bool textOfKey(UIKeyCode key, bool ctrl, bool shift, bool alt, String& out)
-        {
-            if (ctrl || alt)
-            {
-                return false;
-            }
-            int value = static_cast<int>(key);
-            if (value >= static_cast<int>(UIKeyCode::A) && value <= static_cast<int>(UIKeyCode::Z))
-            {
-                char base = shift ? 'A' : 'a';
-                out = String(static_cast<char>(base + (value - static_cast<int>(UIKeyCode::A))));
-                return true;
-            }
-            if (value >= static_cast<int>(UIKeyCode::Digit0) && value <= static_cast<int>(UIKeyCode::Digit9))
-            {
-                static const char plain[] = "0123456789";
-                static const char shifted[] = ")!@#$%^&*(";
-                int index = value - static_cast<int>(UIKeyCode::Digit0);
-                out = String(shift ? shifted[index] : plain[index]);
-                return true;
-            }
-            if (key == UIKeyCode::Space)
-            {
-                out = String(' ');
-                return true;
-            }
-            if (value >= static_cast<int>(UIKeyCode::Apostrophe) && value <= static_cast<int>(UIKeyCode::GraveAccent))
-            {
-                static const char plain[] = "\',-./;=[\\]`";
-                static const char shifted[] = "\"<_>?:+{|}~";
-                int index = value - static_cast<int>(UIKeyCode::Apostrophe);
-                out = String(shift ? shifted[index] : plain[index]);
-                return true;
-            }
-            if (value >= static_cast<int>(UIKeyCode::Keypad0) && value <= static_cast<int>(UIKeyCode::Keypad9))
-            {
-                out = String(static_cast<char>('0' + (value - static_cast<int>(UIKeyCode::Keypad0))));
-                return true;
-            }
-            switch (key)
-            {
-            case UIKeyCode::KeypadDecimal: out = String('.'); return true;
-            case UIKeyCode::KeypadDivide: out = String('/'); return true;
-            case UIKeyCode::KeypadMultiply: out = String('*'); return true;
-            case UIKeyCode::KeypadSubtract: out = String('-'); return true;
-            case UIKeyCode::KeypadAdd: out = String('+'); return true;
-            case UIKeyCode::KeypadEqual: out = String('='); return true;
-            default: break;
-            }
-            return false;
-        }
-
         size_t codepointCount(const String& value)
         {
             size_t index = 0;
@@ -167,8 +115,9 @@ namespace eokas
         mLabel = created;
         this->attachChild(created);
         mCaretBlinkAnchor = std::chrono::steady_clock::now();
-        onGotFocus = [this]() { this->resetCaretBlink(); };
-        onLostFocus = [this]()
+        focusable = true;
+        onFocusGain = [this]() { this->resetCaretBlink(); };
+        onFocusLoss = [this]()
         {
             mPointerSelecting = false;
             mCaretPlaced = false;
@@ -211,26 +160,52 @@ namespace eokas
         return font;
     }
 
-    float UIInput::textScale(UIFont* font) const
+    float UIInput::fontSize() const
     {
         UIText* t = this->label();
         float size = t != nullptr ? t->style.fontSize : UIText::kDefaultFontSize;
-        float bake = (float)font->pixelSize();
-        if (bake <= 0.0f)
+        return size > 0.0f ? size : UIText::kDefaultFontSize;
+    }
+
+    void UIInput::textMetrics(float& scale, float& ascender, float& descender) const
+    {
+        scale = 1.0f;
+        ascender = 0.0f;
+        descender = 0.0f;
+        if (UIFont* font = this->activeFont())
         {
-            return 1.0f;
+            font->drawMetrics(this->fontSize(), scale, ascender, descender);
         }
-        return (size > 0.0f ? size : bake) / bake;
+    }
+
+    void UIInput::textBand(const Rect& content, float& top, float& height, float& baseline) const
+    {
+        float scale = 1.0f;
+        float ascender = 0.0f;
+        float descender = 0.0f;
+        this->textMetrics(scale, ascender, descender);
+        float tight = ascender - descender;
+        if (tight < 1.0f)
+        {
+            tight = 1.0f;
+        }
+        if (tight > content.size.y && content.size.y > 0.0f)
+        {
+            tight = content.size.y;
+        }
+        top = snap(content.origin.y + (content.size.y - tight) * 0.5f);
+        height = tight;
+        baseline = top + ascender;
     }
 
     float UIInput::lineBox(UIFont* font) const
     {
-        float scale = this->textScale(font);
-        float height = font->lineHeight() * scale;
-        if (height < 1.0f)
-        {
-            height = (font->ascender() - font->descender()) * scale;
-        }
+        (void)font;
+        float scale = 1.0f;
+        float ascender = 0.0f;
+        float descender = 0.0f;
+        this->textMetrics(scale, ascender, descender);
+        float height = ascender - descender;
         if (height < 1.0f)
         {
             height = 1.0f;
@@ -253,9 +228,7 @@ namespace eokas
         {
             return 0.0f;
         }
-        UIText* label = this->label();
-        float fontSize = label != nullptr ? label->style.fontSize : UIText::kDefaultFontSize;
-        return font->measure(value.cstr() + begin, end - begin, fontSize).x;
+        return font->measure(value.cstr() + begin, end - begin, this->fontSize()).x;
     }
 
     size_t UIInput::indexOnLine(const String& value, size_t begin, size_t end, float localX) const
@@ -277,12 +250,11 @@ namespace eokas
         {
             return begin;
         }
-        UIText* label = this->label();
-        float fontSize = label != nullptr ? label->style.fontSize : UIText::kDefaultFontSize;
+        float size = this->fontSize();
         float scale = 1.0f;
         float ascender = 0.0f;
         float descender = 0.0f;
-        font->drawMetrics(fontSize, scale, ascender, descender);
+        font->drawMetrics(size, scale, ascender, descender);
         float width = 0.0f;
         size_t i = begin;
         while (i < end)
@@ -293,7 +265,7 @@ namespace eokas
             {
                 break;
             }
-            float advance = font->glyphSized(codepoint, fontSize).advance * scale;
+            float advance = font->glyphSized(codepoint, size).advance * scale;
             if (localX < width + advance * 0.5f)
             {
                 return before;
@@ -716,7 +688,11 @@ namespace eokas
         {
             return 0;
         }
-        float scale = this->textScale(font);
+        float size = this->fontSize();
+        float scale = 1.0f;
+        float ascender = 0.0f;
+        float descender = 0.0f;
+        font->drawMetrics(size, scale, ascender, descender);
         float local = x - content.origin.x + mScroll;
         if (local <= 0.0f)
         {
@@ -732,7 +708,7 @@ namespace eokas
             {
                 break;
             }
-            float advance = font->glyph(codepoint).advance * scale;
+            float advance = font->glyphSized(codepoint, size).advance * scale;
             if (local < width + advance * 0.5f)
             {
                 return before;
@@ -856,7 +832,11 @@ namespace eokas
         {
             return;
         }
-        primitive.addQuad(localToScreen, Rect(snap(x0), snap(content.origin.y), snap(x1) - snap(x0), content.size.y), UIFont::solidUV(), selection);
+        float top = content.origin.y;
+        float height = content.size.y;
+        float baseline = 0.0f;
+        this->textBand(content, top, height, baseline);
+        primitive.addQuad(localToScreen, Rect(snap(x0), snap(top), snap(x1) - snap(x0), height), UIFont::solidUV(), selection);
     }
 
     void UIInput::drawGlyphRun(UIPrimitive& primitive, const Matrix3& localToScreen, const String& value, const Color& color, const Rect& content, float scroll) const
@@ -866,15 +846,21 @@ namespace eokas
         {
             return;
         }
-        float scale = this->textScale(font);
         if (!multiline)
         {
-            float tight = (font->ascender() - font->descender()) * scale;
-            float textTop = snap(content.origin.y + (content.size.y - tight) * 0.5f);
-            float baseline = textTop + font->ascender() * scale;
+            float top = 0.0f;
+            float height = 0.0f;
+            float baseline = 0.0f;
+            this->textBand(content, top, height, baseline);
             this->paintRange(primitive, localToScreen, value, 0, value.length(), color, content, baseline, scroll);
             return;
         }
+        float scale = 1.0f;
+        float ascender = 0.0f;
+        float descender = 0.0f;
+        this->textMetrics(scale, ascender, descender);
+        (void)scale;
+        (void)descender;
         std::vector<TextLine> lines = splitLines(value);
         float lineH = this->lineBox(font);
         float bottom = content.origin.y + content.size.y;
@@ -885,7 +871,7 @@ namespace eokas
             {
                 continue;
             }
-            float baseline = top + font->ascender() * scale;
+            float baseline = top + ascender;
             this->paintRange(primitive, localToScreen, value, lines[i].begin, lines[i].end, color, content, baseline, scroll);
         }
     }
@@ -901,7 +887,13 @@ namespace eokas
         {
             end = value.length();
         }
-        float scale = this->textScale(font);
+        float size = this->fontSize();
+        float scale = 1.0f;
+        float metricsAscender = 0.0f;
+        float metricsDescender = 0.0f;
+        font->drawMetrics(size, scale, metricsAscender, metricsDescender);
+        (void)metricsAscender;
+        (void)metricsDescender;
         float cursorX = snap(content.origin.x - scrollX);
         float right = content.origin.x + content.size.x;
         size_t index = begin;
@@ -912,7 +904,7 @@ namespace eokas
             {
                 continue;
             }
-            const UIFontGlyph& g = font->glyph(codepoint);
+            const UIFontGlyph& g = font->glyphSized(codepoint, size);
             float advance = g.advance * scale;
             if (g.uv.size.x > 0.0f && g.uv.size.y > 0.0f)
             {
@@ -979,20 +971,34 @@ namespace eokas
         {
             return;
         }
-        primitive.addQuad(localToScreen, Rect(x, content.origin.y, 1.0f, content.size.y), UIFont::solidUV(), caret.color);
+        float top = content.origin.y;
+        float height = content.size.y;
+        float baseline = 0.0f;
+        this->textBand(content, top, height, baseline);
+        primitive.addQuad(localToScreen, Rect(x, snap(top), 1.0f, height), UIFont::solidUV(), caret.color);
     }
 
-    bool UIInput::handlePointerPress(float screenX, float screenY, UIMouseButton button)
+    bool UIInput::handlePointerPress(const UIPointerEvent& event)
     {
         mPointerSelecting = true;
         mCaretPlaced = false;
-        return UIWidget::handlePointerPress(screenX, screenY, button);
+        bool handled = UIWidget::handlePointerPress(event);
+        Vector2 position = this->screenToParentPivot(event.position);
+        Vector2 local = shape.pivotToLocal(position);
+        size_t index = this->indexAt(local.x, local.y);
+        mPreferredX = -1.0f;
+        mAnchor = index;
+        mCaret = index;
+        mCaretPlaced = true;
+        this->ensureCaretVisible();
+        this->resetCaretBlink();
+        return handled;
     }
 
-    bool UIInput::handlePointerMove(float screenX, float screenY, const Vector2& delta)
+    bool UIInput::handlePointerMove(const UIPointerEvent& event)
     {
-        Vector2 position = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
-        bool handled = UIWidget::handlePointerMove(screenX, screenY, delta);
+        Vector2 position = this->screenToParentPivot(event.position);
+        bool handled = UIWidget::handlePointerMove(event);
         if (!isPressed() || !mPointerSelecting)
         {
             return handled;
@@ -1011,15 +1017,32 @@ namespace eokas
         return true;
     }
 
-    bool UIInput::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UIInput::handlePointerRelease(const UIPointerEvent& event)
     {
         mPointerSelecting = false;
         mCaretPlaced = false;
-        return UIWidget::handlePointerRelease(screenX, screenY, button);
+        return UIWidget::handlePointerRelease(event);
     }
 
-    bool UIInput::handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt)
+    bool UIInput::handleKeyChar(uint32_t character)
     {
+        if (!readOnly && character >= 32 && character != 127)
+        {
+            this->insertText(UIFont::encodeUtf8(character));
+        }
+        return UIWidget::handleKeyChar(character);
+    }
+
+    bool UIInput::handleKeyPress(const UIKeyEvent& event)
+    {
+        if (event.key == UIKeyCode::Escape)
+        {
+            return false;
+        }
+        const UIKeyCode key = event.key;
+        const bool ctrl = event.ctrl;
+        const bool shift = event.shift;
+        bool handled = true;
         switch (key)
         {
         case UIKeyCode::Backspace:
@@ -1081,11 +1104,19 @@ namespace eokas
                 this->ensureCaretVisible();
                 this->resetCaretBlink();
             }
+            else
+            {
+                handled = false;
+            }
             break;
         case UIKeyCode::C:
             if (ctrl && writeClipboard && this->hasSelection())
             {
                 writeClipboard(this->selectedText());
+            }
+            else
+            {
+                handled = false;
             }
             break;
         case UIKeyCode::X:
@@ -1094,21 +1125,25 @@ namespace eokas
                 writeClipboard(this->selectedText());
                 this->insertText(String());
             }
+            else
+            {
+                handled = false;
+            }
             break;
         case UIKeyCode::V:
             if (ctrl && readClipboard)
             {
                 this->insertText(readClipboard());
             }
+            else
+            {
+                handled = false;
+            }
             break;
-        case UIKeyCode::Escape:
+        default:
+            handled = false;
             break;
         }
-        String typed;
-        if (textOfKey(key, ctrl, shift, alt, typed))
-        {
-            this->insertText(typed);
-        }
-        return UIWidget::handleKeyPress(key, ctrl, shift, alt);
+        return handled || UIWidget::handleKeyPress(event);
     }
 }

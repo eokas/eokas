@@ -22,6 +22,7 @@
 #include "widgets/UIMenu.h"
 #include "widgets/UIButton.h"
 #include "widgets/UISlider.h"
+#include "widgets/UIColorPicker.h"
 #include "widgets/UIToggle.h"
 #include "widgets/UIInput.h"
 #include "widgets/UIDropdown.h"

@@ -13,10 +13,10 @@ namespace eokas
         Color background { Color(0.24f, 0.26f, 0.32f, 1.0f) };
         Color hoverFill { Color(0.32f, 0.44f, 0.68f, 1.0f) };
         Color pressedFill { Color(0.18f, 0.28f, 0.50f, 1.0f) };
-        std::shared_ptr<UIWidget> content;
+        UIWidget::Ref content;
 
         UIButton();
-        void setContent(const std::shared_ptr<UIWidget>& widget);
+        void setContent(const UIWidget::Ref& widget);
         void setText(const String& text);
         UIText* label() const;
         void layout() override;

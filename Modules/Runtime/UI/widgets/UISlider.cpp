@@ -65,16 +65,16 @@ namespace eokas
         return (value - minValue) / span;
     }
 
-    bool UISlider::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UISlider::handlePointerRelease(const UIPointerEvent& event)
     {
         mTracking = false;
-        return UIWidget::handlePointerRelease(screenX, screenY, button);
+        return UIWidget::handlePointerRelease(event);
     }
 
-    bool UISlider::handlePointerMove(float screenX, float screenY, const Vector2& delta)
+    bool UISlider::handlePointerMove(const UIPointerEvent& event)
     {
-        Vector2 position = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
-        bool handled = UIWidget::handlePointerMove(screenX, screenY, delta);
+        Vector2 position = this->screenToParentPivot(event.position);
+        bool handled = UIWidget::handlePointerMove(event);
         if (!isPressed() || !pickable)
         {
             return handled;

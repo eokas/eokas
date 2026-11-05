@@ -1,6 +1,7 @@
 #ifndef _EOKAS_UI_EVENT_H_
 #define _EOKAS_UI_EVENT_H_
 
+#include "Base/Math.h"
 #include <chrono>
 
 namespace eokas
@@ -70,16 +71,19 @@ namespace eokas
         Menu,
     };
 
-    // Generic mouse buttons. Integer values match NativeMouseButton.
-    // Unknown is used when a button has no generic button.
-    enum class UIMouseButton : int
+    // Generic pointer codes. Integer values match NativeMouseButton.
+    // Unknown is used when a pointer has no generic code.
+    enum class UIPointerCode : int
     {
         Unknown = -1,
-        Left = 0,
-        Right,
-        Middle,
-        X1,
-        X2,
+        Pointer_0 = 0,
+        Pointer_1,
+        Pointer_2,
+        Pointer_3,
+        Pointer_4,
+        Left = Pointer_0,
+        Right = Pointer_1,
+        Middle = Pointer_2,
     };
 
     enum class UIInputEvent
@@ -92,7 +96,22 @@ namespace eokas
         PointerRelease,
         Wheel,
         KeyPress,
-        Char,
+    };
+
+    struct UIKeyEvent
+    {
+        UIKeyCode key = UIKeyCode::Unknown;
+        bool ctrl = false;
+        bool shift = false;
+        bool alt = false;
+        bool repeat = false;
+    };
+
+    struct UIPointerEvent
+    {
+        UIPointerCode pointerCode = UIPointerCode::Unknown;
+        Vector2 position {};
+        Vector2 deltaPosition {};
     };
 
     struct UIInputInfo
@@ -102,7 +121,7 @@ namespace eokas
         float x = 0.0f;
         float y = 0.0f;
         std::chrono::steady_clock::time_point time {};
-        UIMouseButton button = UIMouseButton::Unknown;
+        UIPointerCode button = UIPointerCode::Unknown;
         float wheelDeltaX = 0.0f;
         float wheelDeltaY = 0.0f;
     };

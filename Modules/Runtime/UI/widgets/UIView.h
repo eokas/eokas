@@ -14,8 +14,8 @@ namespace eokas
         Color scrollbarPressed { Color(0.32f, 0.44f, 0.68f, 1.0f) };
 
         UIView();
-        const std::shared_ptr<UIWidget>& root() const { return mRoot; }
-        void addChild(const std::shared_ptr<UIWidget>& child);
+        const UIWidget::Ref& root() const { return mRoot; }
+        void addChild(const UIWidget::Ref& child);
         void setScroll(float x, float y);
         float scrollX() const { return mScrollX; }
         float scrollY() const { return mScrollY; }
@@ -26,8 +26,8 @@ namespace eokas
         UIWidget* pick(const Vector2& point) override;
         void layout() override;
         void render(UIPrimitive& primitive) override;
-        bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
-        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
+        bool handlePointerMove(const UIPointerEvent& event) override;
+        bool handlePointerRelease(const UIPointerEvent& event) override;
         bool handleWheel(float screenX, float screenY, float deltaX, float deltaY) override;
 
     private:
@@ -39,7 +39,7 @@ namespace eokas
             Track
         };
 
-        std::shared_ptr<UIWidget> mRoot;
+        UIWidget::Ref mRoot;
         float mScrollX = 0.0f;
         float mScrollY = 0.0f;
         float mMinScrollX = 0.0f;

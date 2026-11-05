@@ -16,15 +16,14 @@ namespace eokas
 
         UICanvas();
         void scaleAt(const Vector2& focal, float value);
-        void addChild(const std::shared_ptr<UIWidget>& child);
         void layout() override;
         void render(UIPrimitive& primitive) override;
         void refit();
-        void dragChild(UIWidget* widget, float localX, float localY);
+        void dragChild(UIWidget* widget, float parentPivotX, float parentPivotY);
         void endDrag();
 
-        bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
-        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
+        bool handlePointerMove(const UIPointerEvent& event) override;
+        bool handlePointerRelease(const UIPointerEvent& event) override;
         bool handleDrag(float screenX, float screenY, const Vector2& delta) override;
         bool handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta) override;
         bool handleWheel(float screenX, float screenY, float deltaX, float deltaY) override;
@@ -33,7 +32,6 @@ namespace eokas
     private:
         UIWidget* findPressedDragable(UIWidget* node) const;
         void applyCanvasSelection(UIWidget* selectedItem) const;
-        bool routeNestedWheel(float screenX, float screenY, float deltaX, float deltaY, UIWidget* widget) const;
 
         bool mSelfDrag = false;
         UIWidget* mDragWidget = nullptr;

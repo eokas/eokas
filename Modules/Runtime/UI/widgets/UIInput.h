@@ -30,10 +30,11 @@ namespace eokas
         void setText(const String& value);
         UIText* label() const;
         void render(UIPrimitive& primitive) override;
-        bool handlePointerPress(float screenX, float screenY, UIMouseButton button) override;
-        bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
-        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
-        bool handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt) override;
+        bool handlePointerPress(const UIPointerEvent& event) override;
+        bool handlePointerMove(const UIPointerEvent& event) override;
+        bool handlePointerRelease(const UIPointerEvent& event) override;
+        bool handleKeyPress(const UIKeyEvent& event) override;
+        bool handleKeyChar(uint32_t character) override;
 
     private:
         std::shared_ptr<UIText> mLabel;
@@ -47,7 +48,9 @@ namespace eokas
         std::chrono::steady_clock::time_point mCaretBlinkAnchor;
 
         UIFont* activeFont() const;
-        float textScale(UIFont* font) const;
+        float fontSize() const;
+        void textMetrics(float& scale, float& ascender, float& descender) const;
+        void textBand(const Rect& content, float& top, float& height, float& baseline) const;
         float lineBox(UIFont* font) const;
         float advanceBetween(const String& value, size_t begin, size_t end) const;
         size_t indexOnLine(const String& value, size_t begin, size_t end, float localX) const;

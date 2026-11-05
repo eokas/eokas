@@ -201,7 +201,7 @@ namespace eokas
         mSpace = space;
         mMode = mode;
     }
-    void UIDockPage::setHead(const std::shared_ptr<UIWidget>& widget)
+    void UIDockPage::setHead(const UIWidget::Ref& widget)
     {
         if (mHead == widget)
         {
@@ -214,7 +214,7 @@ namespace eokas
         this->bindHead();
         this->syncChildren();
     }
-    void UIDockPage::setBody(const std::shared_ptr<UIWidget>& widget)
+    void UIDockPage::setBody(const UIWidget::Ref& widget)
     {
         if (mBody == widget) return;
         mBody = widget;
@@ -224,7 +224,7 @@ namespace eokas
     {
         if (!mHead) return;
         mHead->pickable = true;
-        mHead->onPointerPress = [this]() { this->mSuppressClick = false; this->mDragging = false; };
+        mHead->onPointerPress = [this](const UIPointerEvent&) { this->mSuppressClick = false; this->mDragging = false; };
         mHead->onDrag = [this](const Vector2& position, const Vector2&)
         {
             if (!this->mHead) return;
@@ -235,10 +235,10 @@ namespace eokas
             {
                 screen = this->mHead->parent()->pivotToScreen(position);
             }
-            if (this->onDrag) engaged = this->onDrag(*this, screen.x, screen.y, UIMouseButton::Left);
+            if (this->onDrag) engaged = this->onDrag(*this, screen.x, screen.y, UIPointerCode::Left);
             if (engaged) this->mSuppressClick = true;
         };
-        mHead->onPointerRelease = [this]()
+        mHead->onPointerRelease = [this](const UIPointerEvent&)
         {
             if (!this->mDragging) return;
             this->mDragging = false;
@@ -433,7 +433,7 @@ namespace eokas
             held = std::static_pointer_cast<UIDockPage>(removed);
         }
         page->setDock(nullptr, UIDockMode::None);
-        page->floating = false;
+        page->overlay = false;
         this->reconcile(mRoot.get(), UIDockMode::Fill);
         this->clearPreview();
         return held;
@@ -508,7 +508,7 @@ namespace eokas
         leaf->pages.push_back(page);
         leaf->active = (int)leaf->pages.size() - 1;
         page->setDock(this, UIDockMode::Fill);
-        page->floating = false;
+        page->overlay = false;
         this->attachChild(page);
     }
     void UIDockSpace::splitLeaf(Node* leaf, const std::shared_ptr<UIDockPage>& page, UIDockMode mode)
@@ -521,7 +521,7 @@ namespace eokas
         incoming->pages.push_back(page);
         incoming->active = 0;
         page->setDock(this, mode);
-        page->floating = false;
+        page->overlay = false;
         this->attachChild(page);
         bool incomingFirst = mode == UIDockMode::Left || mode == UIDockMode::Top;
         leaf->split = true;
@@ -548,7 +548,7 @@ namespace eokas
         incoming->pages.push_back(page);
         incoming->active = 0;
         page->setDock(this, mode);
-        page->floating = false;
+        page->overlay = false;
         this->attachChild(page);
         mRoot = std::make_unique<Node>();
         mRoot->split = true;
@@ -750,7 +750,7 @@ namespace eokas
             Rect body(left, top + headH, right - left, bodyH);
             page->place(head, body, active, active);
             page->visible = true;
-            page->floating = false;
+            page->overlay = false;
             x += w;
         }
     }
@@ -993,14 +993,14 @@ namespace eokas
         pivotBorder(primitive, *this, layout, border);
         primitive.popClip();
     }
-    bool UIDockSpace::handlePointerMove(float screenX, float screenY, const Vector2& delta)
+    bool UIDockSpace::handlePointerMove(const UIPointerEvent& event)
     {
-        bool handled = UIWidget::handlePointerMove(screenX, screenY, delta);
+        bool handled = UIWidget::handlePointerMove(event);
         if (!isPressed())
         {
             return handled;
         }
-        Vector2 pivot = (shape.scale.x == 0.0f || shape.scale.y == 0.0f) ? Vector2::ZERO : this->screenToPivot(Vector2(screenX, screenY));
+        Vector2 pivot = (shape.scale.x == 0.0f || shape.scale.y == 0.0f) ? Vector2::ZERO : this->screenToPivot(event.position);
         if (!mSplitterTracking)
         {
             mDragSplitter = this->findSplitter(mRoot.get(), pivot, 0.0f);
@@ -1029,10 +1029,10 @@ namespace eokas
         mDragSplitter->ratio = this->fitRatio(first / inner, span);
         return true;
     }
-    bool UIDockSpace::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UIDockSpace::handlePointerRelease(const UIPointerEvent& event)
     {
         mSplitterTracking = false;
         mDragSplitter = nullptr;
-        return UIWidget::handlePointerRelease(screenX, screenY, button);
+        return UIWidget::handlePointerRelease(event);
     }
 }

@@ -73,12 +73,13 @@ namespace eokas
     UIView::UIView()
     {
         pickable = false;
+        color = Color(1.0f, 1.0f, 1.0f, 1.0f);
         mRoot = std::make_shared<UIWidget>();
         mRoot->pickable = false;
         this->attachChild(mRoot);
     }
 
-    void UIView::addChild(const std::shared_ptr<UIWidget>& child)
+    void UIView::addChild(const UIWidget::Ref& child)
     {
         mRoot->attachChild(child);
     }
@@ -148,7 +149,7 @@ namespace eokas
             content = rootLocal - Vector2(mRoot->shape.pivot.x * mRoot->shape.size.x, mRoot->shape.pivot.y * mRoot->shape.size.y);
             for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
             {
-                if (*it && (*it)->floating)
+                if (*it && (*it)->overlay)
                 {
                     if (UIWidget* hit = (*it)->pick(content))
                     {
@@ -173,7 +174,7 @@ namespace eokas
         {
             for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
             {
-                if (*it && !(*it)->floating)
+                if (*it && !(*it)->overlay)
                 {
                     if (UIWidget* hit = (*it)->pick(content))
                     {
@@ -204,7 +205,7 @@ namespace eokas
 
     void UIView::expandContent(const UIWidget* widget, float& minX, float& minY, float& maxX, float& maxY, bool& any) const
     {
-        if (widget == nullptr || !widget->visible || widget->floating)
+        if (widget == nullptr || !widget->visible || widget->overlay)
         {
             return;
         }
@@ -431,7 +432,7 @@ namespace eokas
         primitive.pushClip(localToScreenRect(localToScreen, this->viewport()));
         for (auto& child : mRoot->children())
         {
-            if (!child || child->floating)
+            if (!child || child->overlay)
             {
                 continue;
             }
@@ -443,7 +444,7 @@ namespace eokas
         primitive.popClip();
         for (auto& child : mRoot->children())
         {
-            if (child && child->floating)
+            if (child && child->overlay)
             {
                 child->render(primitive);
             }
@@ -451,10 +452,10 @@ namespace eokas
         this->drawScrollbars(primitive, localToScreen);
     }
 
-    bool UIView::handlePointerMove(float screenX, float screenY, const Vector2& delta)
+    bool UIView::handlePointerMove(const UIPointerEvent& event)
     {
-        Vector2 position = parent() != nullptr ? parent()->screenToPivot(Vector2(screenX, screenY)) : Vector2(screenX, screenY);
-        UIWidget::handlePointerMove(screenX, screenY, delta);
+        Vector2 position = this->screenToParentPivot(event.position);
+        UIWidget::handlePointerMove(event);
         if (!isPressed())
         {
             return false;
@@ -532,10 +533,10 @@ namespace eokas
         return true;
     }
 
-    bool UIView::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UIView::handlePointerRelease(const UIPointerEvent& event)
     {
         mDrag = BarDrag::None;
-        return UIWidget::handlePointerRelease(screenX, screenY, button);
+        return UIWidget::handlePointerRelease(event);
     }
 
     bool UIView::handleWheel(float screenX, float screenY, float deltaX, float deltaY)
@@ -543,20 +544,6 @@ namespace eokas
         if (!visible || shape.scale.x == 0.0f || shape.scale.y == 0.0f)
         {
             return false;
-        }
-        for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
-        {
-            if (*it && (*it)->floating && (*it)->handleWheel(screenX, screenY, deltaX, deltaY))
-            {
-                return true;
-            }
-        }
-        for (auto it = mRoot->children().rbegin(); it != mRoot->children().rend(); ++it)
-        {
-            if (*it && !(*it)->floating && (*it)->handleWheel(screenX, screenY, deltaX, deltaY))
-            {
-                return true;
-            }
         }
         Vector2 local = this->screenToLocal(Vector2(screenX, screenY));
         if (!Rect(0.0f, 0.0f, shape.size.x, shape.size.y).contains(local))

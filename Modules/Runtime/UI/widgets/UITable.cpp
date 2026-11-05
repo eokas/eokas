@@ -125,9 +125,9 @@ namespace eokas
                     uv, color);
             }
         }
-        const std::shared_ptr<UIWidget>& emptyWidget()
+        const UIWidget::Ref& emptyWidget()
         {
-            static const std::shared_ptr<UIWidget> kEmpty;
+            static const UIWidget::Ref kEmpty;
             return kEmpty;
         }
         float contentShift(const UITable* table, const UITableRow* row, int column)
@@ -152,14 +152,14 @@ namespace eokas
             table->relayout();
         }
     }
-    UITableCell::UITableCell(UITable* table, UITableRow* row)
-        : mTable(table)
-        , mRow(row)
+    UITableCell::UITableCell(UITable* ownerTable, UITableRow* ownerRow)
+        : mOwnerTable(ownerTable)
+        , mOwnerRow(ownerRow)
     {
         pickable = false;
         color = Color(0.0f, 0.0f, 0.0f, 0.0f);
     }
-    void UITableCell::setContent(const std::shared_ptr<UIWidget>& widget)
+    void UITableCell::setContent(const UIWidget::Ref& widget)
     {
         mContent = widget;
         this->detachChildren();
@@ -182,23 +182,23 @@ namespace eokas
         {
             return *mBorder;
         }
-        if (mTable != nullptr)
+        if (mOwnerTable != nullptr)
         {
-            return mTable->border;
+            return mOwnerTable->border;
         }
         return UITableBorder();
     }
     int UITableCell::column() const
     {
-        if (mRow == nullptr)
+        if (mOwnerRow == nullptr)
         {
             return -1;
         }
-        return mRow->columnOf(this);
+        return mOwnerRow->columnOf(this);
     }
     float UITableCell::shift() const
     {
-        return contentShift(mTable, mRow, this->column());
+        return contentShift(mOwnerTable, mOwnerRow, this->column());
     }
     void UITableCell::layout()
     {
@@ -213,7 +213,7 @@ namespace eokas
             float right = 0.0f;
             float bottom = 0.0f;
             fittedInsets(Rect(0.0f, 0.0f, shape.size.x, shape.size.y), this->border(), left, top, right, bottom);
-            float pad = mTable != nullptr ? mTable->cellPadding : 0.0f;
+            float pad = mOwnerTable != nullptr ? mOwnerTable->cellPadding : 0.0f;
             if (pad < 0.0f)
             {
                 pad = 0.0f;
@@ -238,22 +238,22 @@ namespace eokas
         float right = 0.0f;
         float bottom = 0.0f;
         fittedInsets(Rect(0.0f, 0.0f, shape.size.x, shape.size.y), this->border(), left, top, right, bottom);
-        float pad = mTable != nullptr ? mTable->cellPadding : 0.0f;
+        float pad = mOwnerTable != nullptr ? mOwnerTable->cellPadding : 0.0f;
         if (pad < 0.0f)
         {
             pad = 0.0f;
         }
         float shift = this->shift();
-        if (shift > 0.0f && mRow != nullptr && mRow->rowCount() > 0 && mTable != nullptr)
+        if (shift > 0.0f && mOwnerRow != nullptr && mOwnerRow->rowCount() > 0 && mOwnerTable != nullptr)
         {
-            int depth = mRow->depth();
+            int depth = mOwnerRow->depth();
             float indent = shift / (float)(depth + 1);
             float slotH = shape.size.y - top - bottom;
             if (slotH < 0.0f)
             {
                 slotH = 0.0f;
             }
-            drawDisclosure(primitive, *this, Rect(left + pad + (float)depth * indent, top, indent, slotH), mRow->expanded(), mTable->disclosure);
+            drawDisclosure(primitive, *this, Rect(left + pad + (float)depth * indent, top, indent, slotH), mOwnerRow->expanded(), mOwnerTable->disclosure);
         }
         float x = left + pad + shift;
         float y = top + pad;
@@ -289,18 +289,18 @@ namespace eokas
         primitive.popClip();
         drawBorder(primitive, localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), this->border());
     }
-    UITableRow::UITableRow(UITable* table, UITableRow* parent, float height)
-        : mTable(table)
-        , mParent(parent)
+    UITableRow::UITableRow(UITable* ownerTable, UITableRow* ownerRow, float height)
+        : mOwnerTable(ownerTable)
+        , mOwnerRow(ownerRow)
         , mHeight(positive(height))
     {
         pickable = true;
         color = Color(0.0f, 0.0f, 0.0f, 0.0f);
-        int count = table != nullptr ? table->columnCount() : 0;
+        int count = ownerTable != nullptr ? ownerTable->columnCount() : 0;
         mCells.reserve((size_t)count);
         for (int i = 0; i < count; ++i)
         {
-            mCells.push_back(std::make_shared<UITableCell>(table, this));
+            mCells.push_back(std::make_shared<UITableCell>(ownerTable, this));
         }
         this->syncCells();
     }
@@ -317,11 +317,11 @@ namespace eokas
     }
     int UITableRow::index() const
     {
-        UITableRow* owner = mParent;
-        int count = owner != nullptr ? owner->rowCount() : (mTable != nullptr ? mTable->rowCount() : 0);
+        UITableRow* ownerRow = mOwnerRow;
+        int count = ownerRow != nullptr ? ownerRow->rowCount() : (mOwnerTable != nullptr ? mOwnerTable->rowCount() : 0);
         for (int i = 0; i < count; ++i)
         {
-            UITableRow* item = owner != nullptr ? owner->row(i) : mTable->row(i);
+            UITableRow* item = ownerRow != nullptr ? ownerRow->row(i) : mOwnerTable->row(i);
             if (item == this)
             {
                 return i;
@@ -332,7 +332,7 @@ namespace eokas
     int UITableRow::depth() const
     {
         int value = 0;
-        for (UITableRow* node = mParent; node != nullptr; node = node->mParent)
+        for (UITableRow* node = mOwnerRow; node != nullptr; node = node->mOwnerRow)
         {
             value += 1;
         }
@@ -352,13 +352,13 @@ namespace eokas
     }
     UITableRow* UITableRow::insertRow(int index, float height)
     {
-        if (mTable == nullptr || index < 0 || index > this->rowCount())
+        if (mOwnerTable == nullptr || index < 0 || index > this->rowCount())
         {
             return nullptr;
         }
-        auto child = std::make_shared<UITableRow>(mTable, this, height);
+        auto child = std::make_shared<UITableRow>(mOwnerTable, this, height);
         mRows.insert(mRows.begin() + index, child);
-        relayout(mTable);
+        relayout(mOwnerTable);
         return child.get();
     }
     void UITableRow::removeRow(int index)
@@ -368,7 +368,7 @@ namespace eokas
             return;
         }
         mRows.erase(mRows.begin() + index);
-        relayout(mTable);
+        relayout(mOwnerTable);
     }
     void UITableRow::setHeight(float height)
     {
@@ -381,9 +381,9 @@ namespace eokas
             return;
         }
         mExpanded = value;
-        if (mTable != nullptr)
+        if (mOwnerTable != nullptr)
         {
-            relayout(mTable);
+            relayout(mOwnerTable);
         }
         if (onExpandedChanged)
         {
@@ -416,7 +416,7 @@ namespace eokas
         {
             return;
         }
-        mCells.insert(mCells.begin() + index, std::make_shared<UITableCell>(mTable, this));
+        mCells.insert(mCells.begin() + index, std::make_shared<UITableCell>(mOwnerTable, this));
         this->syncCells();
         for (const auto& child : mRows)
         {
@@ -458,7 +458,7 @@ namespace eokas
             child->collect(visibleOnly, out);
         }
     }
-    void UITableRow::setContent(int column, const std::shared_ptr<UIWidget>& widget)
+    void UITableRow::setContent(int column, const UIWidget::Ref& widget)
     {
         UITableCell* item = this->cell(column);
         if (item == nullptr)
@@ -467,7 +467,7 @@ namespace eokas
         }
         item->setContent(widget);
     }
-    const std::shared_ptr<UIWidget>& UITableRow::getContent(int column) const
+    const UIWidget::Ref& UITableRow::getContent(int column) const
     {
         UITableCell* item = this->cell(column);
         if (item == nullptr)
@@ -476,17 +476,18 @@ namespace eokas
         }
         return item->content();
     }
-    bool UITableRow::handlePointerRelease(float screenX, float screenY, UIMouseButton button)
+    bool UITableRow::handlePointerRelease(const UIPointerEvent& event)
     {
         if (isPressed() && this->rowCount() > 0)
         {
             this->setExpanded(!this->expanded());
         }
-        return UIWidget::handlePointerRelease(screenX, screenY, button);
+        return UIWidget::handlePointerRelease(event);
     }
     UITable::UITable()
     {
         pickable = false;
+        color = Color(1.0f, 1.0f, 1.0f, 1.0f);
     }
     void UITable::appendRows(const std::shared_ptr<UITableRow>& row, bool visibleOnly, std::vector<std::shared_ptr<UITableRow>>& out) const
     {
@@ -645,7 +646,7 @@ namespace eokas
         }
         return line->cell(column);
     }
-    void UITable::setContent(int row, int column, const std::shared_ptr<UIWidget>& widget)
+    void UITable::setContent(int row, int column, const UIWidget::Ref& widget)
     {
         UITableCell* item = this->cell(row, column);
         if (item == nullptr)
@@ -654,7 +655,7 @@ namespace eokas
         }
         item->setContent(widget);
     }
-    const std::shared_ptr<UIWidget>& UITable::getContent(int row, int column) const
+    const UIWidget::Ref& UITable::getContent(int row, int column) const
     {
         UITableCell* item = this->cell(row, column);
         if (item == nullptr)
@@ -689,7 +690,7 @@ namespace eokas
         {
             return 0.0f;
         }
-        const std::shared_ptr<UIWidget>& body = item->content();
+        const UIWidget::Ref& body = item->content();
         if (!body || !body->visible)
         {
             return 0.0f;
@@ -831,7 +832,7 @@ namespace eokas
             }
             for (int column = 0; column < columns; ++column)
             {
-                const std::shared_ptr<UIWidget>& body = row->getContent(column);
+                const UIWidget::Ref& body = row->getContent(column);
                 if (body)
                 {
                     body->layout();
@@ -927,10 +928,6 @@ namespace eokas
         if (!visible)
         {
             return;
-        }
-        if (color.a > 0.0f)
-        {
-            primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), color);
         }
         UIWidget::render(primitive);
     }

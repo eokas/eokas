@@ -46,6 +46,8 @@ namespace eokas
         bool hasSize(uint32_t pixelSize) const;
         void drawMetrics(float fontSize, float& scale, float& ascender, float& descender) const;
         Vector2 measure(const char* text, size_t length, float fontSize) const;
+        Vector2 measure(const String& text, float fontSize) const;
+        String cut(const String& text, float fontSize, float width) const;
         const UIFontGlyph& glyph(uint32_t codepoint) const;
         const UIFontGlyph& glyph(char c) const;
         const UIFontGlyph& glyphSized(uint32_t codepoint, float fontSize) const;

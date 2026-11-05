@@ -20,8 +20,11 @@ namespace eokas
         }
         String text;
         UITextStyle style;
+        float maxWidth = 0.0f;
         void layout() override;
         void render(UIPrimitive& primitive) override;
+    private:
+        String mShown;
     };
 }
 

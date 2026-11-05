@@ -29,7 +29,10 @@ namespace eokas
         bool outsideClip(const Rect& screen) const;
         void addQuad(const Rect& screen, const Rect& uv, const Color& color);
         void addQuad(const Matrix3& localToScreen, const Rect& local, const Rect& uv, const Color& color);
+        void addQuad(const Matrix3& localToScreen, const Rect& local, const Rect& uv, const Color& c0, const Color& c1, const Color& c2, const Color& c3);
         void addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color);
+        void addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& c0, const Color& c1, const Color& c2, const Color& c3);
+        void addTriangle(const Vector2& a, const Vector2& b, const Vector2& c, const Rect& uv, const Color& ca, const Color& cb, const Color& cc);
         void addTriangles(const Vector2* vertices, uint32_t triangleCount, const Rect& uv, const Color& color);
         void end();
         void setPendingUpload(const std::vector<uint8_t>& rgba, uint32_t atlasSize = 0);

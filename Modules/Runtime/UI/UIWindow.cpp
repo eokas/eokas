@@ -9,101 +9,6 @@ namespace eokas
     {
         constexpr const char* kUIShaderPath = "Content/Shaders/UI.hlsl";
 
-        Vector2 screenToParentPivot(const UIWidget& widget, const Vector2& screen)
-        {
-            if (widget.parent() == nullptr)
-            {
-                return screen;
-            }
-            return widget.parent()->screenToPivot(screen);
-        }
-
-        bool keyFromCodepoint(uint32_t codepoint, UIKeyCode& key, bool& shift)
-        {
-            shift = false;
-            if (codepoint >= 'a' && codepoint <= 'z')
-            {
-                key = static_cast<UIKeyCode>(static_cast<int>(UIKeyCode::A) + static_cast<int>(codepoint - 'a'));
-                return true;
-            }
-            if (codepoint >= 'A' && codepoint <= 'Z')
-            {
-                key = static_cast<UIKeyCode>(static_cast<int>(UIKeyCode::A) + static_cast<int>(codepoint - 'A'));
-                shift = true;
-                return true;
-            }
-            if (codepoint >= '0' && codepoint <= '9')
-            {
-                key = static_cast<UIKeyCode>(static_cast<int>(UIKeyCode::Digit0) + static_cast<int>(codepoint - '0'));
-                return true;
-            }
-            if (codepoint == ' ')
-            {
-                key = UIKeyCode::Space;
-                return true;
-            }
-            struct Punct
-            {
-                uint32_t plain;
-                uint32_t shifted;
-                UIKeyCode key;
-            };
-            static const Punct punct[] = {
-                {'\'', '"', UIKeyCode::Apostrophe},
-                {',', '<', UIKeyCode::Comma},
-                {'-', '_', UIKeyCode::Minus},
-                {'.', '>', UIKeyCode::Period},
-                {'/', '?', UIKeyCode::Slash},
-                {';', ':', UIKeyCode::Semicolon},
-                {'=', '+', UIKeyCode::Equal},
-                {'[', '{', UIKeyCode::LeftBracket},
-                {'\\', '|', UIKeyCode::Backslash},
-                {']', '}', UIKeyCode::RightBracket},
-                {'`', '~', UIKeyCode::GraveAccent},
-            };
-            for (const Punct& item : punct)
-            {
-                if (codepoint == item.plain)
-                {
-                    key = item.key;
-                    return true;
-                }
-                if (codepoint == item.shifted)
-                {
-                    key = item.key;
-                    shift = true;
-                    return true;
-                }
-            }
-            struct Digit
-            {
-                uint32_t shifted;
-                UIKeyCode key;
-            };
-            static const Digit digits[] = {
-                {')', UIKeyCode::Digit0},
-                {'!', UIKeyCode::Digit1},
-                {'@', UIKeyCode::Digit2},
-                {'#', UIKeyCode::Digit3},
-                {'$', UIKeyCode::Digit4},
-                {'%', UIKeyCode::Digit5},
-                {'^', UIKeyCode::Digit6},
-                {'&', UIKeyCode::Digit7},
-                {'*', UIKeyCode::Digit8},
-                {'(', UIKeyCode::Digit9},
-            };
-            for (const Digit& item : digits)
-            {
-                if (codepoint == item.shifted)
-                {
-                    key = item.key;
-                    shift = true;
-                    return true;
-                }
-            }
-            return false;
-        }
-
         void endActiveDrags(UIWidget* widget)
         {
             if (widget == nullptr)
@@ -119,6 +24,41 @@ namespace eokas
                 }
             }
         }
+
+        UIPointerEvent makePointerEvent(float x, float y, UIPointerCode code, const Vector2& delta = Vector2::ZERO)
+        {
+            UIPointerEvent event;
+            event.pointerCode = code;
+            event.position = Vector2(x, y);
+            event.deltaPosition = delta;
+            return event;
+        }
+
+        void notifyPointerPressAnywhere(UIWidget* widget, const UIPointerEvent& event)
+        {
+            if (widget == nullptr || !widget->visible)
+            {
+                return;
+            }
+            widget->handlePointerPressAnywhere(event);
+            for (const auto& child : widget->children())
+            {
+                notifyPointerPressAnywhere(child.get(), event);
+            }
+        }
+
+        void notifyPointerReleaseAnywhere(UIWidget* widget, const UIPointerEvent& event)
+        {
+            if (widget == nullptr || !widget->visible)
+            {
+                return;
+            }
+            widget->handlePointerReleaseAnywhere(event);
+            for (const auto& child : widget->children())
+            {
+                notifyPointerReleaseAnywhere(child.get(), event);
+            }
+        }
     }
 
     void UIWindow::init(uint32_t width, uint32_t height)
@@ -127,7 +67,10 @@ namespace eokas
         mHeight = (float)height;
         mHovered = nullptr;
         mPressed = nullptr;
-        mPressedButton = UIMouseButton::Unknown;
+        mPressedButton = UIPointerCode::Unknown;
+        mPointerX = 0.0f;
+        mPointerY = 0.0f;
+        mHasPointer = false;
         mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
@@ -137,6 +80,8 @@ namespace eokas
         if (!mRoot)
         {
             mRoot = std::make_shared<UIWidget>();
+            mRoot->shape.pivot = Vector2(0.0f, 0.0f);
+            mRoot->shape.setBox(Vector2(0.0f, 0.0f), Vector2(mWidth, mHeight));
         }
 
         mPrimitive = std::make_shared<UIPrimitive>();
@@ -171,7 +116,7 @@ namespace eokas
         this->resetPointerState(mRoot.get());
         mHovered = nullptr;
         mPressed = nullptr;
-        mPressedButton = UIMouseButton::Unknown;
+        mPressedButton = UIPointerCode::Unknown;
         mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
@@ -184,18 +129,18 @@ namespace eokas
         mPrimitive.reset();
     }
 
-    const std::shared_ptr<UIWidget>& UIWindow::root() const
+    const UIWidget::Ref& UIWindow::root() const
     {
         return mRoot;
     }
 
-    void UIWindow::setRoot(const std::shared_ptr<UIWidget>& widget)
+    void UIWindow::setRoot(const UIWidget::Ref& widget)
     {
         this->setFocus(nullptr);
         this->resetPointerState(mRoot.get());
         mHovered = nullptr;
         mPressed = nullptr;
-        mPressedButton = UIMouseButton::Unknown;
+        mPressedButton = UIPointerCode::Unknown;
         mRawInputEvents.clear();
         mLastParentPivot = Vector2(0.0f, 0.0f);
         mLastWidget = nullptr;
@@ -219,6 +164,11 @@ namespace eokas
         {
             mRoot->layout();
         }
+        this->refreshPointerTargets();
+        if (mHasPointer && mPressed == nullptr)
+        {
+            this->updateHover(mPointerX, mPointerY);
+        }
         mPrimitive->begin();
         if (mRoot)
         {
@@ -241,8 +191,30 @@ namespace eokas
         return mRoot->pick(Vector2(x, y));
     }
 
+    void UIWindow::updateHover(float x, float y)
+    {
+        UIWidget* hit = this->hitTest(x, y);
+        if (hit == mHovered)
+        {
+            return;
+        }
+        if (mHovered != nullptr)
+        {
+            mHovered->handlePointerLeave(makePointerEvent(x, y, UIPointerCode::Unknown));
+        }
+        mHovered = hit;
+        if (mHovered != nullptr)
+        {
+            mHovered->handlePointerEnter(makePointerEvent(x, y, UIPointerCode::Unknown));
+        }
+    }
+
     void UIWindow::onMouseMove(float x, float y)
     {
+        mPointerX = x;
+        mPointerY = y;
+        mHasPointer = true;
+        this->refreshPointerTargets();
         if (mPressed != nullptr)
         {
             UIInputInfo move;
@@ -254,33 +226,19 @@ namespace eokas
             move.button = mPressedButton;
             this->appendRawInput(move);
             this->dispatchDrag(x, y);
+            return;
         }
-
-        UIWidget* hit = this->hitTest(x, y);
-        if (hit != mHovered)
-        {
-            if (mHovered != nullptr)
-            {
-                mHovered->handlePointerLeave(x, y);
-            }
-            mHovered = hit;
-            if (mHovered != nullptr)
-            {
-                mHovered->handlePointerEnter(x, y);
-            }
-        }
-        if (mPressed == nullptr)
-        {
-            this->dispatchPointerMove(mHovered, x, y);
-        }
+        this->updateHover(x, y);
+        this->dispatchPointerMove(mHovered, x, y);
     }
 
-    void UIWindow::onMouseDown(float x, float y, UIMouseButton button)
+    void UIWindow::onMouseDown(float x, float y, UIPointerCode button)
     {
+        this->dispatchPointerPressAnywhere(x, y, button);
         this->onMouseMove(x, y);
         if (mPressed != nullptr || mHovered == nullptr)
         {
-            if (mPressed == nullptr && button == UIMouseButton::Left)
+            if (mPressed == nullptr && button == UIPointerCode::Left)
             {
                 this->setFocus(nullptr);
             }
@@ -288,10 +246,10 @@ namespace eokas
         }
         mPressed = mHovered;
         mPressedButton = button;
-        if (button == UIMouseButton::Left)
+        if (button == UIPointerCode::Left)
         {
             bool insideFocus = mFocused != nullptr && mFocused->containsDescendant(mPressed);
-            if (mPressed->onKeyPress != nullptr || mPressed->onGotFocus != nullptr)
+            if (mPressed->focusable)
             {
                 this->setFocus(mPressed);
             }
@@ -301,7 +259,7 @@ namespace eokas
             }
         }
         mRawInputEvents.clear();
-        mPressed->handlePointerPress(x, y, button);
+        mPressed->handlePointerPress(makePointerEvent(x, y, button));
         UIInputInfo press;
         press.target = mPressed;
         press.type = UIInputEvent::PointerPress;
@@ -313,17 +271,19 @@ namespace eokas
         this->dispatchDrag(x, y);
     }
 
-    void UIWindow::onMouseUp(float x, float y, UIMouseButton button)
+    void UIWindow::onMouseUp(float x, float y, UIPointerCode button)
     {
+        this->dispatchPointerReleaseAnywhere(x, y, button);
+        this->refreshPointerTargets();
         UIWidget* hit = this->hitTest(x, y);
         UIWidget* pressed = mPressed;
-        const UIMouseButton pressedButton = mPressedButton;
+        const UIPointerCode pressedButton = mPressedButton;
         mPressed = nullptr;
-        mPressedButton = UIMouseButton::Unknown;
+        mPressedButton = UIPointerCode::Unknown;
         if (pressed != nullptr && button == pressedButton)
         {
             endActiveDrags(mRoot.get());
-            pressed->handlePointerRelease(x, y, button);
+            pressed->handlePointerRelease(makePointerEvent(x, y, button));
             UIInputInfo release;
             release.target = pressed;
             release.type = UIInputEvent::PointerRelease;
@@ -343,6 +303,7 @@ namespace eokas
 
     void UIWindow::onMouseWheel(float x, float y, float deltaX, float deltaY)
     {
+        this->refreshPointerTargets();
         UIInputInfo wheel;
         wheel.target = this->hitTest(x, y);
         wheel.type = UIInputEvent::Wheel;
@@ -352,11 +313,26 @@ namespace eokas
         wheel.wheelDeltaX = deltaX;
         wheel.wheelDeltaY = deltaY;
         this->appendRawInput(wheel);
-        if (mRoot)
+        UIWidget* walker = this->hitTest(x, y);
+        while (walker != nullptr)
         {
-            mRoot->handleWheel(x, y, deltaX, deltaY);
+            if (walker->handleWheel(x, y, deltaX, deltaY))
+            {
+                break;
+            }
+            walker = walker->parent();
         }
         this->clearRawInputEvents();
+    }
+
+    void UIWindow::dispatchPointerPressAnywhere(float x, float y, UIPointerCode button)
+    {
+        notifyPointerPressAnywhere(mRoot.get(), makePointerEvent(x, y, button));
+    }
+
+    void UIWindow::dispatchPointerReleaseAnywhere(float x, float y, UIPointerCode button)
+    {
+        notifyPointerReleaseAnywhere(mRoot.get(), makePointerEvent(x, y, button));
     }
 
     void UIWindow::dispatchDrag(float x, float y)
@@ -375,7 +351,7 @@ namespace eokas
             }
             walker = walker->parent();
         }
-        if (mPressedButton != UIMouseButton::Left)
+        if (mPressedButton != UIPointerCode::Left)
         {
             return;
         }
@@ -388,41 +364,46 @@ namespace eokas
         {
             return;
         }
-        Vector2 parentPivot = screenToParentPivot(*widget, Vector2(x, y));
+        Vector2 parentPivot = widget->screenToParentPivot(Vector2(x, y));
         Vector2 delta = (mHasParentPivot && mLastWidget == widget) ? (parentPivot - mLastParentPivot) : Vector2::ZERO;
         mLastParentPivot = parentPivot;
         mLastWidget = widget;
         mHasParentPivot = true;
-        widget->handlePointerMove(x, y, delta);
+        widget->handlePointerMove(makePointerEvent(x, y, mPressedButton, delta));
     }
 
-    void UIWindow::onChar(uint32_t codepoint)
+    void UIWindow::onKeyChar(uint32_t character)
     {
         if (!this->focusAlive())
         {
             return;
         }
-        UIKeyCode key = UIKeyCode::Space;
-        bool shift = false;
-        if (!keyFromCodepoint(codepoint, key, shift))
+        mFocused->handleKeyChar(character);
+    }
+
+    void UIWindow::onKeyPress(const UIKeyEvent& event)
+    {
+        if (!this->focusAlive())
         {
             return;
         }
-        mFocused->handleKeyPress(key, false, shift, false);
-    }
-
-    void UIWindow::onKeyDown(UIKeyCode key, bool ctrl, bool shift, bool alt)
-    {
-        if (key == UIKeyCode::Escape)
+        if (mFocused->handleKeyPress(event))
+        {
+            return;
+        }
+        if (event.key == UIKeyCode::Escape)
         {
             this->setFocus(nullptr);
-            return;
         }
+    }
+
+    void UIWindow::onKeyRelease(const UIKeyEvent& event)
+    {
         if (!this->focusAlive())
         {
             return;
         }
-        mFocused->handleKeyPress(key, ctrl, shift, alt);
+        mFocused->handleKeyRelease(event);
     }
 
     void UIWindow::setFocus(UIWidget* widget)
@@ -445,6 +426,11 @@ namespace eokas
     UIWidget* UIWindow::focus() const
     {
         return mFocused;
+    }
+
+    UIWidget* UIWindow::pressed() const
+    {
+        return mPressed;
     }
 
     void UIWindow::resetPointerState(UIWidget* widget)
@@ -471,6 +457,20 @@ namespace eokas
         return false;
     }
 
+    bool UIWindow::widgetAlive(const UIWidget* widget) const
+    {
+        return widget != nullptr && mRoot && mRoot->containsDescendant(widget);
+    }
+
+    void UIWindow::refreshPointerTargets()
+    {
+        if (mHovered != nullptr && !this->widgetAlive(mHovered))
+        {
+            mHovered = nullptr;
+        }
+        this->focusAlive();
+    }
+
     void UIWindow::appendRawInput(const UIInputInfo& info)
     {
         mRawInputEvents.push_back(info);
@@ -481,7 +481,7 @@ namespace eokas
         mRawInputEvents.clear();
     }
 
-    void UIWindow::dispatchPointerGesture(UIWidget* pressed, UIWidget* hit, UIMouseButton button, float x, float y)
+    void UIWindow::dispatchPointerGesture(UIWidget* pressed, UIWidget* hit, UIPointerCode button, float x, float y)
     {
         const Vector2 delta = this->dropDelta(mRawInputEvents);
         if (this->isClickGesture(mRawInputEvents, pressed, hit, button))
@@ -550,9 +550,9 @@ namespace eokas
         return false;
     }
 
-    bool UIWindow::isClickGesture(const std::vector<UIInputInfo>& events, UIWidget* pressed, UIWidget* hit, UIMouseButton button) const
+    bool UIWindow::isClickGesture(const std::vector<UIInputInfo>& events, UIWidget* pressed, UIWidget* hit, UIPointerCode button) const
     {
-        if (this->pointerDragged(events) || hit != pressed || button != UIMouseButton::Left)
+        if (this->pointerDragged(events) || hit != pressed || button != UIPointerCode::Left)
         {
             return false;
         }

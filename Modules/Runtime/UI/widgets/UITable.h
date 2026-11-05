@@ -36,9 +36,9 @@ namespace eokas
     class UITableCell : public UIWidget
     {
     public:
-        UITableCell(UITable* table, UITableRow* row);
-        void setContent(const std::shared_ptr<UIWidget>& widget);
-        const std::shared_ptr<UIWidget>& content() const { return mContent; }
+        UITableCell(UITable* ownerTable, UITableRow* ownerRow);
+        void setContent(const UIWidget::Ref& widget);
+        const UIWidget::Ref& content() const { return mContent; }
         void setBorder(const UITableBorder& value);
         void clearBorder();
         UITableBorder border() const;
@@ -49,18 +49,18 @@ namespace eokas
         int column() const;
         float shift() const;
 
-        UITable* mTable = nullptr;
-        UITableRow* mRow = nullptr;
-        std::shared_ptr<UIWidget> mContent;
+        UITable* mOwnerTable = nullptr;
+        UITableRow* mOwnerRow = nullptr;
+        UIWidget::Ref mContent;
         std::optional<UITableBorder> mBorder;
     };
 
     class UITableRow : public UIWidget
     {
     public:
-        UITableRow(UITable* table, UITableRow* parent, float height);
-        UITable* table() const { return mTable; }
-        UITableRow* parent() const { return mParent; }
+        UITableRow(UITable* ownerTable, UITableRow* ownerRow, float height);
+        UITable* ownerTable() const { return mOwnerTable; }
+        UITableRow* ownerRow() const { return mOwnerRow; }
         int index() const;
         int depth() const;
 
@@ -79,19 +79,19 @@ namespace eokas
 
         UITableCell* cell(int column) const;
         int columnOf(const UITableCell* cell) const;
-        void setContent(int column, const std::shared_ptr<UIWidget>& widget);
-        const std::shared_ptr<UIWidget>& getContent(int column) const;
+        void setContent(int column, const UIWidget::Ref& widget);
+        const UIWidget::Ref& getContent(int column) const;
         void insertCell(int index);
         void removeCell(int index);
         void collect(bool visibleOnly, std::vector<std::shared_ptr<UITableRow>>& out) const;
 
-        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
+        bool handlePointerRelease(const UIPointerEvent& event) override;
 
     private:
         void syncCells();
 
-        UITable* mTable = nullptr;
-        UITableRow* mParent = nullptr;
+        UITable* mOwnerTable = nullptr;
+        UITableRow* mOwnerRow = nullptr;
         float mHeight = 0.0f;
         bool mExpanded = true;
         std::vector<std::shared_ptr<UITableRow>> mRows;
@@ -125,8 +125,8 @@ namespace eokas
         void setRowHeight(int index, float height);
 
         UITableCell* cell(int row, int column) const;
-        void setContent(int row, int column, const std::shared_ptr<UIWidget>& widget);
-        const std::shared_ptr<UIWidget>& getContent(int row, int column) const;
+        void setContent(int row, int column, const UIWidget::Ref& widget);
+        const UIWidget::Ref& getContent(int row, int column) const;
 
         void refit();
         void relayout();

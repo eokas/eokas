@@ -14,7 +14,25 @@ namespace eokas
             float y;
             float u;
             float v;
+            float r;
+            float g;
+            float b;
+            float a;
         };
+
+        ClipVert makeVert(float x, float y, float u, float v, const Color& color)
+        {
+            ClipVert out;
+            out.x = x;
+            out.y = y;
+            out.u = u;
+            out.v = v;
+            out.r = color.r;
+            out.g = color.g;
+            out.b = color.b;
+            out.a = color.a;
+            return out;
+        }
 
         float lesser(float a, float b)
         {
@@ -35,6 +53,10 @@ namespace eokas
             out.y = a.y + (b.y - a.y) * t;
             out.u = a.u + (b.u - a.u) * t;
             out.v = a.v + (b.v - a.v) * t;
+            out.r = a.r + (b.r - a.r) * t;
+            out.g = a.g + (b.g - a.g) * t;
+            out.b = a.b + (b.b - a.b) * t;
+            out.a = a.a + (b.a - a.a) * t;
             return out;
         }
 
@@ -47,6 +69,10 @@ namespace eokas
             out.y = y;
             out.u = a.u + (b.u - a.u) * t;
             out.v = a.v + (b.v - a.v) * t;
+            out.r = a.r + (b.r - a.r) * t;
+            out.g = a.g + (b.g - a.g) * t;
+            out.b = a.b + (b.b - a.b) * t;
+            out.a = a.a + (b.a - a.a) * t;
             return out;
         }
 
@@ -116,18 +142,18 @@ namespace eokas
             }
         }
 
-        void emitTriangle(std::vector<UIVertex>& vertices, std::vector<uint32_t>& indices, const ClipVert& a, const ClipVert& b, const ClipVert& c, const Vector4& color)
+        void emitTriangle(std::vector<UIVertex>& vertices, std::vector<uint32_t>& indices, const ClipVert& a, const ClipVert& b, const ClipVert& c)
         {
             uint32_t base = (uint32_t)vertices.size();
-            vertices.push_back({ Vector2(a.x, a.y), Vector2(a.u, a.v), color });
-            vertices.push_back({ Vector2(b.x, b.y), Vector2(b.u, b.v), color });
-            vertices.push_back({ Vector2(c.x, c.y), Vector2(c.u, c.v), color });
+            vertices.push_back({ Vector2(a.x, a.y), Vector2(a.u, a.v), Vector4(a.r, a.g, a.b, a.a) });
+            vertices.push_back({ Vector2(b.x, b.y), Vector2(b.u, b.v), Vector4(b.r, b.g, b.b, b.a) });
+            vertices.push_back({ Vector2(c.x, c.y), Vector2(c.u, c.v), Vector4(c.r, c.g, c.b, c.a) });
             indices.push_back(base);
             indices.push_back(base + 1);
             indices.push_back(base + 2);
         }
 
-        void emitClippedTriangle(std::vector<UIVertex>& vertices, std::vector<uint32_t>& indices, const ClipVert& a, const ClipVert& b, const ClipVert& c, const Rect& clip, const Vector4& color)
+        void emitClippedTriangle(std::vector<UIVertex>& vertices, std::vector<uint32_t>& indices, const ClipVert& a, const ClipVert& b, const ClipVert& c, const Rect& clip)
         {
             if (clip.size.x <= 0.0f || clip.size.y <= 0.0f)
             {
@@ -149,8 +175,21 @@ namespace eokas
             }
             for (size_t i = 1; i + 1 < poly.size(); ++i)
             {
-                emitTriangle(vertices, indices, poly[0], poly[i], poly[i + 1], color);
+                emitTriangle(vertices, indices, poly[0], poly[i], poly[i + 1]);
             }
+        }
+
+        void emitQuad(std::vector<UIVertex>& vertices, std::vector<uint32_t>& indices, const std::vector<Rect>& clip, const ClipVert& a, const ClipVert& b, const ClipVert& c, const ClipVert& d)
+        {
+            if (clip.empty())
+            {
+                emitTriangle(vertices, indices, a, b, c);
+                emitTriangle(vertices, indices, a, c, d);
+                return;
+            }
+            const Rect& area = clip.back();
+            emitClippedTriangle(vertices, indices, a, b, c, area);
+            emitClippedTriangle(vertices, indices, a, c, d, area);
         }
     }
 
@@ -234,6 +273,11 @@ namespace eokas
 
     void UIPrimitive::addQuad(const Matrix3& localToScreen, const Rect& local, const Rect& uv, const Color& color)
     {
+        this->addQuad(localToScreen, local, uv, color, color, color, color);
+    }
+
+    void UIPrimitive::addQuad(const Matrix3& localToScreen, const Rect& local, const Rect& uv, const Color& c0, const Color& c1, const Color& c2, const Color& c3)
+    {
         Vector2 origin = local.origin;
         Vector2 size = local.size;
         this->addQuad(
@@ -242,7 +286,10 @@ namespace eokas
             UIShape::transformPoint(localToScreen, origin + size),
             UIShape::transformPoint(localToScreen, Vector2(origin.x, origin.y + size.y)),
             uv,
-            color);
+            c0,
+            c1,
+            c2,
+            c3);
     }
 
     void UIPrimitive::addQuad(const Rect& screen, const Rect& uv, const Color& color)
@@ -253,27 +300,43 @@ namespace eokas
             Vector2(screen.origin.x + screen.size.x, screen.origin.y + screen.size.y),
             Vector2(screen.origin.x, screen.origin.y + screen.size.y),
             uv,
+            color,
+            color,
+            color,
             color);
     }
 
     void UIPrimitive::addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& color)
     {
-        Vector4 vertexColor(color.r, color.g, color.b, color.a);
-        ClipVert q0 { p0.x, p0.y, uv.origin.x, uv.origin.y };
-        ClipVert q1 { p1.x, p1.y, uv.origin.x + uv.size.x, uv.origin.y };
-        ClipVert q2 { p2.x, p2.y, uv.origin.x + uv.size.x, uv.origin.y + uv.size.y };
-        ClipVert q3 { p3.x, p3.y, uv.origin.x, uv.origin.y + uv.size.y };
+        this->addQuad(p0, p1, p2, p3, uv, color, color, color, color);
+    }
 
+    void UIPrimitive::addQuad(const Vector2& p0, const Vector2& p1, const Vector2& p2, const Vector2& p3, const Rect& uv, const Color& c0, const Color& c1, const Color& c2, const Color& c3)
+    {
+        float u0 = uv.origin.x;
+        float v0 = uv.origin.y;
+        float u1 = uv.origin.x + uv.size.x;
+        float v1 = uv.origin.y + uv.size.y;
+        emitQuad(
+            mVertices,
+            mIndices,
+            mClipStack,
+            makeVert(p0.x, p0.y, u0, v0, c0),
+            makeVert(p1.x, p1.y, u1, v0, c1),
+            makeVert(p2.x, p2.y, u1, v1, c2),
+            makeVert(p3.x, p3.y, u0, v1, c3));
+    }
+
+    void UIPrimitive::addTriangle(const Vector2& a, const Vector2& b, const Vector2& c, const Rect& uv, const Color& ca, const Color& cb, const Color& cc)
+    {
+        float u = uv.origin.x + uv.size.x * 0.5f;
+        float v = uv.origin.y + uv.size.y * 0.5f;
         if (mClipStack.empty())
         {
-            emitTriangle(mVertices, mIndices, q0, q1, q2, vertexColor);
-            emitTriangle(mVertices, mIndices, q0, q2, q3, vertexColor);
+            emitTriangle(mVertices, mIndices, makeVert(a.x, a.y, u, v, ca), makeVert(b.x, b.y, u, v, cb), makeVert(c.x, c.y, u, v, cc));
             return;
         }
-
-        const Rect& clip = mClipStack.back();
-        emitClippedTriangle(mVertices, mIndices, q0, q1, q2, clip, vertexColor);
-        emitClippedTriangle(mVertices, mIndices, q0, q2, q3, clip, vertexColor);
+        emitClippedTriangle(mVertices, mIndices, makeVert(a.x, a.y, u, v, ca), makeVert(b.x, b.y, u, v, cb), makeVert(c.x, c.y, u, v, cc), mClipStack.back());
     }
 
     void UIPrimitive::addTriangles(const Vector2* vertices, uint32_t triangleCount, const Rect& uv, const Color& color)
@@ -282,7 +345,6 @@ namespace eokas
         {
             return;
         }
-        Vector4 vertexColor(color.r, color.g, color.b, color.a);
         float u0 = uv.origin.x;
         float v0 = uv.origin.y;
         float u1 = uv.origin.x + uv.size.x;
@@ -292,16 +354,16 @@ namespace eokas
             const Vector2& p0 = vertices[i * 3];
             const Vector2& p1 = vertices[i * 3 + 1];
             const Vector2& p2 = vertices[i * 3 + 2];
-            ClipVert c0 { p0.x, p0.y, u0, v0 };
-            ClipVert c1 { p1.x, p1.y, u1, v0 };
-            ClipVert c2 { p2.x, p2.y, u1, v1 };
+            ClipVert c0 = makeVert(p0.x, p0.y, u0, v0, color);
+            ClipVert c1 = makeVert(p1.x, p1.y, u1, v0, color);
+            ClipVert c2 = makeVert(p2.x, p2.y, u1, v1, color);
             if (mClipStack.empty())
             {
-                emitTriangle(mVertices, mIndices, c0, c1, c2, vertexColor);
+                emitTriangle(mVertices, mIndices, c0, c1, c2);
             }
             else
             {
-                emitClippedTriangle(mVertices, mIndices, c0, c1, c2, mClipStack.back(), vertexColor);
+                emitClippedTriangle(mVertices, mIndices, c0, c1, c2, mClipStack.back());
             }
         }
     }

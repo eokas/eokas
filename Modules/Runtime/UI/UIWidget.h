@@ -24,33 +24,38 @@ namespace eokas
         // Geometry is rasterized in local space with the origin at the top-left.
         UIShape shape;
 
-        Color color { Color(1.0f, 1.0f, 1.0f, 1.0f) };
+        Color color { Color(1.0f, 1.0f, 1.0f, 0.0f) };
         
         bool visible = true;
-        bool floating = false;
+        bool overlay = false;
+        bool deferOverlay = false;
         bool pickable = true;
-        bool dragable = false;
+        bool draggable = false;
+        bool focusable = false;
 
         bool isHovered() const { return mHovered; }
         bool isPressed() const { return mPressed; }
         bool isFocused() const { return mFocused; }
 
-        std::function<void()> onPointerEnter;
-        std::function<void()> onPointerLeave;
-        std::function<void()> onPointerPress;
-        std::function<void()> onPointerRelease;
-        std::function<void(const Vector2& position, const Vector2& delta)> onPointerMove;
-        std::function<void(const Vector2& position, f32_t delta)> onWheel;
-        std::function<void(const UIKeyCode&, bool ctrl, bool shift, bool alt)> onKeyPress;
-        std::function<void(const UIKeyCode&, bool ctrl, bool shift, bool alt)> onKeyRelease;
+        std::function<void(const UIPointerEvent&)> onPointerPressAnywhere;
+        std::function<void(const UIPointerEvent&)> onPointerReleaseAnywhere;
+        std::function<void(const UIPointerEvent&)> onPointerEnter;
+        std::function<void(const UIPointerEvent&)> onPointerLeave;
+        std::function<void(const UIPointerEvent&)> onPointerPress;
+        std::function<void(const UIPointerEvent&)> onPointerRelease;
+        std::function<void(const UIPointerEvent&)> onPointerMove;
+        std::function<void(const Vector2& position, const Vector2& delta)> onWheel;
+        std::function<void(const UIKeyEvent&)> onKeyPress;
+        std::function<void(const UIKeyEvent&)> onKeyRelease;
+        std::function<void(uint32_t character)> onKeyChar;
 
         std::function<void()> onClick;
         std::function<void()> onDoubleClick;
         std::function<void(const Vector2& position, const Vector2& delta)> onDrag;
         std::function<void(const Vector2& position, const Vector2& delta)> onDrop;
         
-        std::function<void()> onGotFocus;
-        std::function<void()> onLostFocus;
+        std::function<void()> onFocusGain;
+        std::function<void()> onFocusLoss;
 
         virtual ~UIWidget();
         UIWidget* parent() const { return mParent; }
@@ -58,6 +63,7 @@ namespace eokas
         Ref attachChild(Ref child);
         Ref detachChild(UIWidget* child);
         void detachChildren();
+        Vector2 screenToParentPivot(const Vector2& screen) const;
         Vector2 screenToPivot(const Vector2& screen) const;
         Vector2 pivotToScreen(const Vector2& pivot) const;
         Vector2 localToScreen(const Vector2& local) const;
@@ -66,22 +72,26 @@ namespace eokas
         void addQuad(UIPrimitive& primitive, const Rect& local, const Rect& uv, const Color& color) const;
         virtual void layout();
         virtual void render(UIPrimitive& primitive);
+        void renderOverlay(UIPrimitive& primitive);
         virtual bool contains(const Vector2& point) const;
         virtual UIWidget* pick(const Vector2& point);
 
-        virtual bool handlePointerEnter(float screenX, float screenY);
-        virtual bool handlePointerLeave(float screenX, float screenY);
-        virtual bool handlePointerMove(float screenX, float screenY, const Vector2& delta);
-        virtual bool handlePointerPress(float screenX, float screenY, UIMouseButton button);
-        virtual bool handlePointerRelease(float screenX, float screenY, UIMouseButton button);
+        virtual bool handlePointerPressAnywhere(const UIPointerEvent& event);
+        virtual bool handlePointerReleaseAnywhere(const UIPointerEvent& event);
+        virtual bool handlePointerEnter(const UIPointerEvent& event);
+        virtual bool handlePointerLeave(const UIPointerEvent& event);
+        virtual bool handlePointerMove(const UIPointerEvent& event);
+        virtual bool handlePointerPress(const UIPointerEvent& event);
+        virtual bool handlePointerRelease(const UIPointerEvent& event);
         virtual void handleFocusGain();
         virtual void handleFocusLoss();
         virtual bool handleClick(float screenX, float screenY);
         virtual bool handleDoubleClick(float screenX, float screenY);
         virtual bool handleDrag(float screenX, float screenY, const Vector2& delta);
         virtual bool handleDrop(float screenX, float screenY, UIWidget* hitUnderCursor, const Vector2& delta);
-        virtual bool handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt);
-        virtual bool handleKeyRelease(const UIKeyCode& key, bool ctrl, bool shift, bool alt);
+        virtual bool handleKeyPress(const UIKeyEvent& event);
+        virtual bool handleKeyRelease(const UIKeyEvent& event);
+        virtual bool handleKeyChar(uint32_t character);
         virtual bool handleWheel(float screenX, float screenY, float deltaX, float deltaY);
 
         virtual void endActiveDrag();

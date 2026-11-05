@@ -24,7 +24,7 @@ namespace eokas
         UIText* label() const;
         void layout() override;
         void render(UIPrimitive& primitive) override;
-        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
+        bool handlePointerRelease(const UIPointerEvent& event) override;
 
     private:
         UIDropdown* owner = nullptr;
@@ -66,8 +66,9 @@ namespace eokas
         UIText* caption() const;
         void layout() override;
         void render(UIPrimitive& primitive) override;
-        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
-        bool handleKeyPress(const UIKeyCode& key, bool ctrl, bool shift, bool alt) override;
+        bool handlePointerPressAnywhere(const UIPointerEvent& event) override;
+        bool handlePointerRelease(const UIPointerEvent& event) override;
+        bool handleKeyPress(const UIKeyEvent& event) override;
 
     private:
         std::shared_ptr<UIText> mCaption;

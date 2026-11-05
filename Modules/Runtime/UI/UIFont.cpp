@@ -274,6 +274,54 @@ namespace eokas
         }
         return Vector2(width, ascender - descender);
     }
+    Vector2 UIFont::measure(const String& text, float fontSize) const
+    {
+        return this->measure(text.cstr(), text.length(), fontSize);
+    }
+    String UIFont::cut(const String& text, float fontSize, float width) const
+    {
+        if (text.isEmpty() || width <= 0.0f)
+        {
+            return text.isEmpty() ? String() : text;
+        }
+        Vector2 full = this->measure(text, fontSize);
+        if (full.x <= width)
+        {
+            return text;
+        }
+        String dots("...");
+        float mark = this->measure(dots, fontSize).x;
+        if (mark >= width)
+        {
+            return dots;
+        }
+        float scale = 1.0f;
+        float ascender = 0.0f;
+        float descender = 0.0f;
+        this->drawMetrics(fontSize, scale, ascender, descender);
+        float used = 0.0f;
+        size_t index = 0;
+        size_t keep = 0;
+        uint32_t codepoint = 0;
+        const char* bytes = text.cstr();
+        size_t bytesLen = text.length();
+        while (index < bytesLen)
+        {
+            size_t next = index;
+            if (!UIFont::nextUtf8(bytes, bytesLen, next, codepoint))
+            {
+                break;
+            }
+            used += this->glyphSized(codepoint, fontSize).advance * scale;
+            if (used + mark > width)
+            {
+                break;
+            }
+            keep = next;
+            index = next;
+        }
+        return text.substr(0, keep) + dots;
+    }
     const UIFontGlyph& UIFont::glyphFor(uint32_t codepoint, uint32_t pixelSize) const
     {
         auto found = mSizes.find(pixelSize);

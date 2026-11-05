@@ -25,7 +25,7 @@ namespace eokas
     public:
         Color tabMark { Color(0.32f, 0.44f, 0.68f, 1.0f) };
         Color activeFill { Color(0.32f, 0.40f, 0.56f, 1.0f) };
-        std::function<bool(UIDockPage&, float, float, UIMouseButton)> onDrag;
+        std::function<bool(UIDockPage&, float, float, UIPointerCode)> onDrag;
         std::function<void(UIDockPage&)> onDragEnd;
 
         UIDockPage();
@@ -34,10 +34,10 @@ namespace eokas
         UIDockMode mode() const { return mMode; }
         UIDockSpace* space() const { return mSpace; }
         void setDock(UIDockSpace* space, UIDockMode mode);
-        const std::shared_ptr<UIWidget>& head() const { return mHead; }
-        void setHead(const std::shared_ptr<UIWidget>& widget);
-        const std::shared_ptr<UIWidget>& body() const { return mBody; }
-        void setBody(const std::shared_ptr<UIWidget>& widget);
+        const UIWidget::Ref& head() const { return mHead; }
+        void setHead(const UIWidget::Ref& widget);
+        const UIWidget::Ref& body() const { return mBody; }
+        void setBody(const UIWidget::Ref& widget);
         void layout() override;
         void render(UIPrimitive& primitive) override;
         void layoutInWindow(float width, float height);
@@ -45,8 +45,8 @@ namespace eokas
 
     private:
         UIDockMode mMode = UIDockMode::None;
-        std::shared_ptr<UIWidget> mHead;
-        std::shared_ptr<UIWidget> mBody;
+        UIWidget::Ref mHead;
+        UIWidget::Ref mBody;
         UIDockSpace* mSpace = nullptr;
         bool mDragging = false;
         bool mSuppressClick = false;
@@ -94,8 +94,8 @@ namespace eokas
 
         void layout() override;
         void render(UIPrimitive& primitive) override;
-        bool handlePointerMove(float screenX, float screenY, const Vector2& delta) override;
-        bool handlePointerRelease(float screenX, float screenY, UIMouseButton button) override;
+        bool handlePointerMove(const UIPointerEvent& event) override;
+        bool handlePointerRelease(const UIPointerEvent& event) override;
 
     private:
         struct Node;
