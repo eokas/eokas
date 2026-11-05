@@ -12,26 +12,8 @@ namespace eokas {
             return static_cast<UIKeyCode>(static_cast<int>(keyCode));
         }
 
-        UIMouseButton transferMouseButton(NativeMouseButton mouseButton) {
-            return static_cast<UIMouseButton>(static_cast<int>(mouseButton));
-        }
-
-        bool characterKey(UIKeyCode key) {
-            int value = static_cast<int>(key);
-            auto between = [value](UIKeyCode begin, UIKeyCode end) {
-                return value >= static_cast<int>(begin) && value <= static_cast<int>(end);
-            };
-            if (between(UIKeyCode::A, UIKeyCode::Z)) return true;
-            if (between(UIKeyCode::Digit0, UIKeyCode::Digit9)) return true;
-            if (key == UIKeyCode::Space) return true;
-            if (between(UIKeyCode::Apostrophe, UIKeyCode::GraveAccent)) return true;
-            if (between(UIKeyCode::Keypad0, UIKeyCode::Keypad9)) return true;
-            return key == UIKeyCode::KeypadDecimal
-                || key == UIKeyCode::KeypadDivide
-                || key == UIKeyCode::KeypadMultiply
-                || key == UIKeyCode::KeypadSubtract
-                || key == UIKeyCode::KeypadAdd
-                || key == UIKeyCode::KeypadEqual;
+        UIPointerCode transferMouseButton(NativeMouseButton mouseButton) {
+            return static_cast<UIPointerCode>(static_cast<int>(mouseButton));
         }
 
     }
@@ -113,29 +95,37 @@ namespace eokas {
                 mUIWindow.onMouseWheel(x, y, deltaX, deltaY);
             }
         };
-        mNativeWindow.onKeyDown = [this](NativeKeyCode keyCode, bool, bool ctrl, bool shift, bool alt) {
+        mNativeWindow.onKeyPress = [this](NativeKeyCode keyCode, bool, bool ctrl, bool shift, bool alt, bool repeat) {
             if (!mUiReady) {
                 return false;
             }
-            UIKeyCode key = transferKeyCode(keyCode);
-            if (key == UIKeyCode::Unknown) {
-                return false;
-            }
-            if (!characterKey(key) || ctrl || alt) {
-                mUIWindow.onKeyDown(key, ctrl, shift, alt);
-                return true;
-            }
-            return false;
+            UIKeyEvent event;
+            event.key = transferKeyCode(keyCode);
+            event.ctrl = ctrl;
+            event.shift = shift;
+            event.alt = alt;
+            event.repeat = repeat;
+            mUIWindow.onKeyPress(event);
+            return true;
         };
-        mNativeWindow.onChar = [this](uint32_t codepoint) {
+        mNativeWindow.onKeyChar = [this](uint32_t character) {
             if (!mUiReady) {
                 return false;
             }
-            if (codepoint >= 32 && codepoint != 127) {
-                mUIWindow.onChar(codepoint);
-                return true;
+            mUIWindow.onKeyChar(character);
+            return true;
+        };
+        mNativeWindow.onKeyRelease = [this](NativeKeyCode keyCode, bool, bool ctrl, bool shift, bool alt) {
+            if (!mUiReady) {
+                return false;
             }
-            return false;
+            UIKeyEvent event;
+            event.key = transferKeyCode(keyCode);
+            event.ctrl = ctrl;
+            event.shift = shift;
+            event.alt = alt;
+            mUIWindow.onKeyRelease(event);
+            return true;
         };
     }
 

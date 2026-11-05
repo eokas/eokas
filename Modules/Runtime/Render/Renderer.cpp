@@ -290,17 +290,6 @@ namespace eokas
             return;
 
         ensureResources(space);
-        Primitive::Ref first;
-        for (auto& p : space.primitives)
-        {
-            if (p && p->visible && p->ready())
-            {
-                first = p;
-                break;
-            }
-        }
-        if (!first)
-            return;
 
         Light::Ref sun;
         int sunIndex = -1;

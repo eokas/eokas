@@ -73,15 +73,19 @@ namespace eokas
         if (File::exists(relativePath))
             return relativePath;
 
-        String exeDir = File::basePath(Process::executingPath());
-        String fromExe = File::combinePath(exeDir, relativePath);
-        if (File::exists(fromExe))
-            return fromExe;
-
-        String fromBuildDir = File::combinePath(File::basePath(exeDir), relativePath);
-        if (File::exists(fromBuildDir))
-            return fromBuildDir;
-
+        String cursor = File::basePath(Process::executingPath());
+        for (int i = 0; i < 6; ++i)
+        {
+            if (cursor.isEmpty())
+                break;
+            String candidate = File::combinePath(cursor, relativePath);
+            if (File::exists(candidate))
+                return candidate;
+            String parent = File::basePath(cursor);
+            if (parent == cursor)
+                break;
+            cursor = parent;
+        }
         return relativePath;
     }
 
