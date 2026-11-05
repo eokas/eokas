@@ -22,6 +22,7 @@ eokas_runtime_module(ImApp)
 eokas_runtime_module(Engine)
 
 eokas_toolkit_module(ToolBase)
+eokas_toolkit_module(RoseAxion)
 eokas_toolkit_module(Editor)
 
 include(CTest)
