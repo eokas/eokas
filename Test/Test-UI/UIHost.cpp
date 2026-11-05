@@ -203,7 +203,7 @@ namespace eokas
     void UIHost::observe(const std::shared_ptr<UIDockPage>& page)
     {
         if (!page) return;
-        page->onDrag = [this](UIDockPage& target, float x, float y, UIMouseButton button)
+        page->onDrag = [this](UIDockPage& target, float x, float y, UIPointerCode button)
         {
             return this->dragPage(&target, x, y, button);
         };
@@ -359,9 +359,9 @@ namespace eokas
         mPreviewSpace = hit;
     }
 
-    bool UIHost::dragPage(UIDockPage* page, float x, float y, UIMouseButton button)
+    bool UIHost::dragPage(UIDockPage* page, float x, float y, UIPointerCode button)
     {
-        if (mReleasing || button != UIMouseButton::Left || !page) return false;
+        if (mReleasing || button != UIPointerCode::Left || !page) return false;
         if (!mDragging || mDragPage != page)
         {
             mDragging = true;

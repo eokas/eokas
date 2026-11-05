@@ -21,6 +21,14 @@ namespace
     {
         return local - Vector2(shape.pivot.x * shape.size.x, shape.pivot.y * shape.size.y);
     }
+
+    UIPointerEvent pointerEvent(float x, float y, UIPointerCode code = UIPointerCode::Left)
+    {
+        UIPointerEvent event;
+        event.pointerCode = code;
+        event.position = Vector2(x, y);
+        return event;
+    }
 }
 
 EOKAS_TEST_CASE(ui) {
@@ -29,13 +37,13 @@ EOKAS_TEST_CASE(ui) {
     widget.shape.size = (Rect(0, 0, 40, 20)).size;
     widget.shape.origin = (Rect(0, 0, 40, 20)).origin + widget.shape.pivot * widget.shape.size;
     widget.onClick = [&]() { clicks += 1; };
-    widget.handlePointerPress(0.0f, 0.0f, UIMouseButton::Left);
-    widget.handlePointerRelease(0.0f, 0.0f, UIMouseButton::Left);
+    widget.handlePointerPress(pointerEvent(0.0f, 0.0f));
+    widget.handlePointerRelease(pointerEvent(0.0f, 0.0f));
     widget.handleClick(0.0f, 0.0f);
     EOKAS_EXPECT(clicks == 1);
-    widget.handlePointerEnter(0.0f, 0.0f);
+    widget.handlePointerEnter(pointerEvent(0.0f, 0.0f));
     EOKAS_EXPECT(widget.isHovered());
-    widget.handlePointerLeave(0.0f, 0.0f);
+    widget.handlePointerLeave(pointerEvent(0.0f, 0.0f));
     EOKAS_EXPECT(!widget.isHovered());
 
     UIList list;
@@ -45,8 +53,8 @@ EOKAS_TEST_CASE(ui) {
     first->shape.origin = (Rect(0, 0, 10, 20)).origin + first->shape.pivot * first->shape.size;
     second->shape.size = (Rect(0, 0, 10, 30)).size;
     second->shape.origin = (Rect(0, 0, 10, 30)).origin + second->shape.pivot * second->shape.size;
-    list.addChild(first);
-    list.addChild(second);
+    list.attachChild(first);
+    list.attachChild(second);
     list.shape.setBox(Vector2(0, 0), Vector2(100, 200));
     UIPrimitive listPrim;
     list.layout();
@@ -72,7 +80,7 @@ EOKAS_TEST_CASE(ui) {
     auto cell = std::make_shared<UIWidget>();
     cell->shape.size = (Rect(0, 0, 16, 10)).size;
     cell->shape.origin = (Rect(0, 0, 16, 10)).origin + cell->shape.pivot * cell->shape.size;
-    grid.addChild(cell);
+    grid.attachChild(cell);
     grid.shape.setBox(Vector2(0, 0), Vector2(80, 40));
     UIPrimitive gridPrim;
     grid.layout();
@@ -137,7 +145,7 @@ EOKAS_TEST_CASE(ui) {
     UITableRow* child = group->addRow(20.0f);
     UITableRow* grand = child->addRow(20.0f);
     EOKAS_EXPECT(group->depth() == 0);
-    EOKAS_EXPECT(child->parent() == group);
+    EOKAS_EXPECT(child->ownerRow() == group);
     EOKAS_EXPECT(child->depth() == 1);
     EOKAS_EXPECT(child->index() == 0);
     EOKAS_EXPECT(grand->depth() == 2);
@@ -162,8 +170,8 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(_FloatEqual(boxLeft(other->shape), -20.0f));
     int leafHits = 0;
     grand->onExpandedChanged = [&](bool) { leafHits += 1; };
-    grand->handlePointerPress(0.0f, 0.0f, UIMouseButton::Left);
-    grand->handlePointerRelease(0.0f, 0.0f, UIMouseButton::Left);
+    grand->handlePointerPress(pointerEvent(0.0f, 0.0f));
+    grand->handlePointerRelease(pointerEvent(0.0f, 0.0f));
     EOKAS_EXPECT(grand->expanded());
     EOKAS_EXPECT(leafHits == 0);
     child->setExpanded(false);
@@ -178,8 +186,8 @@ EOKAS_TEST_CASE(ui) {
     group->setExpanded(true);
     int hits = 0;
     group->onExpandedChanged = [&](bool) { hits += 1; };
-    group->handlePointerPress(0.0f, 0.0f, UIMouseButton::Left);
-    group->handlePointerRelease(0.0f, 0.0f, UIMouseButton::Left);
+    group->handlePointerPress(pointerEvent(0.0f, 0.0f));
+    group->handlePointerRelease(pointerEvent(0.0f, 0.0f));
     EOKAS_EXPECT(!group->expanded());
     EOKAS_EXPECT(hits == 1);
     group->setExpanded(true);
@@ -231,8 +239,8 @@ EOKAS_TEST_CASE(ui) {
     int toggleHits = 0;
     UIToggle toggle;
     toggle.onValueChanged = [&](bool) { toggleHits += 1; };
-    toggle.handlePointerPress(0.0f, 0.0f, UIMouseButton::Left);
-    toggle.handlePointerRelease(0.0f, 0.0f, UIMouseButton::Left);
+    toggle.handlePointerPress(pointerEvent(0.0f, 0.0f));
+    toggle.handlePointerRelease(pointerEvent(0.0f, 0.0f));
     EOKAS_EXPECT(toggle.value);
     EOKAS_EXPECT(toggleHits == 1);
 
@@ -244,7 +252,7 @@ EOKAS_TEST_CASE(ui) {
     auto field = std::make_shared<UIInput>();
     field->shape.setBox(Vector2(0, 0), Vector2(80, 40));
     inputWindow.setRoot(field);
-    inputWindow.onMouseDown(8, 8, UIMouseButton::Left);
+    inputWindow.onMouseDown(8, 8, UIPointerCode::Left);
     EOKAS_EXPECT(inputWindow.focus() == field.get());
 
     UIDropdown dropdown;
@@ -268,8 +276,8 @@ EOKAS_TEST_CASE(ui) {
     root->shape.origin = (Rect(0, 0, 200, 100)).origin + root->shape.pivot * root->shape.size;
     uiWindow.setRoot(root);
     EOKAS_EXPECT(uiWindow.hitTest(10, 10) == root.get());
-    uiWindow.onMouseDown(10, 10, UIMouseButton::Left);
-    uiWindow.onMouseUp(10, 10, UIMouseButton::Left);
+    uiWindow.onMouseDown(10, 10, UIPointerCode::Left);
+    uiWindow.onMouseUp(10, 10, UIPointerCode::Left);
     auto panel = std::make_shared<UIWidget>();
     panel->shape.size = (Rect(50.0f, 60.0f, 80.0f, 40.0f)).size;
     root->placeChild(*panel, Vector2(50.0f, 60.0f));
@@ -372,7 +380,9 @@ EOKAS_TEST_CASE(ui) {
     };
     UIWindow& opened = app.open(320, 240);
     app.layout(opened, 320, 240);
-    EOKAS_EXPECT(opened.root() == nullptr);
+    EOKAS_EXPECT(opened.root() != nullptr);
+    EOKAS_EXPECT(_FloatEqual(opened.root()->shape.size.x, 320.0f));
+    EOKAS_EXPECT(_FloatEqual(opened.root()->shape.size.y, 240.0f));
     app.close(opened);
     EOKAS_EXPECT(windows == 0);
 
@@ -430,8 +440,8 @@ EOKAS_TEST_CASE(ui) {
     top->shape.origin = (Rect(0.0f, 0.0f, 10.0f, 20.0f)).origin + top->shape.pivot * top->shape.size;
     low->shape.size = (Rect(30.0f, -5.0f, 10.0f, 10.0f)).size;
     low->shape.origin = (Rect(30.0f, -5.0f, 10.0f, 10.0f)).origin + low->shape.pivot * low->shape.size;
-    fitted.addChild(top);
-    fitted.addChild(low);
+    fitted.attachChild(top);
+    fitted.attachChild(low);
     fitted.refit();
     EOKAS_EXPECT(_FloatEqual(boxLeft(fitted.shape), 100.0f));
     EOKAS_EXPECT(_FloatEqual(boxTop(fitted.shape), 45.0f));
@@ -456,8 +466,8 @@ EOKAS_TEST_CASE(ui) {
     leftItem->shape.origin = (Rect(0.0f, 0.0f, 10.0f, 20.0f)).origin + leftItem->shape.pivot * leftItem->shape.size;
     rightItem->shape.size = (Rect(30.0f, -5.0f, 10.0f, 10.0f)).size;
     rightItem->shape.origin = (Rect(30.0f, -5.0f, 10.0f, 10.0f)).origin + rightItem->shape.pivot * rightItem->shape.size;
-    scaledCanvas.addChild(leftItem);
-    scaledCanvas.addChild(rightItem);
+    scaledCanvas.attachChild(leftItem);
+    scaledCanvas.attachChild(rightItem);
     scaledCanvas.refit();
     leftItem->shape.origin.x = pivotSpace(scaledCanvas.shape, Vector2(-4.0f, 0.0f)).x + leftItem->shape.pivot.x * leftItem->shape.size.x;
     scaledCanvas.refit();
@@ -478,17 +488,17 @@ EOKAS_TEST_CASE(ui) {
     held->shape.origin = (Rect(0.0f, 0.0f, 10.0f, 20.0f)).origin + held->shape.pivot * held->shape.size;
     loose->shape.size = (Rect(30.0f, -5.0f, 10.0f, 10.0f)).size;
     loose->shape.origin = (Rect(30.0f, -5.0f, 10.0f, 10.0f)).origin + loose->shape.pivot * loose->shape.size;
-    loose->dragable = false;
-    canvas->addChild(held);
-    canvas->addChild(loose);
+    loose->draggable = false;
+    canvas->attachChild(held);
+    canvas->attachChild(loose);
     canvasWindow.setRoot(canvas);
     canvasWindow.tick(0.0f);
     canvasWindow.hitTest(0.0f, 0.0f);
     Rect heldBefore = Rect(boxLeft(held->shape), boxTop(held->shape), held->shape.size.x, held->shape.size.y);
     Rect looseBefore = Rect(boxLeft(loose->shape), boxTop(loose->shape), loose->shape.size.x, loose->shape.size.y);
-    canvasWindow.onMouseDown(120.0f, 65.0f, UIMouseButton::Left);
+    canvasWindow.onMouseDown(120.0f, 65.0f, UIPointerCode::Left);
     canvasWindow.onMouseMove(130.0f, 70.0f);
-    canvasWindow.onMouseUp(130.0f, 70.0f, UIMouseButton::Left);
+    canvasWindow.onMouseUp(130.0f, 70.0f, UIPointerCode::Left);
     EOKAS_EXPECT(_FloatEqual(boxLeft(held->shape), heldBefore.origin.x));
     EOKAS_EXPECT(_FloatEqual(boxTop(held->shape), heldBefore.origin.y));
     EOKAS_EXPECT(_FloatEqual(boxLeft(loose->shape), looseBefore.origin.x));
@@ -496,14 +506,14 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(_FloatEqual(boxLeft(canvas->shape), 110.0f));
     EOKAS_EXPECT(_FloatEqual(boxTop(canvas->shape), 50.0f));
 
-    canvasWindow.onMouseDown(140.0f, 50.0f, UIMouseButton::Left);
+    canvasWindow.onMouseDown(140.0f, 50.0f, UIPointerCode::Left);
     canvasWindow.onMouseMove(150.0f, 50.0f);
-    canvasWindow.onMouseUp(150.0f, 50.0f, UIMouseButton::Left);
+    canvasWindow.onMouseUp(150.0f, 50.0f, UIPointerCode::Left);
     EOKAS_EXPECT(_FloatEqual(boxLeft(loose->shape), looseBefore.origin.x));
-    loose->dragable = true;
-    canvasWindow.onMouseDown(140.0f, 50.0f, UIMouseButton::Left);
+    loose->draggable = true;
+    canvasWindow.onMouseDown(140.0f, 50.0f, UIPointerCode::Left);
     canvasWindow.onMouseMove(150.0f, 50.0f);
-    canvasWindow.onMouseUp(150.0f, 50.0f, UIMouseButton::Left);
+    canvasWindow.onMouseUp(150.0f, 50.0f, UIPointerCode::Left);
     EOKAS_EXPECT(_FloatEqual(boxLeft(loose->shape), looseBefore.origin.x + 5.0f));
     EOKAS_EXPECT(_FloatEqual(boxLeft(held->shape), heldBefore.origin.x - 5.0f));
 
@@ -527,9 +537,9 @@ EOKAS_TEST_CASE(ui) {
     dragButton->setText("OK");
     dragButton->shape.size = (Rect(0.0f, 0.0f, 40.0f, 20.0f)).size;
     dragButton->shape.origin = (Rect(0.0f, 0.0f, 40.0f, 20.0f)).origin + dragButton->shape.pivot * dragButton->shape.size;
-    dragButton->dragable = true;
+    dragButton->draggable = true;
     UICanvas dragGroup;
-    dragGroup.addChild(dragButton);
+    dragGroup.attachChild(dragButton);
     dragGroup.shape.setBox(Vector2(0.0f, 0.0f), Vector2(0.0f, 0.0f));
     UIPrimitive dragPrim;
     dragGroup.layout();
@@ -601,29 +611,29 @@ EOKAS_TEST_CASE(ui) {
     auto idle = std::make_shared<UIChart>();
     picked->setContour({ atChart(20.0f, 20.0f), atChart(60.0f, 20.0f), atChart(20.0f, 60.0f) });
     idle->setContour({ atChart(70.0f, 20.0f), atChart(110.0f, 20.0f), atChart(70.0f, 60.0f) });
-    chartCanvas->addChild(anchor);
-    chartCanvas->addChild(picked);
-    chartCanvas->addChild(idle);
+    chartCanvas->attachChild(anchor);
+    chartCanvas->attachChild(picked);
+    chartCanvas->attachChild(idle);
     chartWindow.setRoot(chartCanvas);
     int chartClicks = 0;
     int chartDoubles = 0;
     picked->onClick = [&]() { chartClicks += 1; };
     picked->onDoubleClick = [&]() { chartDoubles += 1; };
-    chartWindow.onMouseDown(30.0f, 30.0f, UIMouseButton::Left);
-    chartWindow.onMouseUp(30.0f, 30.0f, UIMouseButton::Left);
+    chartWindow.onMouseDown(30.0f, 30.0f, UIPointerCode::Left);
+    chartWindow.onMouseUp(30.0f, 30.0f, UIPointerCode::Left);
     EOKAS_EXPECT(chartClicks == 1);
     EOKAS_EXPECT(picked->selected);
     EOKAS_EXPECT(!idle->selected);
-    chartWindow.onMouseDown(30.0f, 30.0f, UIMouseButton::Left);
-    chartWindow.onMouseUp(30.0f, 30.0f, UIMouseButton::Left);
+    chartWindow.onMouseDown(30.0f, 30.0f, UIPointerCode::Left);
+    chartWindow.onMouseUp(30.0f, 30.0f, UIPointerCode::Left);
     EOKAS_EXPECT(chartDoubles == 1);
 
     std::vector<Vector2> contourBefore = picked->contour();
     picked->selected = true;
     idle->selected = false;
-    chartWindow.onMouseDown(30.0f, 30.0f, UIMouseButton::Left);
+    chartWindow.onMouseDown(30.0f, 30.0f, UIPointerCode::Left);
     chartWindow.onMouseMove(42.0f, 30.0f);
-    chartWindow.onMouseUp(42.0f, 30.0f, UIMouseButton::Left);
+    chartWindow.onMouseUp(42.0f, 30.0f, UIPointerCode::Left);
     EOKAS_EXPECT(chartClicks == 1);
     EOKAS_EXPECT(picked->selected);
     EOKAS_EXPECT(!idle->selected);
@@ -643,8 +653,8 @@ EOKAS_TEST_CASE(ui) {
     auto slot = std::make_shared<UIChart>();
     carried->setContour({ atDrop(0.0f, 0.0f), atDrop(40.0f, 0.0f), atDrop(0.0f, 40.0f) });
     slot->setContour({ atDrop(80.0f, 0.0f), atDrop(120.0f, 0.0f), atDrop(80.0f, 40.0f) });
-    dropCanvas->addChild(carried);
-    dropCanvas->addChild(slot);
+    dropCanvas->attachChild(carried);
+    dropCanvas->attachChild(slot);
     dropWindow.setRoot(dropCanvas);
     int drops = 0;
     UIWidget* dropTarget = nullptr;
@@ -652,9 +662,9 @@ EOKAS_TEST_CASE(ui) {
         drops += 1;
         dropTarget = target;
     };
-    dropWindow.onMouseDown(10.0f, 10.0f, UIMouseButton::Left);
+    dropWindow.onMouseDown(10.0f, 10.0f, UIPointerCode::Left);
     dropWindow.onMouseMove(90.0f, 10.0f);
-    dropWindow.onMouseUp(90.0f, 10.0f, UIMouseButton::Left);
+    dropWindow.onMouseUp(90.0f, 10.0f, UIPointerCode::Left);
     EOKAS_EXPECT(drops == 1);
     EOKAS_EXPECT(dropTarget == slot.get());
 
@@ -667,8 +677,8 @@ EOKAS_TEST_CASE(ui) {
     auto plain = std::make_shared<UIWidget>();
     plain->shape.size = (Rect(0.0f, 0.0f, 40.0f, 40.0f)).size;
     plain->shape.origin = atPlain(0.0f, 0.0f) + plain->shape.pivot * plain->shape.size;
-    plainCanvas->addChild(stone);
-    plainCanvas->addChild(plain);
+    plainCanvas->attachChild(stone);
+    plainCanvas->attachChild(plain);
     dropWindow.setRoot(plainCanvas);
     int plainDrops = 0;
     UIWidget* plainTarget = stone.get();
@@ -676,9 +686,9 @@ EOKAS_TEST_CASE(ui) {
         plainDrops += 1;
         plainTarget = target;
     };
-    dropWindow.onMouseDown(70.0f, 10.0f, UIMouseButton::Left);
+    dropWindow.onMouseDown(70.0f, 10.0f, UIPointerCode::Left);
     dropWindow.onMouseMove(10.0f, 10.0f);
-    dropWindow.onMouseUp(10.0f, 10.0f, UIMouseButton::Left);
+    dropWindow.onMouseUp(10.0f, 10.0f, UIPointerCode::Left);
     EOKAS_EXPECT(plainDrops == 1);
     EOKAS_EXPECT(plainTarget == nullptr);
     dropWindow.quit();
@@ -694,7 +704,7 @@ EOKAS_TEST_CASE(ui) {
         pivotSpace(zoomCanvas->shape, Vector2(40.0f, 0.0f)),
         pivotSpace(zoomCanvas->shape, Vector2(0.0f, 40.0f))
     });
-    zoomCanvas->addChild(zoomChart);
+    zoomCanvas->attachChild(zoomChart);
     zoomWindow.setRoot(zoomCanvas);
     Vector2 zoomFocal = Vector2(10.0f, 10.0f) - zoomCanvas->shape.origin;
     Vector2 chartLocal = zoomChart->shape.pivotToLocal(zoomFocal);
@@ -918,7 +928,7 @@ EOKAS_TEST_CASE(ui) {
         auto label = std::make_shared<UIText>();
         label->text = title;
         label->shape.setBox(Vector2(0.0f, 0.0f), Vector2(60.0f, 16.0f));
-        head->addChild(label);
+        head->attachChild(label);
         page->setHead(head);
         auto body = std::make_shared<UIList>();
         body->shape.setBox(Vector2(0.0f, 0.0f), Vector2(200.0f, 80.0f));
@@ -946,10 +956,10 @@ EOKAS_TEST_CASE(ui) {
     prim.end();
     UIWidget* tab = host.hitTest(20.0f, 50.0f);
     EOKAS_EXPECT(tab != nullptr);
-    host.onMouseDown(20.0f, 50.0f, UIMouseButton::Left);
+    host.onMouseDown(20.0f, 50.0f, UIPointerCode::Left);
     host.onMouseMove(80.0f, 80.0f);
     host.onMouseMove(400.0f, 300.0f);
-    host.onMouseUp(400.0f, 300.0f, UIMouseButton::Left);
+    host.onMouseUp(400.0f, 300.0f, UIPointerCode::Left);
     prim.begin();
     host.tick(0.0f);
     prim.end();
@@ -958,6 +968,169 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(pageA->space() == dockHost.get());
     EOKAS_EXPECT(pageB->space() == dockHost.get());
     host.quit();
+
+    int lost = 0;
+    auto focused = std::make_shared<UIWidget>();
+    focused->focusable = true;
+    focused->onFocusLoss = [&]() { lost += 1; };
+    UIWindow focusWindow;
+    focusWindow.init(100, 100);
+    focusWindow.setRoot(focused);
+    focusWindow.setFocus(focused.get());
+    EOKAS_EXPECT(focused->isFocused());
+    focusWindow.setRoot(std::make_shared<UIWidget>());
+    EOKAS_EXPECT(lost == 1);
+    EOKAS_EXPECT(!focused->isFocused());
+
+    auto hoverA = std::make_shared<UIWidget>();
+    hoverA->shape.pivot = Vector2(0.0f, 0.0f);
+    hoverA->shape.setBox(Vector2(0.0f, 0.0f), Vector2(40.0f, 40.0f));
+    auto hoverB = std::make_shared<UIWidget>();
+    hoverB->shape.pivot = Vector2(0.0f, 0.0f);
+    hoverB->shape.setBox(Vector2(60.0f, 0.0f), Vector2(40.0f, 40.0f));
+    auto hoverRoot = std::make_shared<UIWidget>();
+    hoverRoot->pickable = false;
+    hoverRoot->shape.pivot = Vector2(0.0f, 0.0f);
+    hoverRoot->shape.setBox(Vector2(0.0f, 0.0f), Vector2(200.0f, 80.0f));
+    hoverRoot->attachChild(hoverA);
+    hoverRoot->attachChild(hoverB);
+    UIWindow hoverWindow;
+    hoverWindow.init(200, 80);
+    hoverWindow.setRoot(hoverRoot);
+    hoverWindow.onMouseMove(20.0f, 20.0f);
+    EOKAS_EXPECT(hoverA->isHovered());
+    hoverWindow.onMouseDown(20.0f, 20.0f, UIPointerCode::Left);
+    hoverWindow.onMouseMove(80.0f, 20.0f);
+    EOKAS_EXPECT(hoverA->isPressed());
+    EOKAS_EXPECT(hoverA->isHovered());
+    EOKAS_EXPECT(!hoverB->isHovered());
+    hoverWindow.onMouseUp(80.0f, 20.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(hoverB->isHovered());
+
+    int childWheels = 0;
+    int parentWheels = 0;
+    auto wheelChild = std::make_shared<UIWidget>();
+    wheelChild->shape.pivot = Vector2(0.0f, 0.0f);
+    wheelChild->shape.setBox(Vector2(0.0f, 0.0f), Vector2(40.0f, 40.0f));
+    auto wheelParent = std::make_shared<UIWidget>();
+    wheelParent->shape.pivot = Vector2(0.0f, 0.0f);
+    wheelParent->shape.setBox(Vector2(0.0f, 0.0f), Vector2(80.0f, 80.0f));
+    wheelParent->attachChild(wheelChild);
+    wheelParent->onWheel = [&](const Vector2&, const Vector2&) { parentWheels += 1; };
+    UIWindow wheelWindow;
+    wheelWindow.init(80, 80);
+    wheelWindow.setRoot(wheelParent);
+    wheelWindow.onMouseWheel(10.0f, 10.0f, 0.0f, -24.0f);
+    EOKAS_EXPECT(parentWheels == 1);
+    wheelChild->onWheel = [&](const Vector2&, const Vector2&) { childWheels += 1; };
+    wheelWindow.onMouseWheel(10.0f, 10.0f, 0.0f, -24.0f);
+    EOKAS_EXPECT(childWheels == 1);
+    EOKAS_EXPECT(parentWheels == 1);
+
+    int anywherePress = 0;
+    int anywhereRelease = 0;
+    int targetedPress = 0;
+    int lastAnywhere = 0;
+    int lastPress = 0;
+    int seq = 0;
+    auto anywhereA = std::make_shared<UIWidget>();
+    anywhereA->shape.pivot = Vector2(0.0f, 0.0f);
+    anywhereA->shape.setBox(Vector2(0.0f, 0.0f), Vector2(40.0f, 40.0f));
+    anywhereA->onPointerPressAnywhere = [&](const UIPointerEvent&) { anywherePress += 1; lastAnywhere = ++seq; };
+    anywhereA->onPointerReleaseAnywhere = [&](const UIPointerEvent&) { anywhereRelease += 1; };
+    anywhereA->onPointerPress = [&](const UIPointerEvent&) { targetedPress += 1; lastPress = ++seq; };
+    auto anywhereB = std::make_shared<UIWidget>();
+    anywhereB->shape.pivot = Vector2(0.0f, 0.0f);
+    anywhereB->shape.setBox(Vector2(60.0f, 0.0f), Vector2(40.0f, 40.0f));
+    auto anywhereRoot = std::make_shared<UIWidget>();
+    anywhereRoot->pickable = false;
+    anywhereRoot->shape.pivot = Vector2(0.0f, 0.0f);
+    anywhereRoot->shape.setBox(Vector2(0.0f, 0.0f), Vector2(200.0f, 80.0f));
+    anywhereRoot->attachChild(anywhereA);
+    anywhereRoot->attachChild(anywhereB);
+    UIWindow anywhereWindow;
+    anywhereWindow.init(200, 80);
+    anywhereWindow.setRoot(anywhereRoot);
+    anywhereWindow.onMouseDown(70.0f, 20.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(anywherePress == 1);
+    EOKAS_EXPECT(targetedPress == 0);
+    anywhereWindow.onMouseUp(70.0f, 20.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(anywhereRelease == 1);
+    anywhereWindow.onMouseDown(20.0f, 20.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(anywherePress == 2);
+    EOKAS_EXPECT(targetedPress == 1);
+    EOKAS_EXPECT(lastAnywhere < lastPress);
+    anywhereWindow.onMouseUp(20.0f, 20.0f, UIPointerCode::Left);
+    anywhereWindow.onMouseDown(150.0f, 20.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(anywherePress == 3);
+    anywhereWindow.onMouseUp(150.0f, 20.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(anywhereRelease == 3);
+
+    auto dropRoot = std::make_shared<UIWidget>();
+    dropRoot->pickable = false;
+    dropRoot->shape.pivot = Vector2(0.0f, 0.0f);
+    dropRoot->shape.setBox(Vector2(0.0f, 0.0f), Vector2(300.0f, 200.0f));
+    auto drop = std::make_shared<UIDropdown>();
+    drop->shape.pivot = Vector2(0.0f, 0.0f);
+    drop->shape.setBox(Vector2(0.0f, 0.0f), Vector2(120.0f, 28.0f));
+    drop->addItem(1, "One");
+    drop->addItem(2, "Two");
+    dropRoot->attachChild(drop);
+    UIWindow dropOverlayWindow;
+    dropOverlayWindow.init(300, 200);
+    dropOverlayWindow.setRoot(dropRoot);
+    drop->setExpanded(true);
+    drop->layout();
+    dropOverlayWindow.onMouseDown(10.0f, 10.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(drop->expanded);
+    dropOverlayWindow.onMouseUp(10.0f, 10.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(!drop->expanded);
+    dropOverlayWindow.onMouseDown(10.0f, 10.0f, UIPointerCode::Left);
+    dropOverlayWindow.onMouseUp(10.0f, 10.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(drop->expanded);
+    dropOverlayWindow.onMouseDown(10.0f, 40.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(drop->expanded);
+    dropOverlayWindow.onMouseUp(10.0f, 40.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(!drop->expanded);
+    EOKAS_EXPECT(drop->value == 1);
+    drop->setExpanded(true);
+    drop->layout();
+    dropOverlayWindow.onMouseDown(220.0f, 160.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(!drop->expanded);
+    dropOverlayWindow.quit();
+
+    auto menuRoot = std::make_shared<UIWidget>();
+    menuRoot->pickable = false;
+    menuRoot->shape.pivot = Vector2(0.0f, 0.0f);
+    menuRoot->shape.setBox(Vector2(0.0f, 0.0f), Vector2(300.0f, 200.0f));
+    auto menuHost = std::make_shared<UIWidget>();
+    menuHost->shape.pivot = Vector2(0.0f, 0.0f);
+    menuHost->shape.setBox(Vector2(0.0f, 0.0f), Vector2(40.0f, 20.0f));
+    auto popupMenu = std::make_shared<UIMenu>();
+    popupMenu->overlay = true;
+    popupMenu->direction = UIDirection::Vertical;
+    popupMenu->host = menuHost.get();
+    popupMenu->shape.pivot = Vector2(0.0f, 0.0f);
+    popupMenu->shape.setBox(Vector2(0.0f, 20.0f), Vector2(80.0f, 40.0f));
+    auto popupItem = std::make_shared<UIMenuItem>();
+    popupItem->setText("Item");
+    popupMenu->addItem(popupItem);
+    menuRoot->attachChild(menuHost);
+    menuRoot->attachChild(popupMenu);
+    popupMenu->layout();
+    popupMenu->shape.setBox(Vector2(0.0f, 20.0f), Vector2(80.0f, 40.0f));
+    UIWindow menuOverlayWindow;
+    menuOverlayWindow.init(300, 200);
+    menuOverlayWindow.setRoot(menuRoot);
+    menuOverlayWindow.onMouseDown(10.0f, 10.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(popupMenu->visible);
+    menuOverlayWindow.onMouseUp(10.0f, 10.0f, UIPointerCode::Left);
+    menuOverlayWindow.onMouseDown(20.0f, 30.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(popupMenu->visible);
+    menuOverlayWindow.onMouseUp(20.0f, 30.0f, UIPointerCode::Left);
+    menuOverlayWindow.onMouseDown(220.0f, 160.0f, UIPointerCode::Left);
+    EOKAS_EXPECT(!popupMenu->visible);
+    menuOverlayWindow.quit();
 
     return 0;
 }
