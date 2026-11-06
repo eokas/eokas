@@ -117,71 +117,67 @@ EOKAS_TEST_CASE(list_struct) {
     return 0;
 }
 
-EOKAS_TEST_CASE(edits) {
-    Library library("edits");
+EOKAS_TEST_CASE(row_string_list) {
+    Library library("row-string-list");
     Schema* text = library.getSchema("String");
-    Schema* integer = library.getSchema("Int");
+    Schema* tags = library.addSchema(SchemaType::List, "Tags");
+    tags->setElementSchema(text);
     Schema* row = library.addSchema(SchemaType::Struct, "Row");
-    EOKAS_EXPECT(row->insertMember(0, "name", text));
-    EOKAS_EXPECT(row->insertMember(0, "age", integer));
-    EOKAS_EXPECT(row->getMemberIndex("age") == 0);
-    EOKAS_EXPECT(row->renameMember("age", "years"));
-    EOKAS_EXPECT(row->getMember("years") != nullptr);
-    EOKAS_EXPECT(!row->insertMember(0, "years", integer));
-
-    Schema* listSchema = library.addSchema(SchemaType::List, "Rows");
-    listSchema->setElementSchema(row);
-    Value* list = library.make(listSchema);
-    Value* first = library.make(row);
-    Value* middle = library.make(row);
-    Value* last = library.make(row);
-    EOKAS_EXPECT(library.push(list, first));
-    EOKAS_EXPECT(library.push(list, last));
-    EOKAS_EXPECT(library.insert(list, 1, middle));
-    EOKAS_EXPECT(library.count(list) == 3);
-
-    Value* name = library.get(middle, "name");
-    EOKAS_EXPECT(library.setNull(name));
-    EOKAS_EXPECT(library.isNull(name));
-    String got;
-    EOKAS_EXPECT(!library.get(name, got));
-    EOKAS_EXPECT(library.set(name, String("mid")));
-    EOKAS_EXPECT(!library.isNull(name));
-    EOKAS_EXPECT(library.get(name, got));
-    EOKAS_EXPECT(got == "mid");
-
-    Value* years = library.get(middle, "years");
-    EOKAS_EXPECT(library.setNull(years));
-    EOKAS_EXPECT(library.isNull(years));
-
-    EOKAS_EXPECT(library.renameField(first, "name", "title"));
-    EOKAS_EXPECT(library.get(first, "title", got));
-    Value* note = library.make(text);
-    EOKAS_EXPECT(library.set(note, String("extra")));
-    EOKAS_EXPECT(row->insertMember(2, "note", text));
-    EOKAS_EXPECT(library.put(first, "note", note));
-    EOKAS_EXPECT(library.get(first, "note", got));
-    EOKAS_EXPECT(got == "extra");
-    EOKAS_EXPECT(library.removeField(first, "note"));
-    EOKAS_EXPECT(library.remove(list, 0));
+    row->addMember("tags", tags);
+    Value* record = library.make(row);
+    Value* list = library.get(record, "tags");
+    EOKAS_EXPECT(library.push(list, String("red")));
+    EOKAS_EXPECT(library.push(list, String("blue")));
     EOKAS_EXPECT(library.count(list) == 2);
 
-    library.set("rows", list);
+    library.set("row", record);
     MemoryStream memory;
     EOKAS_EXPECT(memory.open());
     BinaryStream stream(memory);
     EOKAS_EXPECT(library.save(stream));
     EOKAS_EXPECT(stream.seek(0, 0));
-    Library loaded("loaded-edits");
+    Library loaded("loaded-row-string-list");
     EOKAS_EXPECT(loaded.load(stream));
-    Value* loadedRows = loaded.get("rows");
-    EOKAS_EXPECT(loaded.count(loadedRows) == 2);
-    Value* loadedMiddle = loaded.get(loadedRows, 0);
-    String loadedName;
-    EOKAS_EXPECT(loaded.get(loadedMiddle, "name", loadedName));
-    EOKAS_EXPECT(loadedName == "mid");
-    Value* loadedYears = loaded.get(loadedMiddle, "years");
-    EOKAS_EXPECT(loaded.isNull(loadedYears));
-    EOKAS_EXPECT(!loaded.get(loadedYears, got));
+    Value* loadedRow = loaded.get("row");
+    Value* loadedTags = loaded.get(loadedRow, "tags");
+    EOKAS_EXPECT(loaded.count(loadedTags) == 2);
+    String first;
+    String second;
+    EOKAS_EXPECT(loaded.get(loadedTags, 0, first));
+    EOKAS_EXPECT(loaded.get(loadedTags, 1, second));
+    EOKAS_EXPECT(first == "red");
+    EOKAS_EXPECT(second == "blue");
     return 0;
 }
+
+EOKAS_TEST_CASE(struct_member_list_grows) {
+    Library library("struct-member-list-grows");
+    Schema* text = library.getSchema("String");
+    Schema* option = library.addSchema(SchemaType::Struct, "Option");
+    option->addMember("label", text);
+    option->addMember("color", text);
+    Schema* options = library.addSchema(SchemaType::List, "Options");
+    options->setElementSchema(option);
+    Schema* column = library.addSchema(SchemaType::Struct, "Column");
+    column->addMember("options", options);
+    Value* record = library.make(column);
+    Value* list = library.get(record, "options");
+    EOKAS_EXPECT(list != nullptr);
+    for (int count = 1; count <= 32; ++count)
+    {
+        EOKAS_EXPECT(library.clear(list));
+        for (int i = 0; i < count; ++i)
+        {
+            Value* item = library.make(option);
+            EOKAS_EXPECT(library.set(item, "label", String::format("选项%d", i + 1)));
+            EOKAS_EXPECT(library.set(item, "color", String("#6366f1")));
+            EOKAS_EXPECT(library.push(list, item));
+        }
+        EOKAS_EXPECT(library.count(list) == static_cast<u32_t>(count));
+    }
+    String last;
+    EOKAS_EXPECT(library.get(library.get(list, 31), "label", last));
+    EOKAS_EXPECT(last == "选项32");
+    return 0;
+}
+

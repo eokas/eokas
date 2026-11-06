@@ -129,8 +129,8 @@ namespace eokas::rose {
 
         std::deque<Value> values;
         
-        std::vector<List> lists;
-        std::vector<Object> objects;
+        std::deque<List> lists;
+        std::deque<Object> objects;
         
         std::vector<String> strings;
         

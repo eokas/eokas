@@ -213,6 +213,9 @@ namespace eokas
 
             switch (message) {
             case WM_CLOSE:
+                if (window->onCloseQuery && !window->onCloseQuery()) {
+                    return 0;
+                }
                 window->destroy();
                 return 0;
             case WM_DESTROY:

@@ -123,7 +123,17 @@ namespace eokas
                 }
             }
             first = false;
-            this->placeChild(*child, Vector2(floorf(cursor.x + 0.5f), floorf(cursor.y + 0.5f)));
+            float x = cursor.x;
+            float y = cursor.y;
+            if (centerCross && direction == UIDirection::Horizontal)
+            {
+                y = (shape.size.y - child->shape.size.y) * 0.5f;
+                if (y < 0.0f)
+                {
+                    y = 0.0f;
+                }
+            }
+            this->placeChild(*child, Vector2(floorf(x + 0.5f), floorf(y + 0.5f)));
             if (direction == UIDirection::Horizontal)
             {
                 cursor.x += child->shape.size.x;

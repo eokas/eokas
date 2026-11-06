@@ -3,6 +3,8 @@
 
 #include "./Header.h"
 
+#include <vector>
+
 namespace eokas::RoseAxion {
 
     enum class FieldKind
@@ -15,6 +17,7 @@ namespace eokas::RoseAxion {
         Url,
         Email,
         SingleOption,
+        MultiOption,
     };
 
     const char* fieldKindKey(FieldKind kind);
@@ -30,6 +33,10 @@ namespace eokas::RoseAxion {
     bool parseInteger(const String& text, i64_t& out);
     bool parseFloat(const String& text, f64_t& out);
     bool parseBool(const String& text, bool& out);
+
+    String joinSelected(const std::vector<String>& labels);
+    std::vector<String> splitSelected(const String& text);
+    bool selectedContains(const std::vector<String>& labels, const String& label);
 
 }
 

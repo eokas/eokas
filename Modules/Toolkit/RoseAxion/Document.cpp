@@ -22,6 +22,19 @@ namespace eokas::RoseAxion {
             return label;
         }
 
+        const float kDefaultColumnWidth = 168.0f;
+        const float kDefaultHeadWidth = 84.0f;
+        const float kMinColumnWidth = 48.0f;
+
+        float clampWidth(float width)
+        {
+            if (width < kMinColumnWidth)
+            {
+                return kMinColumnWidth;
+            }
+            return width;
+        }
+
     }
 
     void TableDocument::createNew()
@@ -31,6 +44,7 @@ namespace eokas::RoseAxion {
         mInt = mLibrary->getSchema("Int");
         mFloat = mLibrary->getSchema("Float");
         mBool = mLibrary->getSchema("Bool");
+        this->ensureSelectedSchema();
 
         mOptionSchema = mLibrary->addSchema(rose::SchemaType::Struct, "Option");
         mOptionSchema->addMember("label", mString);
@@ -43,6 +57,7 @@ namespace eokas::RoseAxion {
         mColumnSchema->addMember("name", mString);
         mColumnSchema->addMember("kind", mString);
         mColumnSchema->addMember("options", mOptionsSchema);
+        mColumnSchema->addMember("width", mFloat);
         rose::Schema* columns = mLibrary->addSchema(rose::SchemaType::List, "Columns");
         columns->setElementSchema(mColumnSchema);
 
@@ -54,6 +69,7 @@ namespace eokas::RoseAxion {
         mRows = mLibrary->make(rows);
         mLibrary->set("columns", mColumns);
         mLibrary->set("rows", mRows);
+        mLibrary->set("headWidth", static_cast<f64_t>(kDefaultHeadWidth));
         mNextId = 0;
         mPath = String::empty;
         mOpen = true;
@@ -80,6 +96,7 @@ namespace eokas::RoseAxion {
         rose::Schema* previousBool = mBool;
         rose::Schema* previousOption = mOptionSchema;
         rose::Schema* previousOptions = mOptionsSchema;
+        rose::Schema* previousSelected = mSelectedSchema;
         rose::Schema* previousColumn = mColumnSchema;
         rose::Value* previousColumns = mColumns;
         rose::Value* previousRows = mRows;
@@ -98,6 +115,7 @@ namespace eokas::RoseAxion {
             mBool = previousBool;
             mOptionSchema = previousOption;
             mOptionsSchema = previousOptions;
+            mSelectedSchema = previousSelected;
             mColumnSchema = previousColumn;
             mColumns = previousColumns;
             mRows = previousRows;
@@ -142,6 +160,7 @@ namespace eokas::RoseAxion {
         mRowSchema = mLibrary->getSchema("Row");
         mOptionSchema = mLibrary->getSchema("Option");
         mOptionsSchema = mLibrary->getSchema("Options");
+        this->ensureSelectedSchema();
         mColumnSchema = mLibrary->getSchema("Column");
         mColumns = mLibrary->get("columns");
         mRows = mLibrary->get("rows");
@@ -149,7 +168,7 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
-        if (mRowSchema == nullptr || mOptionSchema == nullptr || mOptionsSchema == nullptr || mColumnSchema == nullptr)
+        if (mRowSchema == nullptr || mOptionSchema == nullptr || mOptionsSchema == nullptr || mColumnSchema == nullptr || mSelectedSchema == nullptr)
         {
             return false;
         }
@@ -161,11 +180,8 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
-        if (this->columnCount() == 0 || this->rowCount() == 0)
-        {
-            return false;
-        }
         this->refreshIds();
+        this->ensureLayoutFields();
         mOpen = true;
         mDirty = this->rebuildRows(false);
         return true;
@@ -208,6 +224,7 @@ namespace eokas::RoseAxion {
         case FieldKind::Integer: return mInt;
         case FieldKind::Float: return mFloat;
         case FieldKind::Boolean: return mBool;
+        case FieldKind::MultiOption: return mSelectedSchema;
         default: return mString;
         }
     }
@@ -390,7 +407,198 @@ namespace eokas::RoseAxion {
             item.color = this->readString(option, "color");
             column.options.push_back(item);
         }
+        column.width = this->readFloat(object, "width", kDefaultColumnWidth);
         return column;
+    }
+
+    float TableDocument::readFloat(rose::Value* object, const char* field, float fallback) const
+    {
+        Value* slot = this->fieldAt(object, field);
+        f64_t value = 0.0;
+        if (slot == nullptr || !mLibrary->get(slot, value))
+        {
+            return fallback;
+        }
+        return static_cast<float>(value);
+    }
+
+    rose::Value* TableDocument::rebuildColumn(u32_t index, float width)
+    {
+        TableColumn info = this->column(index);
+        Value* fresh = this->makeColumn(info.id, info.name, info.kind, info.options);
+        mLibrary->set(fresh, "width", static_cast<f64_t>(clampWidth(width)));
+        mLibrary->set(mColumns, index, fresh);
+        return fresh;
+    }
+
+    void TableDocument::ensureLayoutFields()
+    {
+        if (mColumnSchema != nullptr && mColumnSchema->getMember("width") == nullptr)
+        {
+            mColumnSchema->addMember("width", mFloat);
+        }
+        u32_t count = this->columnCount();
+        for (u32_t index = 0; index < count; ++index)
+        {
+            if (this->fieldAt(this->columnValue(index), "width") == nullptr)
+            {
+                this->rebuildColumn(index, kDefaultColumnWidth);
+            }
+        }
+        f64_t head = 0.0;
+        if (!mLibrary->get("headWidth", head))
+        {
+            mLibrary->set("headWidth", static_cast<f64_t>(kDefaultHeadWidth));
+        }
+    }
+
+    float TableDocument::columnWidth(u32_t index) const
+    {
+        if (!mOpen || index >= this->columnCount())
+        {
+            return kDefaultColumnWidth;
+        }
+        return clampWidth(this->column(index).width);
+    }
+
+    bool TableDocument::setColumnWidth(u32_t index, float width)
+    {
+        if (!mOpen || index >= this->columnCount())
+        {
+            return false;
+        }
+        float next = clampWidth(width);
+        if (this->columnWidth(index) == next)
+        {
+            return true;
+        }
+        if (!mLibrary->set(this->columnValue(index), "width", static_cast<f64_t>(next)))
+        {
+            this->rebuildColumn(index, next);
+        }
+        mDirty = true;
+        return true;
+    }
+
+    float TableDocument::headWidth() const
+    {
+        if (!mOpen || mLibrary == nullptr)
+        {
+            return kDefaultHeadWidth;
+        }
+        f64_t value = kDefaultHeadWidth;
+        if (!mLibrary->get("headWidth", value))
+        {
+            return kDefaultHeadWidth;
+        }
+        return clampWidth(static_cast<float>(value));
+    }
+
+    bool TableDocument::setHeadWidth(float width)
+    {
+        if (!mOpen || mLibrary == nullptr)
+        {
+            return false;
+        }
+        float next = clampWidth(width);
+        if (this->headWidth() == next)
+        {
+            return true;
+        }
+        mLibrary->set("headWidth", static_cast<f64_t>(next));
+        mDirty = true;
+        return true;
+    }
+
+    void TableDocument::ensureSelectedSchema()
+    {
+        mSelectedSchema = mLibrary->getSchema("Selected");
+        if (mSelectedSchema == nullptr)
+        {
+            mSelectedSchema = mLibrary->addSchema(rose::SchemaType::List, "Selected");
+        }
+        if (mSelectedSchema != nullptr)
+        {
+            mSelectedSchema->setElementSchema(mString);
+        }
+    }
+
+    std::vector<String> TableDocument::filterLabels(const std::vector<String>& labels, const std::vector<FieldOption>& options) const
+    {
+        std::vector<String> out;
+        for (const FieldOption& option : options)
+        {
+            if (option.label.isEmpty())
+            {
+                continue;
+            }
+            if (selectedContains(labels, option.label) && !selectedContains(out, option.label))
+            {
+                out.push_back(option.label);
+            }
+        }
+        return out;
+    }
+
+    std::vector<String> TableDocument::readLabels(u32_t row, u32_t column) const
+    {
+        std::vector<String> labels;
+        if (!mOpen || row >= this->rowCount() || column >= this->columnCount())
+        {
+            return labels;
+        }
+        TableColumn info = this->column(column);
+        Value* field = this->fieldAt(this->rowValue(row), info.id);
+        if (field == nullptr || field->schema == nullptr || field->schema->is(rose::SchemaType::None))
+        {
+            return labels;
+        }
+        if (field->schema->is(rose::SchemaType::List))
+        {
+            u32_t count = mLibrary->count(field);
+            for (u32_t index = 0; index < count; ++index)
+            {
+                String item;
+                if (mLibrary->get(field, index, item) && !item.isEmpty())
+                {
+                    labels.push_back(item);
+                }
+            }
+            return labels;
+        }
+        String value;
+        if (mLibrary->get(field, value) && !value.isEmpty())
+        {
+            return splitSelected(value);
+        }
+        return labels;
+    }
+
+    void TableDocument::writeLabels(u32_t row, const TableColumn& column, const std::vector<String>& labels)
+    {
+        std::vector<String> filtered = this->filterLabels(labels, column.options);
+        Value* made = nullptr;
+        if (filtered.empty())
+        {
+            made = this->makeNone();
+        }
+        else
+        {
+            made = mLibrary->make(mSelectedSchema);
+            if (made != nullptr)
+            {
+                mLibrary->clear(made);
+                for (const String& label : filtered)
+                {
+                    mLibrary->push(made, label);
+                }
+            }
+        }
+        if (made == nullptr)
+        {
+            return;
+        }
+        mLibrary->set(this->rowValue(row), column.id, made);
     }
 
     bool TableDocument::cellIsNull(u32_t row, u32_t column) const
@@ -401,7 +609,15 @@ namespace eokas::RoseAxion {
         }
         TableColumn info = this->column(column);
         Value* field = this->fieldAt(this->rowValue(row), info.id);
-        return field == nullptr || field->schema == nullptr || field->schema->is(rose::SchemaType::None);
+        if (field == nullptr || field->schema == nullptr || field->schema->is(rose::SchemaType::None))
+        {
+            return true;
+        }
+        if (field->schema->is(rose::SchemaType::List) && mLibrary->count(field) == 0)
+        {
+            return true;
+        }
+        return false;
     }
 
     String TableDocument::cellText(u32_t row, u32_t column) const
@@ -411,6 +627,10 @@ namespace eokas::RoseAxion {
             return String::empty;
         }
         TableColumn info = this->column(column);
+        if (info.kind == FieldKind::MultiOption)
+        {
+            return joinSelected(this->cellLabels(row, column));
+        }
         Value* field = this->fieldAt(this->rowValue(row), info.id);
         if (field == nullptr || field->schema == nullptr)
         {
@@ -455,6 +675,111 @@ namespace eokas::RoseAxion {
         return value;
     }
 
+    std::vector<String> TableDocument::cellLabels(u32_t row, u32_t column) const
+    {
+        if (!mOpen || row >= this->rowCount() || column >= this->columnCount())
+        {
+            return {};
+        }
+        TableColumn info = this->column(column);
+        return this->filterLabels(this->readLabels(row, column), info.options);
+    }
+
+    bool TableDocument::setCellLabels(u32_t row, u32_t column, const std::vector<String>& labels)
+    {
+        if (!mOpen || row >= this->rowCount() || column >= this->columnCount())
+        {
+            return false;
+        }
+        TableColumn info = this->column(column);
+        String before = this->cellText(row, column);
+        bool wasNull = this->cellIsNull(row, column);
+        this->writeLabels(row, info, labels);
+        String after = this->cellText(row, column);
+        bool nowNull = this->cellIsNull(row, column);
+        if (before != after || wasNull != nowNull)
+        {
+            mDirty = true;
+        }
+        return true;
+    }
+
+    bool TableDocument::renameOptionLabel(u32_t column, const String& from, const String& to)
+    {
+        if (!mOpen || column >= this->columnCount())
+        {
+            return false;
+        }
+        if (from == to || from.isEmpty())
+        {
+            return true;
+        }
+        TableColumn info = this->column(column);
+        u32_t rows = this->rowCount();
+        for (u32_t row = 0; row < rows; ++row)
+        {
+            if (info.kind == FieldKind::MultiOption)
+            {
+                std::vector<String> labels = this->readLabels(row, column);
+                bool changed = false;
+                for (String& item : labels)
+                {
+                    if (item == from)
+                    {
+                        item = to;
+                        changed = true;
+                    }
+                }
+                if (changed)
+                {
+                    this->setCellLabels(row, column, labels);
+                }
+            }
+            else if (this->cellText(row, column) == from)
+            {
+                this->setCellText(row, column, to);
+            }
+        }
+        return true;
+    }
+
+    bool TableDocument::dropOptionLabel(u32_t column, const String& label)
+    {
+        if (!mOpen || column >= this->columnCount() || label.isEmpty())
+        {
+            return false;
+        }
+        TableColumn info = this->column(column);
+        u32_t rows = this->rowCount();
+        for (u32_t row = 0; row < rows; ++row)
+        {
+            if (info.kind == FieldKind::MultiOption)
+            {
+                std::vector<String> labels = this->readLabels(row, column);
+                std::vector<String> kept;
+                bool changed = false;
+                for (const String& item : labels)
+                {
+                    if (item == label)
+                    {
+                        changed = true;
+                        continue;
+                    }
+                    kept.push_back(item);
+                }
+                if (changed)
+                {
+                    this->setCellLabels(row, column, kept);
+                }
+            }
+            else if (this->cellText(row, column) == label)
+            {
+                this->setCellText(row, column, String::empty);
+            }
+        }
+        return true;
+    }
+
     void TableDocument::putNull(rose::Value* row, const String& field, rose::Schema* schema)
     {
         Value* slot = this->fieldAt(row, field);
@@ -469,6 +794,11 @@ namespace eokas::RoseAxion {
 
     void TableDocument::writeCell(u32_t row, const TableColumn& column, const String& text)
     {
+        if (column.kind == FieldKind::MultiOption)
+        {
+            this->writeLabels(row, column, splitSelected(text));
+            return;
+        }
         String value = trimCopy(text);
         Schema* schema = this->storage(column.kind);
         Value* made = nullptr;
@@ -567,6 +897,10 @@ namespace eokas::RoseAxion {
             {
                 continue;
             }
+            if (kind == FieldKind::SingleOption && this->cellLabels(row, column).size() > 1)
+            {
+                return true;
+            }
             String text = this->cellText(row, column);
             if (!text.isEmpty() && !validateField(kind, text))
             {
@@ -596,22 +930,26 @@ namespace eokas::RoseAxion {
         }
         mRowSchema->setMember(info.id, this->storage(kind));
         mLibrary->set(this->columnValue(column), "kind", String(fieldKindKey(kind)));
-        if (kind != FieldKind::SingleOption)
+        if (kind != FieldKind::SingleOption && kind != FieldKind::MultiOption)
         {
             this->setOptions(column, {});
+            info.options.clear();
         }
         else if (info.options.empty())
         {
             this->setOptions(column, {});
         }
         info.kind = kind;
-        if (kind != FieldKind::SingleOption)
-        {
-            info.options.clear();
-        }
         for (u32_t row = 0; row < rows; ++row)
         {
-            this->writeCell(row, info, texts[row]);
+            if (kind == FieldKind::SingleOption && splitSelected(texts[row]).size() > 1)
+            {
+                this->writeCell(row, info, String::empty);
+            }
+            else
+            {
+                this->writeCell(row, info, texts[row]);
+            }
         }
         mDirty = true;
         return true;
@@ -619,13 +957,18 @@ namespace eokas::RoseAxion {
 
     void TableDocument::writeOptions(rose::Value* list, const std::vector<FieldOption>& options)
     {
-        mLibrary->clear(list);
+        if (list == nullptr)
+        {
+            return;
+        }
+        Value listValue = *list;
+        mLibrary->clear(&listValue);
         for (const FieldOption& option : options)
         {
             Value* item = mLibrary->make(mOptionSchema);
             mLibrary->set(item, "label", option.label);
             mLibrary->set(item, "color", option.color.isEmpty() ? String("#6366f1") : option.color);
-            mLibrary->push(list, item);
+            mLibrary->push(&listValue, item);
         }
     }
 
@@ -670,6 +1013,7 @@ namespace eokas::RoseAxion {
         mLibrary->set(column, "name", name);
         mLibrary->set(column, "kind", String(fieldKindKey(kind)));
         mLibrary->set(column, "options", this->makeOptions(options));
+        mLibrary->set(column, "width", static_cast<f64_t>(kDefaultColumnWidth));
         return column;
     }
 

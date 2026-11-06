@@ -166,6 +166,7 @@ namespace eokas::RoseAxion {
         case FieldKind::Url: return "url";
         case FieldKind::Email: return "email";
         case FieldKind::SingleOption: return "singleOption";
+        case FieldKind::MultiOption: return "multiOption";
         case FieldKind::Text:
         default:
             return "text";
@@ -183,6 +184,7 @@ namespace eokas::RoseAxion {
         case FieldKind::Url: return "网址";
         case FieldKind::Email: return "邮箱地址";
         case FieldKind::SingleOption: return "单选";
+        case FieldKind::MultiOption: return "多选";
         case FieldKind::Text:
         default:
             return "文本";
@@ -198,6 +200,7 @@ namespace eokas::RoseAxion {
         if (key == "url") return FieldKind::Url;
         if (key == "email") return FieldKind::Email;
         if (key == "singleOption") return FieldKind::SingleOption;
+        if (key == "multiOption") return FieldKind::MultiOption;
         return FieldKind::Text;
     }
 
@@ -357,6 +360,7 @@ namespace eokas::RoseAxion {
         }
         case FieldKind::Text:
         case FieldKind::SingleOption:
+        case FieldKind::MultiOption:
         default:
             return true;
         }
@@ -380,6 +384,63 @@ namespace eokas::RoseAxion {
             return value;
         }
         return String::format("%04d-%02d-%02dT%02d:%02d:%02d", year, month, day, hour, minute, second);
+    }
+
+    String joinSelected(const std::vector<String>& labels)
+    {
+        String out = String::empty;
+        for (const String& label : labels)
+        {
+            String piece = trimCopy(label);
+            if (piece.isEmpty())
+            {
+                continue;
+            }
+            if (!out.isEmpty())
+            {
+                out = out + ", ";
+            }
+            out = out + piece;
+        }
+        return out;
+    }
+
+    std::vector<String> splitSelected(const String& text)
+    {
+        std::vector<String> out;
+        size_t start = 0;
+        while (start <= text.length())
+        {
+            size_t comma = text.find(',', start);
+            if (comma == String::npos)
+            {
+                String piece = trimCopy(text.substr(start, text.length() - start));
+                if (!piece.isEmpty())
+                {
+                    out.push_back(piece);
+                }
+                break;
+            }
+            String piece = trimCopy(text.substr(start, comma - start));
+            if (!piece.isEmpty())
+            {
+                out.push_back(piece);
+            }
+            start = comma + 1;
+        }
+        return out;
+    }
+
+    bool selectedContains(const std::vector<String>& labels, const String& label)
+    {
+        for (const String& item : labels)
+        {
+            if (item == label)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     String displayDateTime(const String& stored)

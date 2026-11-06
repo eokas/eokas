@@ -445,6 +445,9 @@ namespace eokas
         case ClientMessage:
             if (event.xclient.message_type == current.wmProtocols
                 && static_cast<::Atom>(event.xclient.data.l[0]) == current.wmDelete) {
+                if (window.onCloseQuery && !window.onCloseQuery()) {
+                    return;
+                }
                 window.destroy();
             }
             return;

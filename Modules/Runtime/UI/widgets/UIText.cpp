@@ -19,7 +19,7 @@ namespace eokas
         Vector2 measured = font->measure(text, style.fontSize);
         float width = measured.x;
         float height = measured.y;
-        if (maxWidth > 0.0f && width > maxWidth)
+        if (maxWidth > 0.0f && width > maxWidth + 0.5f)
         {
             mShown = font->cut(text, style.fontSize, maxWidth);
             width = font->measure(mShown, style.fontSize).x;

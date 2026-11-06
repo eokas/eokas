@@ -18,6 +18,7 @@ namespace eokas
         UIDirection direction = UIDirection::Vertical;
         float padding = 8.0f;
         float spacing = 8.0f;
+        bool centerCross = false;
         void refit();
         void layout() override;
         void render(UIPrimitive& primitive) override;

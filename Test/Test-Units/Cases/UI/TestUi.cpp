@@ -73,6 +73,18 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(_FloatEqual(boxTop(first->shape), -92.0f));
     EOKAS_EXPECT(_FloatEqual(boxTop(second->shape), -64.0f));
 
+    UIList rowList;
+    rowList.direction = UIDirection::Horizontal;
+    rowList.centerCross = true;
+    rowList.padding = 0.0f;
+    rowList.spacing = 0.0f;
+    auto rowItem = std::make_shared<UIWidget>();
+    rowItem->shape.size = Vector2(10.0f, 20.0f);
+    rowList.attachChild(rowItem);
+    rowList.shape.setBox(Vector2(0.0f, 0.0f), Vector2(100.0f, 40.0f));
+    rowList.layout();
+    EOKAS_EXPECT(_FloatEqual(boxTop(rowItem->shape), -10.0f));
+
     UIGrid grid;
     grid.columns = 2;
     grid.cellWidth = 16.0f;
@@ -217,6 +229,24 @@ EOKAS_TEST_CASE(ui) {
     EOKAS_EXPECT(button.label() != nullptr);
     EOKAS_EXPECT(button.label()->text == "OK");
 
+    int closeHits = 0;
+    int clickHits = 0;
+    UITag tag;
+    tag.caption().text = "Alpha";
+    tag.caption().shape.size = Vector2(30.0f, 12.0f);
+    tag.onClose = [&]() { closeHits += 1; };
+    tag.onClick = [&]() { clickHits += 1; };
+    tag.layout();
+    EOKAS_EXPECT(tag.caption().text == "Alpha");
+    Vector2 closeScreen = tag.localToScreen(Vector2(tag.shape.size.x - 2.0f, tag.shape.size.y * 0.5f));
+    EOKAS_EXPECT(tag.handleClick(closeScreen.x, closeScreen.y));
+    EOKAS_EXPECT(closeHits == 1);
+    EOKAS_EXPECT(clickHits == 0);
+    Vector2 captionScreen = tag.localToScreen(Vector2(tag.paddingX + 2.0f, tag.shape.size.y * 0.5f));
+    EOKAS_EXPECT(tag.handleClick(captionScreen.x, captionScreen.y));
+    EOKAS_EXPECT(clickHits == 1);
+    EOKAS_EXPECT(closeHits == 1);
+
     UIMenu menu;
     auto item = std::make_shared<UIMenuItem>();
     item->setText("File");
@@ -261,6 +291,174 @@ EOKAS_TEST_CASE(ui) {
     dropdown.setValue(2);
     EOKAS_EXPECT(dropdown.value == 2);
     EOKAS_EXPECT(dropdown.labelOf(2) == "Two");
+
+    UINumberPicker numbers;
+    numbers.setRange(0, 10);
+    numbers.setValue(12);
+    EOKAS_EXPECT(numbers.value == 10);
+    numbers.setValue(-3);
+    EOKAS_EXPECT(numbers.value == 0);
+    numbers.wrap = true;
+    numbers.setRange(0, 23);
+    numbers.setValue(24);
+    EOKAS_EXPECT(numbers.value == 0);
+    numbers.setValue(23);
+    numbers.step(1, true);
+    EOKAS_EXPECT(numbers.value == 0);
+    numbers.step(-1, true);
+    EOKAS_EXPECT(numbers.value == 23);
+    int numberHits = 0;
+    int numberCommits = 0;
+    numbers.onValueChanged = [&](int) { numberHits += 1; };
+    numbers.onValueCommitted = [&](int) { numberCommits += 1; };
+    numbers.setValue(5);
+    EOKAS_EXPECT(numbers.value == 5);
+    EOKAS_EXPECT(numberHits == 1);
+    numbers.step(2, true);
+    EOKAS_EXPECT(numbers.value == 7);
+    EOKAS_EXPECT(numberHits == 2);
+    EOKAS_EXPECT(numberCommits == 1);
+    numbers.shape.setBox(Vector2(0.0f, 0.0f), Vector2(80.0f, 180.0f));
+    numbers.handleWheel(40.0f, 90.0f, 0.0f, -48.0f);
+    EOKAS_EXPECT(numbers.value == 8);
+
+    Vector2 numberV = UINumberPicker::preferredSize(1.0f);
+    EOKAS_EXPECT(_FloatEqual(numberV.x, 52.0f));
+    EOKAS_EXPECT(_FloatEqual(numberV.y, 180.0f));
+    Vector2 numberH = UINumberPicker::preferredSize(1.0f, UIDirection::Horizontal);
+    EOKAS_EXPECT(_FloatEqual(numberH.x, 180.0f));
+    EOKAS_EXPECT(_FloatEqual(numberH.y, 52.0f));
+
+    UINumberPicker stepper;
+    stepper.setRange(0, 10);
+    stepper.setValue(5);
+    stepper.shape.setBox(Vector2(0.0f, 0.0f), numberV);
+    stepper.handleClick(numberV.x * 0.5f, 8.0f);
+    EOKAS_EXPECT(stepper.value == 4);
+    stepper.handleClick(numberV.x * 0.5f, numberV.y - 8.0f);
+    EOKAS_EXPECT(stepper.value == 5);
+    stepper.direction = UIDirection::Horizontal;
+    stepper.shape.setBox(Vector2(0.0f, 0.0f), numberH);
+    stepper.handleClick(8.0f, numberH.y * 0.5f);
+    EOKAS_EXPECT(stepper.value == 4);
+    stepper.handleClick(numberH.x - 8.0f, numberH.y * 0.5f);
+    EOKAS_EXPECT(stepper.value == 5);
+
+    UITimePicker timePicker;
+    timePicker.setTime(25, 99, -1);
+    EOKAS_EXPECT(timePicker.hour() == 23);
+    EOKAS_EXPECT(timePicker.minute() == 59);
+    EOKAS_EXPECT(timePicker.second() == 0);
+    timePicker.setTime(18, 7, 9);
+    EOKAS_EXPECT(timePicker.hour() == 18);
+    EOKAS_EXPECT(timePicker.minute() == 7);
+    EOKAS_EXPECT(timePicker.second() == 9);
+    timePicker.showSeconds = false;
+    EOKAS_EXPECT(timePicker.second() == 0);
+
+    UIDatePicker datePicker;
+    EOKAS_EXPECT(UIDatePicker::daysInMonth(2024, 2) == 29);
+    EOKAS_EXPECT(UIDatePicker::daysInMonth(2023, 2) == 28);
+    EOKAS_EXPECT(UIDatePicker::daysInMonth(1900, 2) == 28);
+    EOKAS_EXPECT(UIDatePicker::daysInMonth(2000, 2) == 29);
+    datePicker.setDate(2024, 2, 29);
+    EOKAS_EXPECT(datePicker.year() == 2024);
+    EOKAS_EXPECT(datePicker.month() == 2);
+    EOKAS_EXPECT(datePicker.day() == 29);
+    datePicker.setDate(2023, 2, 29);
+    EOKAS_EXPECT(datePicker.year() == 2023);
+    EOKAS_EXPECT(datePicker.month() == 2);
+    EOKAS_EXPECT(datePicker.day() == 28);
+    datePicker.setDate(2024, 1, 31);
+    datePicker.setDate(2024, 2, 31);
+    EOKAS_EXPECT(datePicker.day() == 29);
+
+    UIDateTimePicker dateTime;
+    dateTime.setDateTime(2026, 11, 7, 13, 30, 45);
+    EOKAS_EXPECT(dateTime.year() == 2026);
+    EOKAS_EXPECT(dateTime.month() == 11);
+    EOKAS_EXPECT(dateTime.day() == 7);
+    EOKAS_EXPECT(dateTime.hour() == 13);
+    EOKAS_EXPECT(dateTime.minute() == 30);
+    EOKAS_EXPECT(dateTime.second() == 45);
+    TimePoint stamp = dateTime.value();
+    EOKAS_EXPECT(stamp.year() == 2026);
+    EOKAS_EXPECT(stamp.month() == 11);
+    EOKAS_EXPECT(stamp.date() == 7);
+    EOKAS_EXPECT(stamp.hour() == 13);
+    EOKAS_EXPECT(stamp.minute() == 30);
+    EOKAS_EXPECT(stamp.second() == 45);
+    dateTime.setValue(TimePoint(2020, 2, 29, 23, 59, 59));
+    EOKAS_EXPECT(dateTime.year() == 2020);
+    EOKAS_EXPECT(dateTime.month() == 2);
+    EOKAS_EXPECT(dateTime.day() == 29);
+    EOKAS_EXPECT(dateTime.hour() == 23);
+    EOKAS_EXPECT(dateTime.minute() == 59);
+    EOKAS_EXPECT(dateTime.second() == 59);
+
+    Vector2 dateV = UIDatePicker::preferredSize(1.0f);
+    Vector2 dateH = UIDatePicker::preferredSize(1.0f, UIDirection::Horizontal);
+    EOKAS_EXPECT(_FloatEqual(dateV.x, 224.0f));
+    EOKAS_EXPECT(_FloatEqual(dateV.y, 200.0f));
+    EOKAS_EXPECT(_FloatEqual(dateH.x, 200.0f));
+    EOKAS_EXPECT(_FloatEqual(dateH.y, 204.0f));
+    Vector2 timeV = UITimePicker::preferredSize(1.0f, true);
+    Vector2 timeH = UITimePicker::preferredSize(1.0f, true, UIDirection::Horizontal);
+    EOKAS_EXPECT(_FloatEqual(timeV.x, 204.0f));
+    EOKAS_EXPECT(_FloatEqual(timeV.y, 200.0f));
+    EOKAS_EXPECT(_FloatEqual(timeH.x, 200.0f));
+    EOKAS_EXPECT(_FloatEqual(timeH.y, 204.0f));
+    Vector2 dateTimeV = UIDateTimePicker::preferredSize(1.0f, true);
+    Vector2 dateTimeH = UIDateTimePicker::preferredSize(1.0f, true, UIDirection::Horizontal);
+    EOKAS_EXPECT(_FloatEqual(dateTimeV.x, 460.0f));
+    EOKAS_EXPECT(_FloatEqual(dateTimeV.y, 220.0f));
+    EOKAS_EXPECT(_FloatEqual(dateTimeH.x, 220.0f));
+    EOKAS_EXPECT(_FloatEqual(dateTimeH.y, 440.0f));
+
+    auto countDirected = [](UIWidget& root, UIDirection expected)
+    {
+        int count = 0;
+        for (const auto& child : root.children())
+        {
+            auto* numbers = dynamic_cast<UINumberPicker*>(child.get());
+            if (numbers != nullptr)
+            {
+                if (numbers->direction != expected) return -1;
+                count += 1;
+            }
+            auto* date = dynamic_cast<UIDatePicker*>(child.get());
+            if (date != nullptr)
+            {
+                if (date->direction != expected) return -1;
+                count += 1;
+            }
+            auto* time = dynamic_cast<UITimePicker*>(child.get());
+            if (time != nullptr)
+            {
+                if (time->direction != expected) return -1;
+                count += 1;
+            }
+        }
+        return count;
+    };
+
+    UIDatePicker dateDirected;
+    dateDirected.direction = UIDirection::Horizontal;
+    dateDirected.shape.setBox(Vector2(0.0f, 0.0f), dateH);
+    dateDirected.layout();
+    EOKAS_EXPECT(countDirected(dateDirected, UIDirection::Horizontal) == 3);
+
+    UITimePicker timeDirected;
+    timeDirected.direction = UIDirection::Horizontal;
+    timeDirected.shape.setBox(Vector2(0.0f, 0.0f), timeH);
+    timeDirected.layout();
+    EOKAS_EXPECT(countDirected(timeDirected, UIDirection::Horizontal) == 3);
+
+    UIDateTimePicker dateTimeDirected;
+    dateTimeDirected.direction = UIDirection::Horizontal;
+    dateTimeDirected.shape.setBox(Vector2(0.0f, 0.0f), dateTimeH);
+    dateTimeDirected.layout();
+    EOKAS_EXPECT(countDirected(dateTimeDirected, UIDirection::Horizontal) == 2);
 
     UIPrimitive primitive;
     primitive.begin();

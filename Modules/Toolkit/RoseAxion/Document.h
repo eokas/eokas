@@ -22,6 +22,7 @@ namespace eokas::RoseAxion {
         String name;
         FieldKind kind = FieldKind::Text;
         std::vector<FieldOption> options;
+        float width = 168.0f;
     };
 
     class TableDocument
@@ -40,10 +41,18 @@ namespace eokas::RoseAxion {
         u32_t rowCount() const;
         u32_t columnCount() const;
         TableColumn column(u32_t index) const;
+        float columnWidth(u32_t index) const;
+        bool setColumnWidth(u32_t index, float width);
+        float headWidth() const;
+        bool setHeadWidth(float width);
 
         bool cellIsNull(u32_t row, u32_t column) const;
         String cellText(u32_t row, u32_t column) const;
         bool setCellText(u32_t row, u32_t column, const String& text);
+        std::vector<String> cellLabels(u32_t row, u32_t column) const;
+        bool setCellLabels(u32_t row, u32_t column, const std::vector<String>& labels);
+        bool renameOptionLabel(u32_t column, const String& from, const String& to);
+        bool dropOptionLabel(u32_t column, const String& label);
 
         bool setColumnName(u32_t column, const String& name);
         bool columnChangeClears(u32_t column, FieldKind kind) const;
@@ -58,12 +67,19 @@ namespace eokas::RoseAxion {
     private:
         bool bind();
         void refreshIds();
+        void ensureLayoutFields();
+        float readFloat(rose::Value* object, const char* field, float fallback) const;
+        rose::Value* rebuildColumn(u32_t index, float width);
         rose::Schema* storage(FieldKind kind) const;
         rose::Value* columnValue(u32_t index) const;
         rose::Value* rowValue(u32_t index) const;
         String readString(rose::Value* object, const char* field) const;
         void writeCell(u32_t row, const TableColumn& column, const String& text);
         void putNull(rose::Value* row, const String& field, rose::Schema* schema);
+        void ensureSelectedSchema();
+        std::vector<String> readLabels(u32_t row, u32_t column) const;
+        std::vector<String> filterLabels(const std::vector<String>& labels, const std::vector<FieldOption>& options) const;
+        void writeLabels(u32_t row, const TableColumn& column, const std::vector<String>& labels);
         rose::Value* makeColumn(const String& id, const String& name, FieldKind kind, const std::vector<FieldOption>& options);
         rose::Value* makeOptions(const std::vector<FieldOption>& options);
         String makeId();
@@ -81,6 +97,7 @@ namespace eokas::RoseAxion {
         rose::Schema* mBool = nullptr;
         rose::Schema* mOptionSchema = nullptr;
         rose::Schema* mOptionsSchema = nullptr;
+        rose::Schema* mSelectedSchema = nullptr;
         rose::Schema* mColumnSchema = nullptr;
         rose::Value* mColumns = nullptr;
         rose::Value* mRows = nullptr;

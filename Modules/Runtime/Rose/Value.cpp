@@ -119,7 +119,7 @@ namespace eokas::rose
         if (schema->type() == SchemaType::Struct)
         {
             size_t index = this->objects.size();
-            Object &object = this->objects.emplace_back();
+            this->objects.emplace_back();
 
             Value &value = this->values.emplace_back();
             value.set(schema, u32_t(index));
@@ -128,7 +128,7 @@ namespace eokas::rose
             {
                 auto *member = schema->getMember(i);
                 Value *v = this->make(member->schema);
-                object.members.emplace(member->name, *v);
+                this->objects[index].members.emplace(member->name, *v);
             }
 
             return &value;

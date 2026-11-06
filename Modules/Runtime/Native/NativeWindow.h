@@ -74,6 +74,8 @@ namespace eokas
         // Display connection for handle(). X11 Display* on Linux. Null on Windows and macOS.
         void* display() const;
 
+        // Return false to cancel a user close. Unset or true continues to destroy.
+        std::function<bool()> onCloseQuery;
         // Fired when the user or the owner closes the window, before the platform window is destroyed.
         std::function<void()> onClose;
         std::function<void(float width, float height)> onClientSize;

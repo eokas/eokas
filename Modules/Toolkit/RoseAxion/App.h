@@ -2,14 +2,16 @@
 #define _EOKAS_ROSE_AXION_APP_H_
 
 #include "./Document.h"
+#include "./Editor.h"
 
 #include "UI/UIEvent.h"
 
-#include <chrono>
 #include <functional>
+#include <memory>
 
 namespace eokas {
     class UIWindow;
+    class UIWidget;
 }
 
 namespace eokas::RoseAxion {
@@ -23,6 +25,7 @@ namespace eokas::RoseAxion {
         std::function<void(const String&)> openExternal;
         std::function<bool()> ctrlDown;
         std::function<void(const String&)> setTitle;
+        std::function<void()> requestQuit;
     };
 
     class AxionApp
@@ -31,21 +34,29 @@ namespace eokas::RoseAxion {
         void attach(UIWindow& window, const AxionHost& host, const String& fontPath, float scale);
         void resize(float width, float height);
         void tick();
+        bool resizeCursorAt(float x, float y) const;
+        bool requestClose();
 
     private:
+        enum class ConfirmKind { None, ChangeType, DeleteColumn, Unsaved };
+        enum class PendingAction { None, New, Open, Close };
+
         void requestRebuild();
         void build();
         void notifyTitle();
         bool handleShortcut(UIKeyCode key, bool ctrl);
-        void finishEdit(const String& text, int rowDelta, int colDelta);
-        void beginEdit(int row, int col, const String& seed);
-        void selectCell(int row, int col);
-        void selectAll();
+        void resetView();
+        bool confirmUnsaved(PendingAction action);
+        void runPending();
+        void applyNewDocument();
+        void applyOpenDocument();
         void newDocument();
         void openDocument();
-        void saveDocument();
+        bool saveDocument();
+        bool saveDocumentAs();
         String fileTitle() const;
         bool handleEscape();
+        RoseEditor::Host editorHost();
 
         UIWindow* mWindow = nullptr;
         AxionHost mHost;
@@ -55,35 +66,16 @@ namespace eokas::RoseAxion {
         float mScale = 1.0f;
         bool mRebuild = true;
         TableDocument mDoc;
+        std::shared_ptr<RoseEditor> mEditor;
 
-        enum class SelectKind { None, Cell, Row, Column, All };
-        enum class EditKind { None, Cell, Header };
-        enum class ConfirmKind { None, ChangeType, DeleteColumn };
-
-        SelectKind mSelect = SelectKind::None;
-        EditKind mEdit = EditKind::None;
         ConfirmKind mConfirm = ConfirmKind::None;
-        int mSelectRow = 0;
-        int mSelectCol = 0;
-        int mEditRow = 0;
-        int mEditCol = 0;
-        String mEditSeed;
-        int mSettingsCol = -1;
-        int mDateRow = -1;
-        int mDateCol = -1;
-        int mPickRow = -1;
-        int mPickCol = -1;
-        int mColorIndex = -1;
+        PendingAction mPending = PendingAction::None;
+        bool mCloseAllowed = false;
+        int mConfirmCol = -1;
         FieldKind mPendingKind = FieldKind::Text;
-        String mDateDraft;
-        String mTimeDraft;
-        std::chrono::steady_clock::time_point mClickTime {};
-        int mClickRow = -1;
-        int mClickCol = -1;
-        bool mClickHeader = false;
         bool mResetScroll = false;
     };
 
 }
 
-#endif//_EOKAS_ROSE_AXION_APP_H_
+#endif

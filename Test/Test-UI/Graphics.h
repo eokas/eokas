@@ -779,9 +779,17 @@ namespace eokas::ui {
                 head->direction = UIDirection::Horizontal;
                 head->padding = tabPad;
                 head->spacing = 0.0f;
+                head->centerCross = true;
                 setBox(head, Rect(0.0f, 0.0f, 0.0f, tabH));
                 head->color = regionHead;
-                head->attachChild(textOf(title, tabPx, tabPx, tabPx, ink));
+                auto label = std::make_shared<UIText>();
+                label->pickable = false;
+                label->style.fontPath = fontPath;
+                label->style.fontSize = tabPx;
+                label->style.color = ink;
+                label->text = title;
+                label->maxWidth = 0.0f;
+                head->attachChild(label);
                 return head;
             };
             auto noteBody = [&](const char* value)
@@ -1311,9 +1319,265 @@ namespace eokas::ui {
             colorPage->refit();
             colorView->addChild(colorPage);
             auto colorTab = makePage("Color", colorView);
+
+            auto dateView = std::make_shared<UIView>();
+            dateView->color = canvas;
+            dateView->scrollbarThickness = 8.0f * s;
+            dateView->scrollbar = Color(0.40f, 0.44f, 0.52f, 1.0f);
+            dateView->scrollbarTrack = Color(0.078f, 0.086f, 0.110f, 1.0f);
+            dateView->scrollbarPressed = accent;
+            auto paintNumber = [&](UINumberPicker& picker)
+            {
+                picker.uiScale = s;
+                picker.setFont(fontPath, smallPx);
+                picker.background = Color(0.120f, 0.129f, 0.165f, 1.0f);
+                picker.field = field;
+                picker.ink = ink;
+                picker.muted = mute;
+                picker.accent = accent;
+                picker.button = neutral;
+                picker.buttonHover = neutralHover;
+                picker.buttonPress = neutralPress;
+                picker.line = Color(0.050f, 0.055f, 0.070f, 1.0f);
+            };
+            auto paintTime = [&](UITimePicker& picker)
+            {
+                picker.uiScale = s;
+                picker.setFont(fontPath, smallPx);
+                picker.background = Color(0.120f, 0.129f, 0.165f, 1.0f);
+                picker.field = field;
+                picker.ink = ink;
+                picker.muted = mute;
+                picker.accent = accent;
+                picker.button = neutral;
+                picker.buttonHover = neutralHover;
+                picker.buttonPress = neutralPress;
+                picker.line = Color(0.050f, 0.055f, 0.070f, 1.0f);
+            };
+            auto paintDate = [&](UIDatePicker& picker)
+            {
+                picker.uiScale = s;
+                picker.setFont(fontPath, smallPx);
+                picker.background = Color(0.120f, 0.129f, 0.165f, 1.0f);
+                picker.field = field;
+                picker.ink = ink;
+                picker.muted = mute;
+                picker.accent = accent;
+                picker.button = neutral;
+                picker.buttonHover = neutralHover;
+                picker.buttonPress = neutralPress;
+                picker.line = Color(0.050f, 0.055f, 0.070f, 1.0f);
+            };
+            auto paintDateTime = [&](UIDateTimePicker& picker)
+            {
+                picker.uiScale = s;
+                picker.setFont(fontPath, smallPx);
+                picker.background = Color(0.120f, 0.129f, 0.165f, 1.0f);
+                picker.field = field;
+                picker.ink = ink;
+                picker.muted = mute;
+                picker.accent = accent;
+                picker.button = neutral;
+                picker.buttonHover = neutralHover;
+                picker.buttonPress = neutralPress;
+                picker.line = Color(0.050f, 0.055f, 0.070f, 1.0f);
+            };
+
+            Vector2 dateSize = UIDatePicker::preferredSize(s);
+            Vector2 timeSize = UITimePicker::preferredSize(s, true);
+            Vector2 dateTimeSize = UIDateTimePicker::preferredSize(s, true);
+            Vector2 dateSizeH = UIDatePicker::preferredSize(s, UIDirection::Horizontal);
+            Vector2 timeSizeH = UITimePicker::preferredSize(s, true, UIDirection::Horizontal);
+            Vector2 dateTimeSizeH = UIDateTimePicker::preferredSize(s, true, UIDirection::Horizontal);
+            auto datePicker = std::make_shared<UIDatePicker>();
+            paintDate(*datePicker);
+            datePicker->setDate(2026, 11, 7);
+            setBox(datePicker, Rect(0.0f, 0.0f, dateSize.x, dateSize.y));
+            auto timePicker = std::make_shared<UITimePicker>();
+            paintTime(*timePicker);
+            timePicker->setTime(13, 30, 45);
+            setBox(timePicker, Rect(0.0f, 0.0f, timeSize.x, timeSize.y));
+            auto dateTimePicker = std::make_shared<UIDateTimePicker>();
+            paintDateTime(*dateTimePicker);
+            dateTimePicker->setDateTime(2026, 11, 7, 13, 30, 45);
+            setBox(dateTimePicker, Rect(0.0f, 0.0f, dateTimeSize.x, dateTimeSize.y));
+            auto datePickerH = std::make_shared<UIDatePicker>();
+            datePickerH->direction = UIDirection::Horizontal;
+            paintDate(*datePickerH);
+            datePickerH->setDate(2026, 11, 7);
+            setBox(datePickerH, Rect(0.0f, 0.0f, dateSizeH.x, dateSizeH.y));
+            auto timePickerH = std::make_shared<UITimePicker>();
+            timePickerH->direction = UIDirection::Horizontal;
+            paintTime(*timePickerH);
+            timePickerH->setTime(13, 30, 45);
+            setBox(timePickerH, Rect(0.0f, 0.0f, timeSizeH.x, timeSizeH.y));
+            auto dateTimePickerH = std::make_shared<UIDateTimePicker>();
+            dateTimePickerH->direction = UIDirection::Horizontal;
+            paintDateTime(*dateTimePickerH);
+            dateTimePickerH->setDateTime(2026, 11, 7, 13, 30, 45);
+            setBox(dateTimePickerH, Rect(0.0f, 0.0f, dateTimeSizeH.x, dateTimeSizeH.y));
+
+            float dateSideW = 280.0f * s;
+            float dateSideInner = dateSideW - cardPad * 2.0f;
+            auto dateLive = textOf("Live", dateSideInner, smallPx, smallPx, ink);
+            auto dateCommitted = textOf("Committed", dateSideInner, smallPx, smallPx, mute);
+            auto formatStamp = [](int year, int month, int day, int hour, int minute, int second)
+            {
+                return String::format("%04d-%02d-%02d  %02d:%02d:%02d", year, month, day, hour, minute, second);
+            };
+            UIText* dateLivePtr = dateLive.get();
+            UIText* dateCommittedPtr = dateCommitted.get();
+            UIDatePicker* datePtr = datePicker.get();
+            UITimePicker* timePtr = timePicker.get();
+            UIDateTimePicker* dateTimePtr = dateTimePicker.get();
+            UIDatePicker* datePtrH = datePickerH.get();
+            UITimePicker* timePtrH = timePickerH.get();
+            UIDateTimePicker* dateTimePtrH = dateTimePickerH.get();
+            auto refreshLive = [dateLivePtr, formatStamp](const char* label, int year, int month, int day, int hour, int minute, int second)
+            {
+                dateLivePtr->text = String(label) + String("   ") + formatStamp(year, month, day, hour, minute, second);
+            };
+            auto refreshCommitted = [dateCommittedPtr, formatStamp](const char* label, int year, int month, int day, int hour, int minute, int second)
+            {
+                dateCommittedPtr->text = String(label) + String("   ") + formatStamp(year, month, day, hour, minute, second);
+            };
+            datePicker->onDateChanged = [refreshLive, datePtr]()
+            {
+                refreshLive("Date", datePtr->year(), datePtr->month(), datePtr->day(), 0, 0, 0);
+            };
+            datePicker->onDateCommitted = [refreshCommitted, datePtr]()
+            {
+                refreshCommitted("Date", datePtr->year(), datePtr->month(), datePtr->day(), 0, 0, 0);
+            };
+            timePicker->onTimeChanged = [refreshLive, timePtr]()
+            {
+                refreshLive("Time", 0, 0, 0, timePtr->hour(), timePtr->minute(), timePtr->second());
+            };
+            timePicker->onTimeCommitted = [refreshCommitted, timePtr]()
+            {
+                refreshCommitted("Time", 0, 0, 0, timePtr->hour(), timePtr->minute(), timePtr->second());
+            };
+            dateTimePicker->onDateTimeChanged = [refreshLive, dateTimePtr]()
+            {
+                refreshLive("DateTime", dateTimePtr->year(), dateTimePtr->month(), dateTimePtr->day(), dateTimePtr->hour(), dateTimePtr->minute(), dateTimePtr->second());
+            };
+            dateTimePicker->onDateTimeCommitted = [refreshCommitted, dateTimePtr]()
+            {
+                refreshCommitted("DateTime", dateTimePtr->year(), dateTimePtr->month(), dateTimePtr->day(), dateTimePtr->hour(), dateTimePtr->minute(), dateTimePtr->second());
+            };
+            datePickerH->onDateChanged = [refreshLive, datePtrH]()
+            {
+                refreshLive("Date", datePtrH->year(), datePtrH->month(), datePtrH->day(), 0, 0, 0);
+            };
+            datePickerH->onDateCommitted = [refreshCommitted, datePtrH]()
+            {
+                refreshCommitted("Date", datePtrH->year(), datePtrH->month(), datePtrH->day(), 0, 0, 0);
+            };
+            timePickerH->onTimeChanged = [refreshLive, timePtrH]()
+            {
+                refreshLive("Time", 0, 0, 0, timePtrH->hour(), timePtrH->minute(), timePtrH->second());
+            };
+            timePickerH->onTimeCommitted = [refreshCommitted, timePtrH]()
+            {
+                refreshCommitted("Time", 0, 0, 0, timePtrH->hour(), timePtrH->minute(), timePtrH->second());
+            };
+            dateTimePickerH->onDateTimeChanged = [refreshLive, dateTimePtrH]()
+            {
+                refreshLive("DateTime", dateTimePtrH->year(), dateTimePtrH->month(), dateTimePtrH->day(), dateTimePtrH->hour(), dateTimePtrH->minute(), dateTimePtrH->second());
+            };
+            dateTimePickerH->onDateTimeCommitted = [refreshCommitted, dateTimePtrH]()
+            {
+                refreshCommitted("DateTime", dateTimePtrH->year(), dateTimePtrH->month(), dateTimePtrH->day(), dateTimePtrH->hour(), dateTimePtrH->minute(), dateTimePtrH->second());
+            };
+            refreshLive("DateTime", dateTimePicker->year(), dateTimePicker->month(), dateTimePicker->day(), dateTimePicker->hour(), dateTimePicker->minute(), dateTimePicker->second());
+            refreshCommitted("DateTime", dateTimePicker->year(), dateTimePicker->month(), dateTimePicker->day(), dateTimePicker->hour(), dateTimePicker->minute(), dateTimePicker->second());
+
+            Vector2 numberSize = UINumberPicker::preferredSize(s);
+            Vector2 numberSizeH = UINumberPicker::preferredSize(s, UIDirection::Horizontal);
+            auto makeNumber = [&](UIDirection dir, const Vector2& size)
+            {
+                auto picker = std::make_shared<UINumberPicker>();
+                paintNumber(*picker);
+                picker->direction = dir;
+                picker->setRange(0, 23);
+                picker->wrap = true;
+                picker->formatter = [](int v) { return String::format("%02d", v); };
+                picker->setValue(13);
+                setBox(picker, Rect(0.0f, 0.0f, size.x, size.y));
+                picker->onValueChanged = [dateLivePtr](int value)
+                {
+                    dateLivePtr->text = String::format("Number   %02d", value);
+                };
+                picker->onValueCommitted = [dateCommittedPtr](int value)
+                {
+                    dateCommittedPtr->text = String::format("Number   %02d", value);
+                };
+                return picker;
+            };
+            auto numberPicker = makeNumber(UIDirection::Vertical, numberSize);
+            auto numberPickerH = makeNumber(UIDirection::Horizontal, numberSizeH);
+
+            auto dateSide = card(dateSideW);
+            dateSide->attachChild(textOf("Preview", dateSideInner, smallPx, smallPx, mute));
+            dateSide->attachChild(dateLive);
+            dateSide->attachChild(dateCommitted);
+            dateSide->attachChild(textOf("Wheel, click the end arrows, or drag. Arrow keys step the focused wheel.", dateSideInner, smallPx, smallPx, mute));
+            dateSide->attachChild(textOf("Number vertical", dateSideInner, smallPx, smallPx, mute));
+            dateSide->attachChild(numberPicker);
+            dateSide->attachChild(textOf("Number horizontal", dateSideInner, smallPx, smallPx, mute));
+            dateSide->attachChild(numberPickerH);
+            dateSide->refit();
+
+            float pickersH = dateSize.y;
+            if (timeSize.y > pickersH) pickersH = timeSize.y;
+            float pairW = dateSize.x + colGap + timeSize.x;
+            float pickersH2 = dateSizeH.y;
+            if (timeSizeH.y > pickersH2) pickersH2 = timeSizeH.y;
+            float pairWH = dateSizeH.x + colGap + timeSizeH.x;
+            float stackW = pairW;
+            if (dateTimeSize.x > stackW) stackW = dateTimeSize.x;
+            if (pairWH > stackW) stackW = pairWH;
+            if (dateTimeSizeH.x > stackW) stackW = dateTimeSizeH.x;
+            auto dateRow = hrow(pairW, pickersH, colGap);
+            dateRow->attachChild(datePicker);
+            dateRow->attachChild(timePicker);
+            auto dateRowH = hrow(pairWH, pickersH2, colGap);
+            dateRowH->attachChild(datePickerH);
+            dateRowH->attachChild(timePickerH);
+            auto dateColumns = hrow(stackW + colGap + dateSideW, 0.0f, colGap);
+            auto dateStack = std::make_shared<UIList>();
+            dateStack->direction = UIDirection::Vertical;
+            dateStack->padding = 0.0f;
+            dateStack->spacing = 14.0f * s;
+            dateStack->color = clear;
+            setBox(dateStack, Rect(0.0f, 0.0f, stackW, 0.0f));
+            dateStack->attachChild(dateRow);
+            dateStack->attachChild(dateTimePicker);
+            dateStack->attachChild(dateRowH);
+            dateStack->attachChild(dateTimePickerH);
+            dateStack->refit();
+            float dateBlockH = dateStack->shape.size.y;
+            if (dateSide->shape.size.y > dateBlockH) dateBlockH = dateSide->shape.size.y;
+            setBox(dateColumns, Rect(0.0f, 0.0f, stackW + colGap + dateSideW, dateBlockH));
+            dateColumns->attachChild(dateStack);
+            dateColumns->attachChild(dateSide);
+
+            auto datePage = std::make_shared<UIList>();
+            datePage->direction = UIDirection::Vertical;
+            datePage->padding = pagePad;
+            datePage->spacing = 14.0f * s;
+            datePage->color = clear;
+            setBox(datePage, Rect(0.0f, 0.0f, (float)windowWidth, 0.0f));
+            datePage->attachChild(textOf("Date / Time", innerW, titlePx, titlePx, ink));
+            datePage->attachChild(textOf("Vertical and horizontal wheels. Drag, scroll, click the end arrows, or use the keys.", innerW, smallPx, smallPx, mute));
+            datePage->attachChild(dateColumns);
+            datePage->refit();
+            dateView->addChild(datePage);
+            auto dateTab = makePage("Date", dateView);
             dock->dockPage(makePage("Canvas", board), UIDockMode::Fill);
             dock->dockPage(colorTab, UIDockMode::Fill);
-            dock->activate(colorTab.get());
+            dock->dockPage(dateTab, UIDockMode::Fill);
+            dock->activate(dateTab.get());
             mColorPicker = picker;
             root->attachChild(dock);
             mHost->prepare();

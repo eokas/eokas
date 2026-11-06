@@ -369,6 +369,10 @@ namespace eokas
 - (BOOL)windowShouldClose:(NSWindow*)sender
 {
     (void)sender;
+    auto* window = static_cast<eokas::NativeWindow*>(self.owner);
+    if (window != nullptr && window->onCloseQuery && !window->onCloseQuery()) {
+        return NO;
+    }
     return YES;
 }
 

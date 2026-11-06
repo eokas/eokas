@@ -38,16 +38,75 @@ static void writeCrashText(HANDLE file, const char* text)
     WriteFile(file, text, static_cast<DWORD>(lstrlenA(text)), &written, nullptr);
 }
 
+static bool appendCrashFileName(char* dir, DWORD size)
+{
+    DWORD len = lstrlenA(dir);
+    if (len == 0 || len + 20 >= size)
+    {
+        return false;
+    }
+    if (dir[len - 1] != '\\' && dir[len - 1] != '/')
+    {
+        dir[len] = '\\';
+        dir[len + 1] = 0;
+        ++len;
+    }
+    lstrcpynA(dir + len, "roseaxion-crash.txt", size - len);
+    return true;
+}
+
+static void fillCrashLogPath(char* out, DWORD size)
+{
+    if (out == nullptr || size == 0)
+    {
+        return;
+    }
+    out[0] = 0;
+    char path[MAX_PATH];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    if (n > 0 && n < MAX_PATH)
+    {
+        char* last = nullptr;
+        for (char* p = path; *p != 0; ++p)
+        {
+            if (*p == '\\' || *p == '/')
+            {
+                last = p;
+            }
+        }
+        if (last != nullptr)
+        {
+            last[1] = 0;
+            if (appendCrashFileName(path, MAX_PATH))
+            {
+                lstrcpynA(out, path, size);
+                return;
+            }
+        }
+    }
+    DWORD temp = GetTempPathA(MAX_PATH, path);
+    if (temp > 0 && temp < MAX_PATH && appendCrashFileName(path, MAX_PATH))
+    {
+        lstrcpynA(out, path, size);
+    }
+}
+
 static LONG WINAPI roseAxionCrashFilter(EXCEPTION_POINTERS* info)
 {
-    HANDLE file = CreateFileA(
-        "E:\\Cheelin\\Projects\\eokas\\eokas\\roseaxion-crash.txt",
-        GENERIC_WRITE,
-        FILE_SHARE_READ,
-        nullptr,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        nullptr);
+    char crashPath[MAX_PATH] = {};
+    fillCrashLogPath(crashPath, MAX_PATH);
+    HANDLE file = INVALID_HANDLE_VALUE;
+    if (crashPath[0] != 0)
+    {
+        file = CreateFileA(
+            crashPath,
+            GENERIC_WRITE,
+            FILE_SHARE_READ,
+            nullptr,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+    }
     char line[1024];
     snprintf(
         line,
@@ -303,6 +362,7 @@ namespace {
             host.openExternal = [](const eokas::String& url) { openExternal(url); };
             host.ctrlDown = []() { return ctrlDown(); };
             host.setTitle = [this](const eokas::String& title) { mNative.setTitle(title); };
+            host.requestQuit = [this]() { mNative.close(); };
             mApp.attach(mWindow, host, mFontPath, mScale);
             mApp.resize(mWidth, mHeight);
 
@@ -376,6 +436,10 @@ namespace {
 
         void bindInput()
         {
+            mNative.onCloseQuery = [this]()
+            {
+                return mApp.requestClose();
+            };
             mNative.onClose = [this]()
             {
                 mRunning = false;
@@ -402,6 +466,15 @@ namespace {
             mNative.onMouseMove = [this](float x, float y)
             {
                 mWindow.onMouseMove(x, y);
+            };
+            mNative.onCursor = [this](float x, float y, eokas::NativeCursor& cursor)
+            {
+                if (!mApp.resizeCursorAt(x, y))
+                {
+                    return false;
+                }
+                cursor = eokas::NativeCursor::SizeWestEast;
+                return true;
             };
             mNative.onMouseDown = [this](float x, float y, eokas::NativeMouseButton button)
             {
