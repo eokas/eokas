@@ -6,6 +6,7 @@
 #include "./NativeClipboard.h"
 #include "./NativeDialogs.h"
 #include "./NativeInput.h"
+#include "./NativeUtilities.h"
 #include "./NativeWindow.h"
 
 #endif//_EOKAS_NATIVE_MAIN_H_

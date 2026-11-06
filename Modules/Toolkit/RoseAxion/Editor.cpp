@@ -28,11 +28,16 @@ namespace eokas::RoseAxion {
             FieldKind::Integer,
             FieldKind::Float,
             FieldKind::Boolean,
+            FieldKind::Date,
+            FieldKind::Time,
             FieldKind::DateTime,
             FieldKind::Url,
             FieldKind::Email,
             FieldKind::SingleOption,
             FieldKind::MultiOption,
+            FieldKind::Color,
+            FieldKind::FilePath,
+            FieldKind::FolderPath,
         };
 
         const int kKindCount = static_cast<int>(sizeof(kKinds) / sizeof(kKinds[0]));
@@ -40,6 +45,21 @@ namespace eokas::RoseAxion {
         bool optionKind(FieldKind kind)
         {
             return kind == FieldKind::SingleOption || kind == FieldKind::MultiOption;
+        }
+
+        bool temporalKind(FieldKind kind)
+        {
+            return kind == FieldKind::Date || kind == FieldKind::Time || kind == FieldKind::DateTime;
+        }
+
+        bool pathKind(FieldKind kind)
+        {
+            return kind == FieldKind::FilePath || kind == FieldKind::FolderPath;
+        }
+
+        bool pickerKind(FieldKind kind)
+        {
+            return kind == FieldKind::Boolean || kind == FieldKind::Color || temporalKind(kind) || pathKind(kind);
         }
 
         int clampi(int value, int lo, int hi)
@@ -75,35 +95,7 @@ namespace eokas::RoseAxion {
 
         bool colorFromHex(const String& text, Color& out)
         {
-            String value = trimCopy(text);
-            if (!value.isEmpty() && value.at(0) == '#')
-            {
-                value = value.substr(1);
-            }
-            if (value.length() != 6)
-            {
-                return false;
-            }
-            auto hex = [](char c) -> int
-            {
-                if (c >= '0' && c <= '9') return c - '0';
-                if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-                if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-                return -1;
-            };
-            int channels[3] = {};
-            for (int i = 0; i < 3; ++i)
-            {
-                int hi = hex(value.at(static_cast<size_t>(i * 2)));
-                int lo = hex(value.at(static_cast<size_t>(i * 2 + 1)));
-                if (hi < 0 || lo < 0)
-                {
-                    return false;
-                }
-                channels[i] = hi * 16 + lo;
-            }
-            out = Color(channels[0] / 255.0f, channels[1] / 255.0f, channels[2] / 255.0f, 1.0f);
-            return true;
+            return parseColor(text, out);
         }
 
         std::shared_ptr<UIText> makeText(const String& value, const String& font, float size, const Color& color, float width, float height)
@@ -161,6 +153,27 @@ namespace eokas::RoseAxion {
             }
         };
 
+        struct EscapeColorPicker : UIColorPicker
+        {
+            std::function<void()> onEscape;
+            bool handleKeyPress(const UIKeyEvent& event) override
+            {
+                if (UIColorPicker::handleKeyPress(event))
+                {
+                    return true;
+                }
+                if (event.key == UIKeyCode::Escape)
+                {
+                    if (onEscape)
+                    {
+                        onEscape();
+                    }
+                    return true;
+                }
+                return false;
+            }
+        };
+
         void revealCell(UIView& view, int row, int col, float headW, const std::vector<float>& colWs, float rowH)
         {
             if (row < 0 || col < 0 || col >= static_cast<int>(colWs.size()))
@@ -215,6 +228,45 @@ namespace eokas::RoseAxion {
             widget.shape.setBox(topLeft, Vector2(w, widget.shape.size.y));
         }
 
+        void bindEscape(UIWidget& widget, const std::function<void()>& onEscape)
+        {
+            if (dynamic_cast<UINumberPicker*>(&widget) != nullptr)
+            {
+                widget.onKeyPress = [onEscape](const UIKeyEvent& event)
+                {
+                    if (event.key == UIKeyCode::Escape)
+                    {
+                        onEscape();
+                    }
+                };
+            }
+            for (const auto& child : widget.children())
+            {
+                if (child)
+                {
+                    bindEscape(*child, onEscape);
+                }
+            }
+        }
+
+        template<typename T>
+        void styleTemporalPicker(T& picker, float s, const String& font, float fontSize, const Color& field, const Color& ink, const Color& mute, const Color& accent)
+        {
+            picker.shape.pivot = Vector2(0.0f, 0.0f);
+            picker.uiScale = s;
+            picker.direction = UIDirection::Vertical;
+            picker.setFont(font, fontSize);
+            picker.background = field;
+            picker.field = field;
+            picker.ink = ink;
+            picker.muted = mute;
+            picker.accent = accent;
+            picker.button = Color(0.227f, 0.247f, 0.306f, 1.0f);
+            picker.buttonHover = Color(0.32f, 0.36f, 0.44f, 1.0f);
+            picker.buttonPress = Color(0.16f, 0.18f, 0.22f, 1.0f);
+            picker.line = Color(0.050f, 0.055f, 0.070f, 1.0f);
+        }
+
     }
 
     void RoseEditor::bind(TableDocument& doc, const Host& host)
@@ -252,6 +304,8 @@ namespace eokas::RoseAxion {
         mDateCol = -1;
         mPickRow = -1;
         mPickCol = -1;
+        mColorRow = -1;
+        mColorCol = -1;
         mColorIndex = -1;
         mClickHeader = false;
         mClickRow = -1;
@@ -266,9 +320,12 @@ namespace eokas::RoseAxion {
         mEditAnchor = nullptr;
         mPickAnchor = nullptr;
         mDateAnchor = nullptr;
+        mColorAnchor = nullptr;
         mPickMenu = nullptr;
         mEditInput = nullptr;
         mDatePanel = nullptr;
+        mColorPanel = nullptr;
+        mColorPicker = nullptr;
         mSettingsPanel = nullptr;
         mFocus = nullptr;
         mResizeHandles.clear();
@@ -279,6 +336,8 @@ namespace eokas::RoseAxion {
     {
         mSettingsCol = -1;
         mColorIndex = -1;
+        mColorRow = -1;
+        mColorCol = -1;
     }
 
     float RoseEditor::scrollX() const
@@ -341,6 +400,10 @@ namespace eokas::RoseAxion {
         {
             placeOnOverlay(*mOverlay, *mDatePanel, mDateAnchor->screenBounds(), true);
         }
+        if (mColorPanel != nullptr && mColorAnchor != nullptr)
+        {
+            placeOnOverlay(*mOverlay, *mColorPanel, mColorAnchor->screenBounds(), true);
+        }
         if (mSettingsPanel != nullptr)
         {
             float w = mSettingsPanel->shape.size.x;
@@ -396,9 +459,12 @@ namespace eokas::RoseAxion {
         }
         if (mSettingsCol >= cols) mSettingsCol = -1;
         if (mDateRow >= rows || mDateCol >= cols) { mDateRow = -1; mDateCol = -1; }
+        else if (mDateCol >= 0 && cols > 0 && !temporalKind(mDoc->column(static_cast<u32_t>(mDateCol)).kind)) { mDateRow = -1; mDateCol = -1; }
         if (mPickRow >= rows || mPickCol >= cols) { mPickRow = -1; mPickCol = -1; }
+        if (mColorRow >= rows || mColorCol >= cols) { mColorRow = -1; mColorCol = -1; }
+        else if (mColorCol >= 0 && cols > 0 && mDoc->column(static_cast<u32_t>(mColorCol)).kind != FieldKind::Color) { mColorRow = -1; mColorCol = -1; }
         if (mEdit == EditKind::Cell && (rows <= 0 || cols <= 0 || mEditRow >= rows || mEditCol >= cols)) mEdit = EditKind::None;
-        if (mEdit == EditKind::Cell && cols > 0 && mDoc->column(static_cast<u32_t>(mEditCol)).kind == FieldKind::Boolean) mEdit = EditKind::None;
+        if (mEdit == EditKind::Cell && cols > 0 && pickerKind(mDoc->column(static_cast<u32_t>(mEditCol)).kind)) mEdit = EditKind::None;
         if (mEdit == EditKind::Header && (cols <= 0 || mEditCol >= cols)) mEdit = EditKind::None;
     }
 
@@ -448,30 +514,44 @@ namespace eokas::RoseAxion {
         mSelectRow = row;
         mSelectCol = col;
         mEdit = EditKind::None;
-        if (kind == FieldKind::DateTime)
+        if (temporalKind(kind))
         {
+            TimePoint now;
+            mDateYear = now.year();
+            mDateMonth = now.month();
+            mDateDay = now.date();
+            mDateHour = now.hour();
+            mDateMinute = now.minute();
+            mDateSecond = now.second();
             String shown = mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
-            size_t space = shown.find(' ');
-            if (space != String::npos)
+            if (kind == FieldKind::Date)
             {
-                String date = shown.substr(0, space);
-                String time = shown.substr(space + 1);
-                mDateDraft = String::empty;
-                for (size_t i = 0; i < date.length(); ++i)
-                {
-                    char c = date.at(i);
-                    mDateDraft = mDateDraft + String(c == '/' ? '-' : c);
-                }
-                mTimeDraft = time;
+                parseDate(shown, mDateYear, mDateMonth, mDateDay);
+            }
+            else if (kind == FieldKind::Time)
+            {
+                parseTime(shown, mDateHour, mDateMinute, mDateSecond);
             }
             else
             {
-                TimePoint now;
-                mDateDraft = now.toString("YYYY-MM-DD");
-                mTimeDraft = now.toString("hh:mm:ss");
+                parseDateTime(shown, mDateYear, mDateMonth, mDateDay, mDateHour, mDateMinute, mDateSecond);
             }
             mDateRow = row;
             mDateCol = col;
+            mColorRow = -1;
+            mColorCol = -1;
+            mSettingsCol = -1;
+            mPickRow = -1;
+            mPickCol = -1;
+            this->notifyRebuild();
+            return;
+        }
+        if (kind == FieldKind::Color)
+        {
+            mColorRow = row;
+            mColorCol = col;
+            mDateRow = -1;
+            mDateCol = -1;
             mSettingsCol = -1;
             mPickRow = -1;
             mPickCol = -1;
@@ -482,11 +562,41 @@ namespace eokas::RoseAxion {
         {
             return;
         }
+        if (pathKind(kind))
+        {
+            mSettingsCol = -1;
+            mPickRow = -1;
+            mPickCol = -1;
+            mDateRow = -1;
+            mDateCol = -1;
+            mColorRow = -1;
+            mColorCol = -1;
+            String current = mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
+            String picked = String::empty;
+            if (kind == FieldKind::FilePath && mHost.pickFilePath)
+            {
+                picked = mHost.pickFilePath(current);
+            }
+            else if (kind == FieldKind::FolderPath && mHost.pickFolderPath)
+            {
+                picked = mHost.pickFolderPath(current);
+            }
+            if (!picked.isEmpty())
+            {
+                mDoc->setCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), picked);
+            }
+            this->notifyRebuild();
+            return;
+        }
         if (optionKind(kind))
         {
             mPickRow = row;
             mPickCol = col;
             mSettingsCol = -1;
+            mDateRow = -1;
+            mDateCol = -1;
+            mColorRow = -1;
+            mColorCol = -1;
             this->notifyRebuild();
             return;
         }
@@ -496,6 +606,10 @@ namespace eokas::RoseAxion {
         mEditSeed = seed;
         mPickRow = -1;
         mPickCol = -1;
+        mDateRow = -1;
+        mDateCol = -1;
+        mColorRow = -1;
+        mColorCol = -1;
         this->notifyRebuild();
     }
 
@@ -574,6 +688,18 @@ namespace eokas::RoseAxion {
             this->notifyRebuild();
             return true;
         }
+        if (mColorRow >= 0 || mColorCol >= 0)
+        {
+            if (mColorPicker != nullptr && mColorPicker->eyeDropping())
+            {
+                mColorPicker->cancelEyeDropper();
+                return true;
+            }
+            mColorRow = -1;
+            mColorCol = -1;
+            this->notifyRebuild();
+            return true;
+        }
         if (mEdit != EditKind::None)
         {
             mEdit = EditKind::None;
@@ -588,6 +714,27 @@ namespace eokas::RoseAxion {
             return true;
         }
         return false;
+    }
+
+    bool RoseEditor::colorDropping() const
+    {
+        return mColorPicker != nullptr && mColorPicker->eyeDropping();
+    }
+
+    void RoseEditor::sampleColorDropper(float x, float y, bool commit)
+    {
+        if (mColorPicker != nullptr)
+        {
+            mColorPicker->sampleEyeDropper(x, y, commit);
+        }
+    }
+
+    void RoseEditor::cancelColorDropper()
+    {
+        if (mColorPicker != nullptr)
+        {
+            mColorPicker->cancelEyeDropper();
+        }
     }
 
     bool RoseEditor::resizeCursorAt(float x, float y) const
@@ -710,9 +857,12 @@ namespace eokas::RoseAxion {
         mEditAnchor = nullptr;
         mPickAnchor = nullptr;
         mDateAnchor = nullptr;
+        mColorAnchor = nullptr;
         mPickMenu = nullptr;
         mEditInput = nullptr;
         mDatePanel = nullptr;
+        mColorPanel = nullptr;
+        mColorPicker = nullptr;
         mSettingsPanel = nullptr;
         mFocus = nullptr;
         mResizeHandles.clear();
@@ -1092,7 +1242,7 @@ namespace eokas::RoseAxion {
                 more->onClick = [this, col, moreRaw, showPopup]()
                 {
                     showPopup(*moreRaw, {
-                        {"字段设置", [this, col]() { mSettingsCol = col; mDateRow = -1; mDateCol = -1; mColorIndex = -1; this->notifyRebuild(); }},
+                        {"字段设置", [this, col]() { mSettingsCol = col; mDateRow = -1; mDateCol = -1; mColorRow = -1; mColorCol = -1; mColorIndex = -1; this->notifyRebuild(); }},
                         {"在左边插入一列", [this, col]() { mDoc->insertColumn(static_cast<u32_t>(col)); mSelect = SelectKind::Column; mSelectCol = col; this->notifyRebuild(); }},
                         {"在右边插入一列", [this, col]() { mDoc->insertColumn(static_cast<u32_t>(col + 1)); mSelect = SelectKind::Column; mSelectCol = col + 1; this->notifyRebuild(); }},
                     });
@@ -1256,7 +1406,7 @@ namespace eokas::RoseAxion {
                 };
                 hit->onKeyChar = [this, row, col, kind = info.kind](uint32_t character)
                 {
-                    if (character < 32 || character == 127 || kind == FieldKind::Boolean)
+                    if (character < 32 || character == 127 || pickerKind(kind))
                     {
                         return;
                     }
@@ -1306,6 +1456,54 @@ namespace eokas::RoseAxion {
                     }
                     attachOptionTags(*hit, hitSize, row, col, info, labels);
                 }
+                else if (info.kind == FieldKind::Color)
+                {
+                    Color chip;
+                    if (parseColor(shown, chip))
+                    {
+                        float swatch = 14.0f * s;
+                        if (swatch > hitSize.y - 4.0f * s)
+                        {
+                            swatch = hitSize.y - 4.0f * s;
+                        }
+                        if (swatch < 1.0f)
+                        {
+                            swatch = 1.0f;
+                        }
+                        float borderW = 1.0f * s;
+                        if (borderW > swatch * 0.25f)
+                        {
+                            borderW = swatch * 0.25f;
+                        }
+                        auto border = std::make_shared<UIWidget>();
+                        border->pickable = false;
+                        border->shape.pivot = Vector2(0.0f, 0.0f);
+                        border->color = Color(0.040f, 0.043f, 0.055f, 1.0f);
+                        setBox(border, Rect(textPadX, (hitSize.y - swatch) * 0.5f, swatch, swatch));
+                        auto swatchFill = std::make_shared<UIWidget>();
+                        swatchFill->pickable = false;
+                        swatchFill->shape.pivot = Vector2(0.0f, 0.0f);
+                        swatchFill->color = chip;
+                        float inner = swatch - borderW * 2.0f;
+                        if (inner < 1.0f)
+                        {
+                            inner = 1.0f;
+                        }
+                        setBox(swatchFill, Rect(borderW, borderW, inner, inner));
+                        border->attachChild(swatchFill);
+                        hit->attachChild(border);
+                        String hex = formatColor(chip);
+                        float labelX = textPadX + swatch + 6.0f * s;
+                        float labelW = hitSize.x - labelX - textPadX;
+                        if (labelW < 1.0f)
+                        {
+                            labelW = 1.0f;
+                        }
+                        auto label = makeText(hex, fontPath, fontPx, chip, labelW, 22.0f * s);
+                        centerText(label, labelX, labelW, hitSize.y);
+                        hit->attachChild(label);
+                    }
+                }
                 else
                 {
                     auto label = makeText(shown, fontPath, fontPx, textColor, hitSize.x - textPadX * 2.0f, 22.0f * s);
@@ -1325,7 +1523,11 @@ namespace eokas::RoseAxion {
                 {
                     mDateAnchor = hit.get();
                 }
-                if (mFocus == nullptr && cellSelected && (!editing || info.kind == FieldKind::Boolean))
+                if (mColorRow == row && mColorCol == col)
+                {
+                    mColorAnchor = hit.get();
+                }
+                if (mFocus == nullptr && cellSelected && (!editing || pickerKind(info.kind)))
                 {
                     mFocus = hit.get();
                 }
@@ -1397,6 +1599,11 @@ namespace eokas::RoseAxion {
         {
             revealRow = mDateRow;
             revealCol = mDateCol;
+        }
+        else if (mColorRow >= 0 && mColorCol >= 0)
+        {
+            revealRow = mColorRow;
+            revealCol = mColorCol;
         }
         else if (mSelect == SelectKind::Cell)
         {
@@ -1522,21 +1729,36 @@ namespace eokas::RoseAxion {
 
         if (mDateRow >= 0 && mDateCol >= 0)
         {
+            FieldKind dateKind = mDoc->column(static_cast<u32_t>(mDateCol)).kind;
             auto panel = std::make_shared<UIList>();
             panel->direction = UIDirection::Vertical;
             panel->padding = 16.0f * s;
             panel->spacing = 10.0f * s;
+            panel->pickable = true;
             panel->color = Color(0.120f, 0.130f, 0.165f, 1.0f);
             panel->shape.pivot = Vector2(0.0f, 0.0f);
-            float panelW = 280.0f * s;
-            setBox(panel, Rect(0.0f, 0.0f, panelW, 220.0f * s));
+            Vector2 pickerSize = UIDateTimePicker::preferredSize(s, true);
+            const char* titleText = "日期时间选择";
+            if (dateKind == FieldKind::Date)
+            {
+                pickerSize = UIDatePicker::preferredSize(s);
+                titleText = "日期选择";
+            }
+            else if (dateKind == FieldKind::Time)
+            {
+                pickerSize = UITimePicker::preferredSize(s, true);
+                titleText = "时间选择";
+            }
+            float panelW = pickerSize.x + 32.0f * s;
+            float panelH = pickerSize.y + 116.0f * s;
+            setBox(panel, Rect(0.0f, 0.0f, panelW, panelH));
             float innerW = panelW - 32.0f * s;
             auto head = std::make_shared<UIWidget>();
             head->pickable = false;
             head->shape.pivot = Vector2(0.0f, 0.0f);
             head->color = clear;
             setBox(head, Rect(0.0f, 0.0f, innerW, 32.0f * s));
-            auto title = makeText("日期时间选择", fontPath, fontPx + 1.0f, ink, innerW - 76.0f * s, 28.0f * s);
+            auto title = makeText(titleText, fontPath, fontPx + 1.0f, ink, innerW - 76.0f * s, 28.0f * s);
             title->shape.pivot = Vector2(0.0f, 0.0f);
             setBox(title, Rect(0.0f, 2.0f * s, innerW - 76.0f * s, 28.0f * s));
             head->attachChild(title);
@@ -1545,26 +1767,91 @@ namespace eokas::RoseAxion {
             close->onClick = [this]() { mDateRow = -1; mDateCol = -1; this->notifyRebuild(); };
             head->attachChild(close);
             panel->attachChild(head);
-            panel->attachChild(makeText("日期", fontPath, smallPx, mute, 200.0f * s, 18.0f * s));
-            auto date = std::make_shared<EscapeInput>();
-            date->shape.pivot = Vector2(0.0f, 0.0f);
-            setBox(date, Rect(0.0f, 0.0f, panelW - 40.0f * s, 32.0f * s));
-            styleInput(*date);
-            date->setText(mDateDraft);
-            date->onEscape = [this]() { this->handleEscape(); };
-            date->onSubmit = [this](const String& text) { mDateDraft = text; };
-            date->onFocusLoss = [this, raw = date.get()]() { mDateDraft = raw->text; };
-            panel->attachChild(date);
-            panel->attachChild(makeText("时间", fontPath, smallPx, mute, 200.0f * s, 18.0f * s));
-            auto time = std::make_shared<EscapeInput>();
-            time->shape.pivot = Vector2(0.0f, 0.0f);
-            setBox(time, Rect(0.0f, 0.0f, panelW - 40.0f * s, 32.0f * s));
-            styleInput(*time);
-            time->setText(mTimeDraft);
-            time->onEscape = [this]() { this->handleEscape(); };
-            time->onSubmit = [this](const String& text) { mTimeDraft = text; };
-            time->onFocusLoss = [this, raw = time.get()]() { mTimeDraft = raw->text; };
-            panel->attachChild(time);
+            std::shared_ptr<UIWidget> pickerWidget;
+            std::function<void()> capturePicker;
+            auto escapePicker = [this]() { this->handleEscape(); };
+            auto pickerKeyPress = [escapePicker](const UIKeyEvent& event)
+            {
+                if (event.key == UIKeyCode::Escape)
+                {
+                    escapePicker();
+                }
+            };
+            if (dateKind == FieldKind::Date)
+            {
+                auto picker = std::make_shared<UIDatePicker>();
+                styleTemporalPicker(*picker, s, fontPath, smallPx, field, ink, mute, accent);
+                setBox(picker, Rect(0.0f, 0.0f, pickerSize.x, pickerSize.y));
+                picker->setDate(mDateYear, mDateMonth, mDateDay);
+                mDateYear = picker->year();
+                mDateMonth = picker->month();
+                mDateDay = picker->day();
+                UIDatePicker* pickerRaw = picker.get();
+                capturePicker = [this, pickerRaw]()
+                {
+                    mDateYear = pickerRaw->year();
+                    mDateMonth = pickerRaw->month();
+                    mDateDay = pickerRaw->day();
+                };
+                picker->onDateChanged = capturePicker;
+                picker->onDateCommitted = capturePicker;
+                picker->onKeyPress = pickerKeyPress;
+                bindEscape(*picker, escapePicker);
+                pickerWidget = picker;
+            }
+            else if (dateKind == FieldKind::Time)
+            {
+                auto picker = std::make_shared<UITimePicker>();
+                styleTemporalPicker(*picker, s, fontPath, smallPx, field, ink, mute, accent);
+                picker->showSeconds = true;
+                setBox(picker, Rect(0.0f, 0.0f, pickerSize.x, pickerSize.y));
+                picker->setTime(mDateHour, mDateMinute, mDateSecond);
+                mDateHour = picker->hour();
+                mDateMinute = picker->minute();
+                mDateSecond = picker->second();
+                UITimePicker* pickerRaw = picker.get();
+                capturePicker = [this, pickerRaw]()
+                {
+                    mDateHour = pickerRaw->hour();
+                    mDateMinute = pickerRaw->minute();
+                    mDateSecond = pickerRaw->second();
+                };
+                picker->onTimeChanged = capturePicker;
+                picker->onTimeCommitted = capturePicker;
+                picker->onKeyPress = pickerKeyPress;
+                bindEscape(*picker, escapePicker);
+                pickerWidget = picker;
+            }
+            else
+            {
+                auto picker = std::make_shared<UIDateTimePicker>();
+                styleTemporalPicker(*picker, s, fontPath, smallPx, field, ink, mute, accent);
+                picker->showSeconds = true;
+                setBox(picker, Rect(0.0f, 0.0f, pickerSize.x, pickerSize.y));
+                picker->setDateTime(mDateYear, mDateMonth, mDateDay, mDateHour, mDateMinute, mDateSecond);
+                mDateYear = picker->year();
+                mDateMonth = picker->month();
+                mDateDay = picker->day();
+                mDateHour = picker->hour();
+                mDateMinute = picker->minute();
+                mDateSecond = picker->second();
+                UIDateTimePicker* pickerRaw = picker.get();
+                capturePicker = [this, pickerRaw]()
+                {
+                    mDateYear = pickerRaw->year();
+                    mDateMonth = pickerRaw->month();
+                    mDateDay = pickerRaw->day();
+                    mDateHour = pickerRaw->hour();
+                    mDateMinute = pickerRaw->minute();
+                    mDateSecond = pickerRaw->second();
+                };
+                picker->onDateTimeChanged = capturePicker;
+                picker->onDateTimeCommitted = capturePicker;
+                picker->onKeyPress = pickerKeyPress;
+                bindEscape(*picker, escapePicker);
+                pickerWidget = picker;
+            }
+            panel->attachChild(pickerWidget);
             auto actions = std::make_shared<UIList>();
             actions->direction = UIDirection::Horizontal;
             actions->padding = 0.0f;
@@ -1582,31 +1869,131 @@ namespace eokas::RoseAxion {
                 this->notifyRebuild();
             };
             auto ok = makeButton("确定", fontPath, fontPx, 80.0f * s, 32.0f * s, accent, ink);
-            ok->onClick = [this, dateRow, dateCol]()
+            ok->onClick = [this, dateRow, dateCol, dateKind, capturePicker]()
             {
-                String combined = trimCopy(mDateDraft);
-                String timeText = trimCopy(mTimeDraft);
-                if (!timeText.isEmpty())
+                if (capturePicker)
                 {
-                    combined = combined + "T" + timeText;
+                    capturePicker();
                 }
-                if (!validateField(FieldKind::DateTime, combined))
+                String stored = formatDateTime(mDateYear, mDateMonth, mDateDay, mDateHour, mDateMinute, mDateSecond);
+                if (dateKind == FieldKind::Date)
                 {
-                    mDoc->setStatus("日期时间格式无效");
-                    this->notifyRebuild();
-                    return;
+                    stored = formatDate(mDateYear, mDateMonth, mDateDay);
                 }
-                mDoc->setCellText(static_cast<u32_t>(dateRow), static_cast<u32_t>(dateCol), combined);
+                else if (dateKind == FieldKind::Time)
+                {
+                    stored = formatTime(mDateHour, mDateMinute, mDateSecond);
+                }
+                mDoc->setCellText(static_cast<u32_t>(dateRow), static_cast<u32_t>(dateCol), stored);
                 mDateRow = -1;
                 mDateCol = -1;
                 this->notifyRebuild();
             };
+            close->onKeyPress = pickerKeyPress;
+            clearBtn->onKeyPress = pickerKeyPress;
+            ok->onKeyPress = pickerKeyPress;
             actions->attachChild(clearBtn);
             actions->attachChild(ok);
             panel->attachChild(actions);
             overlay->attachChild(panel);
             mDatePanel = panel.get();
-            mFocus = date.get();
+            mFocus = pickerWidget.get();
+        }
+
+        if (mColorRow >= 0 && mColorCol >= 0)
+        {
+            auto panel = std::make_shared<UIList>();
+            panel->direction = UIDirection::Vertical;
+            panel->padding = 16.0f * s;
+            panel->spacing = 10.0f * s;
+            panel->pickable = true;
+            panel->color = Color(0.120f, 0.130f, 0.165f, 1.0f);
+            panel->shape.pivot = Vector2(0.0f, 0.0f);
+            Vector2 pickerSize = UIColorPicker::preferredSize(s);
+            float panelW = pickerSize.x + 32.0f * s;
+            float panelH = pickerSize.y + 74.0f * s;
+            setBox(panel, Rect(0.0f, 0.0f, panelW, panelH));
+            float innerW = panelW - 32.0f * s;
+            float btnW = 64.0f * s;
+            float btnH = 28.0f * s;
+            float btnGap = 8.0f * s;
+            float headActions = btnW * 2.0f + btnGap + 12.0f * s;
+            auto head = std::make_shared<UIWidget>();
+            head->pickable = false;
+            head->shape.pivot = Vector2(0.0f, 0.0f);
+            head->color = clear;
+            setBox(head, Rect(0.0f, 0.0f, innerW, 32.0f * s));
+            auto title = makeText("颜色选择", fontPath, fontPx + 1.0f, ink, innerW - headActions, 28.0f * s);
+            title->shape.pivot = Vector2(0.0f, 0.0f);
+            setBox(title, Rect(0.0f, 2.0f * s, innerW - headActions, 28.0f * s));
+            head->attachChild(title);
+            int colorRow = mColorRow;
+            int colorCol = mColorCol;
+            auto clearBtn = makeButton("清除", fontPath, smallPx, btnW, btnH, Color(0.227f, 0.247f, 0.306f, 1.0f), ink);
+            clearBtn->shape.setBox(Vector2(innerW - btnW * 2.0f - btnGap, 2.0f * s), Vector2(btnW, btnH));
+            clearBtn->onClick = [this, colorRow, colorCol]()
+            {
+                mDoc->setCellText(static_cast<u32_t>(colorRow), static_cast<u32_t>(colorCol), String::empty);
+                mColorRow = -1;
+                mColorCol = -1;
+                this->notifyRebuild();
+            };
+            head->attachChild(clearBtn);
+            auto close = makeButton("关闭", fontPath, smallPx, btnW, btnH, Color(0.227f, 0.247f, 0.306f, 1.0f), ink);
+            close->shape.setBox(Vector2(innerW - btnW, 2.0f * s), Vector2(btnW, btnH));
+            close->onClick = [this]() { mColorRow = -1; mColorCol = -1; this->notifyRebuild(); };
+            head->attachChild(close);
+            panel->attachChild(head);
+            auto picker = std::make_shared<EscapeColorPicker>();
+            picker->shape.pivot = Vector2(0.0f, 0.0f);
+            picker->uiScale = s;
+            picker->useAlpha = true;
+            picker->setFont(fontPath, smallPx);
+            picker->background = field;
+            picker->field = field;
+            picker->ink = ink;
+            picker->muted = mute;
+            picker->accent = accent;
+            picker->button = Color(0.227f, 0.247f, 0.306f, 1.0f);
+            picker->buttonHover = Color(0.32f, 0.36f, 0.44f, 1.0f);
+            picker->buttonPress = Color(0.16f, 0.18f, 0.22f, 1.0f);
+            picker->line = Color(0.050f, 0.055f, 0.070f, 1.0f);
+            picker->writeClipboard = mHost.writeClipboard;
+            picker->readClipboard = mHost.readClipboard;
+            Color current(1.0f, 1.0f, 1.0f, 1.0f);
+            parseColor(mDoc->cellText(static_cast<u32_t>(mColorRow), static_cast<u32_t>(mColorCol)), current);
+            picker->setColor(current, true);
+            setBox(picker, Rect(0.0f, 0.0f, pickerSize.x, pickerSize.y));
+            picker->onColorCommitted = [this, colorRow, colorCol](const Color& value)
+            {
+                mDoc->setCellText(static_cast<u32_t>(colorRow), static_cast<u32_t>(colorCol), formatColor(value));
+                mColorRow = -1;
+                mColorCol = -1;
+                this->notifyRebuild();
+            };
+            picker->onCancelled = [this]()
+            {
+                mColorRow = -1;
+                mColorCol = -1;
+                this->notifyRebuild();
+            };
+            auto escapePicker = [this]() { this->handleEscape(); };
+            picker->onEscape = escapePicker;
+            picker->onKeyPress = [escapePicker](const UIKeyEvent& event)
+            {
+                if (event.key == UIKeyCode::Escape)
+                {
+                    escapePicker();
+                }
+            };
+            bindEscape(*picker, escapePicker);
+            panel->attachChild(picker);
+            close->onKeyPress = picker->onKeyPress;
+            clearBtn->onKeyPress = picker->onKeyPress;
+            overlay->attachChild(panel);
+            mColorPanel = panel.get();
+            mColorPicker = picker.get();
+            mFocus = picker.get();
         }
 
         if (mSettingsCol >= 0)

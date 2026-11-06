@@ -1,5 +1,6 @@
 #include "UIColorPicker.h"
 #include "../UIFont.h"
+#include "Native/NativeUtilities.h"
 
 #include <cmath>
 #include <cstdlib>
@@ -304,14 +305,11 @@ namespace eokas
         (void)x;
         (void)y;
         if (!mEye) return;
-        if (sampleScreen)
+        Color sample = NativeUtilities::sampleScreenColor();
+        if (sample.a >= 0.0f)
         {
-            Color sample = sampleScreen(x, y);
-            if (sample.a >= 0.0f)
-            {
-                float a = useAlpha ? mColor.a : 1.0f;
-                this->userDisplay(sample.r, sample.g, sample.b, a);
-            }
+            float a = useAlpha ? mColor.a : 1.0f;
+            this->userDisplay(sample.r, sample.g, sample.b, a);
         }
         if (!commit) return;
         mEye = false;

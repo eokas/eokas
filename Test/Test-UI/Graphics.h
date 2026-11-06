@@ -1240,29 +1240,6 @@ namespace eokas::ui {
             picker->line = Color(0.050f, 0.055f, 0.070f, 1.0f);
             picker->writeClipboard = writeClipboard;
             picker->readClipboard = readClipboard;
-            picker->sampleScreen = [windowHandle](float x, float y) -> Color
-            {
-                POINT point;
-                point.x = (LONG)std::floor(x + 0.5f);
-                point.y = (LONG)std::floor(y + 0.5f);
-                ClientToScreen(windowHandle, &point);
-                HDC dc = GetDC(nullptr);
-                if (dc == nullptr)
-                {
-                    return Color(0.0f, 0.0f, 0.0f, -1.0f);
-                }
-                COLORREF pixel = GetPixel(dc, point.x, point.y);
-                ReleaseDC(nullptr, dc);
-                if (pixel == CLR_INVALID)
-                {
-                    return Color(0.0f, 0.0f, 0.0f, -1.0f);
-                }
-                return Color(
-                    (float)GetRValue(pixel) / 255.0f,
-                    (float)GetGValue(pixel) / 255.0f,
-                    (float)GetBValue(pixel) / 255.0f,
-                    1.0f);
-            };
             setBox(picker, Rect(0.0f, 0.0f, colorSize.x, colorSize.y));
             float sideW = 280.0f * s;
             float sideInner = sideW - cardPad * 2.0f;

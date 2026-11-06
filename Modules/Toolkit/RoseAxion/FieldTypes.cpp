@@ -81,6 +81,45 @@ namespace eokas::RoseAxion {
             return true;
         }
 
+        bool validTime(int hour, int minute, int second)
+        {
+            return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 59;
+        }
+
+        bool validDate(int year, int month, int day)
+        {
+            return year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= daysInMonth(year, month);
+        }
+
+        bool parseTimeClock(const String& text, size_t& index, int& hour, int& minute, int& second)
+        {
+            if (!takeDigits(text, index, 2, hour))
+            {
+                return false;
+            }
+            if (!takeOne(text, index, ':', 0))
+            {
+                return false;
+            }
+            if (!takeDigits(text, index, 2, minute))
+            {
+                return false;
+            }
+            second = 0;
+            if (index < text.length() && text.at(index) == ':')
+            {
+                if (!takeOne(text, index, ':', 0))
+                {
+                    return false;
+                }
+                if (!takeDigits(text, index, 2, second))
+                {
+                    return false;
+                }
+            }
+            return validTime(hour, minute, second);
+        }
+
         bool parseDateParts(const String& text, int& year, int& month, int& day, int& hour, int& minute, int& second)
         {
             String value = trimCopy(text);
@@ -114,43 +153,54 @@ namespace eokas::RoseAxion {
                 {
                     return false;
                 }
-                if (!takeDigits(value, index, 2, hour))
+                if (!parseTimeClock(value, index, hour, minute, second))
                 {
                     return false;
-                }
-                if (!takeOne(value, index, ':', 0))
-                {
-                    return false;
-                }
-                if (!takeDigits(value, index, 2, minute))
-                {
-                    return false;
-                }
-                if (index < value.length())
-                {
-                    if (!takeOne(value, index, ':', 0))
-                    {
-                        return false;
-                    }
-                    if (!takeDigits(value, index, 2, second))
-                    {
-                        return false;
-                    }
                 }
             }
             if (index != value.length())
             {
                 return false;
             }
-            if (year < 1 || month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month))
+            return validDate(year, month, day);
+        }
+
+        bool parseTimeOnly(const String& text, int& hour, int& minute, int& second)
+        {
+            String value = trimCopy(text);
+            size_t index = 0;
+            if (!parseTimeClock(value, index, hour, minute, second))
             {
                 return false;
             }
-            if (hour < 0 || hour > 23 || minute < 0 || minute > 59 || second < 0 || second > 59)
+            return index == value.length();
+        }
+
+        int hexNibble(char c)
+        {
+            if (c >= '0' && c <= '9') return c - '0';
+            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+            if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+            return -1;
+        }
+
+        bool parseHexByte(const String& text, size_t index, int& out)
+        {
+            int hi = hexNibble(text.at(index));
+            int lo = hexNibble(text.at(index + 1));
+            if (hi < 0 || lo < 0)
             {
                 return false;
             }
+            out = hi * 16 + lo;
             return true;
+        }
+
+        int colorByte(float value)
+        {
+            if (value < 0.0f) value = 0.0f;
+            if (value > 1.0f) value = 1.0f;
+            return static_cast<int>(value * 255.0f + 0.5f);
         }
 
     }
@@ -162,11 +212,16 @@ namespace eokas::RoseAxion {
         case FieldKind::Integer: return "integer";
         case FieldKind::Float: return "float";
         case FieldKind::Boolean: return "boolean";
+        case FieldKind::Date: return "date";
+        case FieldKind::Time: return "time";
         case FieldKind::DateTime: return "datetime";
         case FieldKind::Url: return "url";
         case FieldKind::Email: return "email";
         case FieldKind::SingleOption: return "singleOption";
         case FieldKind::MultiOption: return "multiOption";
+        case FieldKind::Color: return "color";
+        case FieldKind::FilePath: return "filePath";
+        case FieldKind::FolderPath: return "folderPath";
         case FieldKind::Text:
         default:
             return "text";
@@ -180,11 +235,16 @@ namespace eokas::RoseAxion {
         case FieldKind::Integer: return "整数";
         case FieldKind::Float: return "浮点数";
         case FieldKind::Boolean: return "布尔值";
+        case FieldKind::Date: return "日期";
+        case FieldKind::Time: return "时间";
         case FieldKind::DateTime: return "日期时间";
         case FieldKind::Url: return "网址";
         case FieldKind::Email: return "邮箱地址";
         case FieldKind::SingleOption: return "单选";
         case FieldKind::MultiOption: return "多选";
+        case FieldKind::Color: return "颜色";
+        case FieldKind::FilePath: return "文件路径";
+        case FieldKind::FolderPath: return "目录路径";
         case FieldKind::Text:
         default:
             return "文本";
@@ -196,11 +256,16 @@ namespace eokas::RoseAxion {
         if (key == "integer") return FieldKind::Integer;
         if (key == "float") return FieldKind::Float;
         if (key == "boolean") return FieldKind::Boolean;
+        if (key == "date") return FieldKind::Date;
+        if (key == "time") return FieldKind::Time;
         if (key == "datetime") return FieldKind::DateTime;
         if (key == "url") return FieldKind::Url;
         if (key == "email") return FieldKind::Email;
         if (key == "singleOption") return FieldKind::SingleOption;
         if (key == "multiOption") return FieldKind::MultiOption;
+        if (key == "color") return FieldKind::Color;
+        if (key == "filePath") return FieldKind::FilePath;
+        if (key == "folderPath") return FieldKind::FolderPath;
         return FieldKind::Text;
     }
 
@@ -308,6 +373,44 @@ namespace eokas::RoseAxion {
         return false;
     }
 
+    bool parseColor(const String& text, Color& out)
+    {
+        String value = trimCopy(text);
+        if (!value.isEmpty() && value.at(0) == '#')
+        {
+            value = value.substr(1);
+        }
+        if (value.length() != 6 && value.length() != 8)
+        {
+            return false;
+        }
+        int channels[4] = {0, 0, 0, 255};
+        int count = value.length() == 8 ? 4 : 3;
+        for (int i = 0; i < count; ++i)
+        {
+            if (!parseHexByte(value, static_cast<size_t>(i * 2), channels[i]))
+            {
+                return false;
+            }
+        }
+        out = Color(
+            channels[0] / 255.0f,
+            channels[1] / 255.0f,
+            channels[2] / 255.0f,
+            channels[3] / 255.0f);
+        return true;
+    }
+
+    String formatColor(const Color& value)
+    {
+        return String::format(
+            "#%02X%02X%02X%02X",
+            colorByte(value.r),
+            colorByte(value.g),
+            colorByte(value.b),
+            colorByte(value.a));
+    }
+
     bool validateField(FieldKind kind, const String& text)
     {
         String value = trimCopy(text);
@@ -332,6 +435,20 @@ namespace eokas::RoseAxion {
             bool flag = false;
             return parseBool(value, flag);
         }
+        case FieldKind::Date:
+        {
+            int year = 0;
+            int month = 0;
+            int day = 0;
+            return parseDate(value, year, month, day);
+        }
+        case FieldKind::Time:
+        {
+            int hour = 0;
+            int minute = 0;
+            int second = 0;
+            return parseTime(value, hour, minute, second);
+        }
         case FieldKind::DateTime:
         {
             int year = 0;
@@ -340,7 +457,12 @@ namespace eokas::RoseAxion {
             int hour = 0;
             int minute = 0;
             int second = 0;
-            return parseDateParts(value, year, month, day, hour, minute, second);
+            return parseDateTime(value, year, month, day, hour, minute, second);
+        }
+        case FieldKind::Color:
+        {
+            Color color;
+            return parseColor(value, color);
         }
         case FieldKind::Url:
             return value.find("http://") == 0 || value.find("https://") == 0;
@@ -361,6 +483,8 @@ namespace eokas::RoseAxion {
         case FieldKind::Text:
         case FieldKind::SingleOption:
         case FieldKind::MultiOption:
+        case FieldKind::FilePath:
+        case FieldKind::FolderPath:
         default:
             return true;
         }
@@ -369,21 +493,44 @@ namespace eokas::RoseAxion {
     String canonicalText(FieldKind kind, const String& text)
     {
         String value = trimCopy(text);
-        if (kind != FieldKind::DateTime)
-        {
-            return value;
-        }
         int year = 0;
         int month = 0;
         int day = 0;
         int hour = 0;
         int minute = 0;
         int second = 0;
-        if (!parseDateParts(value, year, month, day, hour, minute, second))
+        switch (kind)
         {
+        case FieldKind::Date:
+            if (!parseDate(value, year, month, day))
+            {
+                return value;
+            }
+            return formatDate(year, month, day);
+        case FieldKind::Time:
+            if (!parseTime(value, hour, minute, second))
+            {
+                return value;
+            }
+            return formatTime(hour, minute, second);
+        case FieldKind::DateTime:
+            if (!parseDateTime(value, year, month, day, hour, minute, second))
+            {
+                return value;
+            }
+            return formatDateTime(year, month, day, hour, minute, second);
+        case FieldKind::Color:
+        {
+            Color color;
+            if (!parseColor(value, color))
+            {
+                return value;
+            }
+            return formatColor(color);
+        }
+        default:
             return value;
         }
-        return String::format("%04d-%02d-%02dT%02d:%02d:%02d", year, month, day, hour, minute, second);
     }
 
     String joinSelected(const std::vector<String>& labels)
@@ -443,6 +590,30 @@ namespace eokas::RoseAxion {
         return false;
     }
 
+    String displayDate(const String& stored)
+    {
+        int year = 0;
+        int month = 0;
+        int day = 0;
+        if (!parseDate(stored, year, month, day))
+        {
+            return stored;
+        }
+        return String::format("%04d/%02d/%02d", year, month, day);
+    }
+
+    String displayTime(const String& stored)
+    {
+        int hour = 0;
+        int minute = 0;
+        int second = 0;
+        if (!parseTime(stored, hour, minute, second))
+        {
+            return stored;
+        }
+        return formatTime(hour, minute, second);
+    }
+
     String displayDateTime(const String& stored)
     {
         int year = 0;
@@ -451,11 +622,63 @@ namespace eokas::RoseAxion {
         int hour = 0;
         int minute = 0;
         int second = 0;
-        if (!parseDateParts(stored, year, month, day, hour, minute, second))
+        if (!parseDateTime(stored, year, month, day, hour, minute, second))
         {
             return stored;
         }
         return String::format("%04d/%02d/%02d %02d:%02d:%02d", year, month, day, hour, minute, second);
+    }
+
+    bool parseDate(const String& text, int& year, int& month, int& day)
+    {
+        int hour = 0;
+        int minute = 0;
+        int second = 0;
+        return parseDateParts(text, year, month, day, hour, minute, second);
+    }
+
+    bool parseTime(const String& text, int& hour, int& minute, int& second)
+    {
+        int year = 0;
+        int month = 0;
+        int day = 0;
+        if (parseDateParts(text, year, month, day, hour, minute, second))
+        {
+            return true;
+        }
+        return parseTimeOnly(text, hour, minute, second);
+    }
+
+    bool parseDateTime(const String& text, int& year, int& month, int& day, int& hour, int& minute, int& second)
+    {
+        if (parseDateParts(text, year, month, day, hour, minute, second))
+        {
+            return true;
+        }
+        if (!parseTimeOnly(text, hour, minute, second))
+        {
+            return false;
+        }
+        TimePoint now;
+        year = now.year();
+        month = now.month();
+        day = now.date();
+        return validDate(year, month, day);
+    }
+
+    String formatDate(int year, int month, int day)
+    {
+        return String::format("%04d-%02d-%02d", year, month, day);
+    }
+
+    String formatTime(int hour, int minute, int second)
+    {
+        return String::format("%02d:%02d:%02d", hour, minute, second);
+    }
+
+    String formatDateTime(int year, int month, int day, int hour, int minute, int second)
+    {
+        return String::format("%04d-%02d-%02dT%02d:%02d:%02d", year, month, day, hour, minute, second);
     }
 
 }

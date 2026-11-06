@@ -188,6 +188,8 @@ namespace eokas::RoseAxion {
         host.writeClipboard = mHost.writeClipboard;
         host.readClipboard = mHost.readClipboard;
         host.openExternal = mHost.openExternal;
+        host.pickFilePath = mHost.pickFilePath;
+        host.pickFolderPath = mHost.pickFolderPath;
         host.ctrlDown = mHost.ctrlDown;
         host.handleShortcut = [this](UIKeyCode key, bool ctrl) { return this->handleShortcut(key, ctrl); };
         host.confirmChangeType = [this](int col, FieldKind kind)
@@ -374,6 +376,27 @@ namespace eokas::RoseAxion {
     bool AxionApp::resizeCursorAt(float x, float y) const
     {
         return mEditor && mEditor->resizeCursorAt(x, y);
+    }
+
+    bool AxionApp::colorDropping() const
+    {
+        return mEditor && mEditor->colorDropping();
+    }
+
+    void AxionApp::sampleColorDropper(float x, float y, bool commit)
+    {
+        if (mEditor)
+        {
+            mEditor->sampleColorDropper(x, y, commit);
+        }
+    }
+
+    void AxionApp::cancelColorDropper()
+    {
+        if (mEditor)
+        {
+            mEditor->cancelColorDropper();
+        }
     }
 
     void AxionApp::build()

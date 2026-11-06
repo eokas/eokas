@@ -23,6 +23,8 @@ namespace eokas::RoseAxion {
         std::function<void(const String&)> writeClipboard;
         std::function<String()> readClipboard;
         std::function<void(const String&)> openExternal;
+        std::function<String(const String& suggested)> pickFilePath;
+        std::function<String(const String& suggested)> pickFolderPath;
         std::function<bool()> ctrlDown;
         std::function<void(const String&)> setTitle;
         std::function<void()> requestQuit;
@@ -35,6 +37,9 @@ namespace eokas::RoseAxion {
         void resize(float width, float height);
         void tick();
         bool resizeCursorAt(float x, float y) const;
+        bool colorDropping() const;
+        void sampleColorDropper(float x, float y, bool commit);
+        void cancelColorDropper();
         bool requestClose();
 
     private:

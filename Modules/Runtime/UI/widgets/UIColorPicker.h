@@ -39,9 +39,6 @@ namespace eokas
         std::function<void(const Color&)> onColorChanged;
         std::function<void(const Color&)> onColorCommitted;
         std::function<void()> onCancelled;
-        // Screen-space sample used by the eyedropper. Return a negative alpha
-        // when the pixel cannot be read. Alpha on the returned color is ignored.
-        std::function<Color(float x, float y)> sampleScreen;
         std::function<void(const String&)> writeClipboard;
         std::function<String()> readClipboard;
 

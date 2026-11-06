@@ -668,9 +668,25 @@ namespace eokas::RoseAxion {
         {
             return String::empty;
         }
+        if (info.kind == FieldKind::Date)
+        {
+            return displayDate(value);
+        }
+        if (info.kind == FieldKind::Time)
+        {
+            return displayTime(value);
+        }
         if (info.kind == FieldKind::DateTime)
         {
             return displayDateTime(value);
+        }
+        if (info.kind == FieldKind::Color)
+        {
+            Color color;
+            if (parseColor(value, color))
+            {
+                return formatColor(color);
+            }
         }
         return value;
     }

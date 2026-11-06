@@ -3,6 +3,7 @@
 #include "Base/IO.h"
 #include "Base/Time.h"
 #include "Base/Timer.h"
+#include "Native/NativeDialogs.h"
 #include "Native/NativeWindow.h"
 #include "Render/Camera.h"
 #include "Render/Renderer.h"
@@ -21,6 +22,7 @@
 #include <dbghelp.h>
 #include <cstdio>
 #include <exception>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -287,6 +289,28 @@ namespace {
         ShellExecuteW(nullptr, L"open", wide.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     }
 
+    eokas::String pickAnyFile(HWND owner)
+    {
+        eokas::String path;
+        std::map<eokas::String, eokas::String> filters;
+        filters["所有文件"] = "*.*";
+        if (!eokas::NativeDialogs::openFileDialog(path, filters, owner))
+        {
+            return eokas::String::empty;
+        }
+        return path;
+    }
+
+    eokas::String pickAnyFolder(HWND owner, const eokas::String& suggested)
+    {
+        eokas::String path;
+        if (!eokas::NativeDialogs::openFolderDialog(path, suggested, owner))
+        {
+            return eokas::String::empty;
+        }
+        return path;
+    }
+
     bool ctrlDown()
     {
         return (GetKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -360,6 +384,8 @@ namespace {
             host.writeClipboard = [](const eokas::String& value) { writeClipboard(value); };
             host.readClipboard = []() { return readClipboard(); };
             host.openExternal = [](const eokas::String& url) { openExternal(url); };
+            host.pickFilePath = [hwnd](const eokas::String&) { return pickAnyFile(hwnd); };
+            host.pickFolderPath = [hwnd](const eokas::String& suggested) { return pickAnyFolder(hwnd, suggested); };
             host.ctrlDown = []() { return ctrlDown(); };
             host.setTitle = [this](const eokas::String& title) { mNative.setTitle(title); };
             host.requestQuit = [this]() { mNative.close(); };
@@ -465,6 +491,10 @@ namespace {
             };
             mNative.onMouseMove = [this](float x, float y)
             {
+                if (mApp.colorDropping())
+                {
+                    mApp.sampleColorDropper(x, y, false);
+                }
                 mWindow.onMouseMove(x, y);
             };
             mNative.onCursor = [this](float x, float y, eokas::NativeCursor& cursor)
@@ -478,6 +508,19 @@ namespace {
             };
             mNative.onMouseDown = [this](float x, float y, eokas::NativeMouseButton button)
             {
+                if (mApp.colorDropping())
+                {
+                    if (button == eokas::NativeMouseButton::Right)
+                    {
+                        mApp.cancelColorDropper();
+                        return;
+                    }
+                    if (button == eokas::NativeMouseButton::Left)
+                    {
+                        mApp.sampleColorDropper(x, y, true);
+                        return;
+                    }
+                }
                 mWindow.onMouseDown(x, y, static_cast<eokas::UIPointerCode>(static_cast<int>(button)));
             };
             mNative.onMouseUp = [this](float x, float y, eokas::NativeMouseButton button)

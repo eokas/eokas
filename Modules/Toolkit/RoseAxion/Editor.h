@@ -12,6 +12,7 @@
 #include <vector>
 
 namespace eokas {
+    class UIColorPicker;
     class UITable;
     class UIView;
 }
@@ -27,6 +28,8 @@ namespace eokas::RoseAxion {
             std::function<void(const String&)> writeClipboard;
             std::function<String()> readClipboard;
             std::function<void(const String&)> openExternal;
+            std::function<String(const String& suggested)> pickFilePath;
+            std::function<String(const String& suggested)> pickFolderPath;
             std::function<bool()> ctrlDown;
             std::function<bool(UIKeyCode, bool)> handleShortcut;
             std::function<void(int, FieldKind)> confirmChangeType;
@@ -41,6 +44,9 @@ namespace eokas::RoseAxion {
         void rebuild();
         bool resizeCursorAt(float x, float y) const;
         bool handleEscape();
+        bool colorDropping() const;
+        void sampleColorDropper(float x, float y, bool commit);
+        void cancelColorDropper();
         float scrollX() const;
         float scrollY() const;
         void setScroll(float x, float y);
@@ -78,9 +84,12 @@ namespace eokas::RoseAxion {
         UIWidget* mEditAnchor = nullptr;
         UIWidget* mPickAnchor = nullptr;
         UIWidget* mDateAnchor = nullptr;
+        UIWidget* mColorAnchor = nullptr;
         UIWidget* mPickMenu = nullptr;
         UIWidget* mEditInput = nullptr;
         UIWidget* mDatePanel = nullptr;
+        UIWidget* mColorPanel = nullptr;
+        UIColorPicker* mColorPicker = nullptr;
         UIWidget* mSettingsPanel = nullptr;
         UIWidget* mFocus = nullptr;
         Color mEditFill { 0.145f, 0.157f, 0.196f, 1.0f };
@@ -97,9 +106,15 @@ namespace eokas::RoseAxion {
         int mDateCol = -1;
         int mPickRow = -1;
         int mPickCol = -1;
+        int mColorRow = -1;
+        int mColorCol = -1;
         int mColorIndex = -1;
-        String mDateDraft;
-        String mTimeDraft;
+        int mDateYear = 1970;
+        int mDateMonth = 1;
+        int mDateDay = 1;
+        int mDateHour = 0;
+        int mDateMinute = 0;
+        int mDateSecond = 0;
         std::chrono::steady_clock::time_point mClickTime {};
         int mClickRow = -1;
         int mClickCol = -1;
