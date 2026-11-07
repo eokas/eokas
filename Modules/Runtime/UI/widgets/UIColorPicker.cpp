@@ -451,23 +451,40 @@ namespace eokas
         mAdd = box(cx, chipY, chip, chip);
 
         y += m.theme + m.gap;
-        mWheel = box(left, y, m.wheel, m.wheel);
-        float barX = left + m.wheel + m.gap;
+        float barsW = m.bar + m.barGap + m.bar;
+        float swatchW = m.swatch;
+        float graphicW = m.wheel + m.gap + barsW + m.gap + swatchW;
+        float extra = inner - graphicW;
+        if (extra > 0.0f)
+        {
+            float grow = m.swatch * 0.35f;
+            if (grow > extra) grow = extra;
+            swatchW += grow;
+            extra -= grow;
+            graphicW += grow;
+        }
+        float gx = left;
+        if (extra > 0.0f)
+        {
+            gx = left + snapf(extra * 0.5f);
+        }
+        mWheel = box(gx, y, m.wheel, m.wheel);
+        float barX = gx + m.wheel + m.gap;
         mBar0 = box(barX, y, m.bar, m.wheel);
         mBar1 = box(barX + m.bar + m.barGap, y, m.bar, m.wheel);
         float sx = mBar1.x + mBar1.w + m.gap;
         float swatchH = (m.wheel - m.cap * 2.0f - m.hex - m.small * 4.0f) * 0.5f;
         if (swatchH < 8.0f) swatchH = 8.0f;
         float sy = y;
-        mNewCap = box(sx, sy, m.swatch, m.cap);
+        mNewCap = box(sx, sy, swatchW, m.cap);
         sy += m.cap + m.small;
-        mNewSwatch = box(sx, sy, m.swatch, swatchH);
+        mNewSwatch = box(sx, sy, swatchW, swatchH);
         sy += swatchH + m.small;
-        mOldCap = box(sx, sy, m.swatch, m.cap);
+        mOldCap = box(sx, sy, swatchW, m.cap);
         sy += m.cap + m.small;
-        mOldSwatch = box(sx, sy, m.swatch, swatchH);
+        mOldSwatch = box(sx, sy, swatchW, swatchH);
         sy += swatchH + m.small;
-        mHex = box(sx, sy, m.swatch, m.hex);
+        mHex = box(sx, sy, swatchW, m.hex);
 
         mCenterX = mWheel.x + mWheel.w * 0.5f;
         mCenterY = mWheel.y + mWheel.h * 0.5f;

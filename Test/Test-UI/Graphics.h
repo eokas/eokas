@@ -1240,17 +1240,60 @@ namespace eokas::ui {
             picker->line = Color(0.050f, 0.055f, 0.070f, 1.0f);
             picker->writeClipboard = writeClipboard;
             picker->readClipboard = readClipboard;
-            setBox(picker, Rect(0.0f, 0.0f, colorSize.x, colorSize.y));
-            float sideW = 280.0f * s;
-            float sideInner = sideW - cardPad * 2.0f;
+
+            const float palettePad = 4.0f;
+            const float paletteGap = 2.0f;
+            const float palettePadPx = floorf(palettePad * s + 0.5f);
+            const float paletteGapPx = floorf(paletteGap * s + 0.5f);
+            auto paletteBox = [&](float cellPx)
+            {
+                return Vector2(
+                    palettePadPx * 2.0f + cellPx * (float)UIPalette::kColumns + paletteGapPx * (float)(UIPalette::kColumns - 1),
+                    palettePadPx * 2.0f + cellPx * (float)UIPalette::kRows + paletteGapPx * (float)(UIPalette::kRows - 1));
+            };
+            float minInner = 268.0f * s;
+            float cellPx = floorf((minInner - palettePadPx * 2.0f - paletteGapPx * (float)(UIPalette::kColumns - 1)) / (float)UIPalette::kColumns);
+            if (cellPx < 22.0f) cellPx = 22.0f;
+            Vector2 paletteSize = paletteBox(cellPx);
+            float colorSideInner = paletteSize.x;
+            float colorSideW = colorSideInner + cardPad * 2.0f;
+            float pickerW = innerW - colGap - colorSideW;
+            if (pickerW < colorSize.x)
+            {
+                pickerW = colorSize.x;
+                float maxSide = innerW - colGap - pickerW;
+                float maxInner = maxSide - cardPad * 2.0f;
+                float fitted = floorf((maxInner - palettePadPx * 2.0f - paletteGapPx * (float)(UIPalette::kColumns - 1)) / (float)UIPalette::kColumns);
+                if (fitted < 16.0f) fitted = 16.0f;
+                cellPx = fitted;
+                paletteSize = paletteBox(cellPx);
+                colorSideInner = paletteSize.x;
+                colorSideW = colorSideInner + cardPad * 2.0f;
+                pickerW = innerW - colGap - colorSideW;
+                if (pickerW < colorSize.x) pickerW = colorSize.x;
+            }
+            setBox(picker, Rect(0.0f, 0.0f, pickerW, colorSize.y));
+
+            auto palette = std::make_shared<UIPalette>();
+            palette->uiScale = s;
+            palette->padding = palettePad;
+            palette->spacing = paletteGap;
+            palette->cellSize = s > 0.0f ? cellPx / s : cellPx;
+            palette->background = field;
+            palette->accent = accent;
+            palette->line = Color(0.050f, 0.055f, 0.070f, 1.0f);
+            setBox(palette, Rect(0.0f, 0.0f, paletteSize.x, paletteSize.y));
+            palette->setColor(Color(1.0f, 0.0f, 0.0f, 1.0f));
+
+            float swatchH = 48.0f * s;
             auto preview = std::make_shared<UIWidget>();
             preview->pickable = false;
-            setBox(preview, Rect(0.0f, 0.0f, sideInner, 132.0f * s));
-            auto live = textOf("Live", sideInner, smallPx, smallPx, ink);
-            auto committed = textOf("Committed", sideInner, smallPx, smallPx, mute);
+            setBox(preview, Rect(0.0f, 0.0f, colorSideInner, swatchH));
+            auto live = textOf("Live", colorSideInner, smallPx, smallPx, ink);
+            auto committed = textOf("Committed", colorSideInner, smallPx, smallPx, mute);
             auto formatColor = [](const Color& value)
             {
-                return String::format("%.3f   %.3f   %.3f   %.3f", value.r, value.g, value.b, value.a);
+                return String::format("%.3f  %.3f  %.3f  %.3f", value.r, value.g, value.b, value.a);
             };
             UIWidget* previewPtr = preview.get();
             UIText* livePtr = live.get();
@@ -1258,40 +1301,59 @@ namespace eokas::ui {
             picker->onColorChanged = [previewPtr, livePtr, formatColor](const Color& value)
             {
                 previewPtr->color = value;
-                livePtr->text = String("Live   ") + formatColor(value);
+                livePtr->text = String("Live  ") + formatColor(value);
             };
             picker->onColorCommitted = [committedPtr, formatColor](const Color& value)
             {
-                committedPtr->text = String("Committed   ") + formatColor(value);
+                committedPtr->text = String("Committed  ") + formatColor(value);
             };
             picker->onCancelled = [committedPtr]()
             {
                 committedPtr->text = "Reverted to the original color.";
             };
+            palette->onColorChanged = [previewPtr, livePtr, committedPtr, formatColor](const Color& value)
+            {
+                previewPtr->color = value;
+                livePtr->text = String("Live  ") + formatColor(value);
+                committedPtr->text = String("Committed  ") + formatColor(value);
+            };
             picker->setColor(Color(0.90f, 0.35f, 0.12f, 0.82f));
-            committedPtr->text = String("Committed   ") + formatColor(picker->color());
-            auto side = card(sideW);
-            side->attachChild(textOf("Preview", sideInner, smallPx, smallPx, mute));
-            side->attachChild(preview);
-            side->attachChild(live);
-            side->attachChild(committed);
-            side->attachChild(textOf("Drag a swatch onto Themes to save it.", sideInner, smallPx, smallPx, mute));
-            side->attachChild(textOf("Right-click a saved swatch to remove it.", sideInner, smallPx, smallPx, mute));
-            side->attachChild(textOf("Escape or right-click cancels the dropper.", sideInner, smallPx, smallPx, mute));
-            side->refit();
-            float colorRowH = picker->shape.size.y;
-            if (side->shape.size.y > colorRowH) colorRowH = side->shape.size.y;
-            auto colorColumns = hrow(colorSize.x + colGap + sideW, colorRowH, colGap);
+            committedPtr->text = String("Committed  ") + formatColor(picker->color());
+
+            auto previewCard = card(colorSideW);
+            previewCard->spacing = 8.0f * s;
+            previewCard->attachChild(textOf("Preview", colorSideInner, smallPx, smallPx, mute));
+            previewCard->attachChild(preview);
+            previewCard->attachChild(live);
+            previewCard->attachChild(committed);
+            previewCard->refit();
+
+            auto paletteCard = card(colorSideW);
+            paletteCard->spacing = 8.0f * s;
+            paletteCard->attachChild(textOf("Palette", colorSideInner, smallPx, smallPx, mute));
+            paletteCard->attachChild(palette);
+            paletteCard->refit();
+
+            auto colorSide = column(colorSideW);
+            colorSide->spacing = 14.0f * s;
+            colorSide->attachChild(previewCard);
+            colorSide->attachChild(paletteCard);
+            colorSide->refit();
+
+            float colorBlockH = colorSize.y;
+            if (colorSide->shape.size.y > colorBlockH) colorBlockH = colorSide->shape.size.y;
+            auto colorColumns = hrow(innerW, colorBlockH, colGap);
+            colorColumns->attachChild(colorSide);
             colorColumns->attachChild(picker);
-            colorColumns->attachChild(side);
+
             auto colorPage = std::make_shared<UIList>();
             colorPage->direction = UIDirection::Vertical;
             colorPage->padding = pagePad;
             colorPage->spacing = 14.0f * s;
             colorPage->color = clear;
             setBox(colorPage, Rect(0.0f, 0.0f, (float)windowWidth, 0.0f));
-            colorPage->attachChild(textOf("Color Picker", innerW, titlePx, titlePx, ink));
-            colorPage->attachChild(textOf("Wheel or spectrum, RGBA / HSV, hex, themes, and an eyedropper.", innerW, smallPx, smallPx, mute));
+            colorPage->attachChild(textOf("Color", innerW, titlePx, titlePx, ink));
+            colorPage->attachChild(textOf("Picker and palette share the result panel. Drag onto Themes to save, right-click to remove. Esc cancels the dropper.", innerW, smallPx, smallPx, mute));
             colorPage->attachChild(colorColumns);
             colorPage->refit();
             colorView->addChild(colorPage);
@@ -1554,7 +1616,7 @@ namespace eokas::ui {
             dock->dockPage(makePage("Canvas", board), UIDockMode::Fill);
             dock->dockPage(colorTab, UIDockMode::Fill);
             dock->dockPage(dateTab, UIDockMode::Fill);
-            dock->activate(dateTab.get());
+            dock->activate(colorTab.get());
             mColorPicker = picker;
             root->attachChild(dock);
             mHost->prepare();

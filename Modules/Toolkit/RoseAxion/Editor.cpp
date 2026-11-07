@@ -4,24 +4,13 @@
 #include "UI/Main.h"
 #include "UI/UIFont.h"
 
+#include <cmath>
 #include <utility>
 #include <vector>
 
 namespace eokas::RoseAxion {
 
     namespace {
-
-        const char* kPresets[] = {
-            "#ffffff", "#e5e7eb", "#9ca3af", "#374151", "#111827",
-            "#fecaca", "#ef4444", "#b91c1c",
-            "#fed7aa", "#f97316", "#c2410c",
-            "#fef08a", "#eab308", "#a16207",
-            "#bbf7d0", "#22c55e", "#15803d",
-            "#99f6e4", "#14b8a6", "#0f766e",
-            "#bfdbfe", "#3b82f6", "#1d4ed8",
-            "#c7d2fe", "#6366f1", "#4338ca",
-            "#f5d0fe", "#d946ef", "#a21caf",
-        };
 
         const FieldKind kKinds[] = {
             FieldKind::Text,
@@ -96,6 +85,18 @@ namespace eokas::RoseAxion {
         bool colorFromHex(const String& text, Color& out)
         {
             return parseColor(text, out);
+        }
+
+        Color invertRgb(const Color& color)
+        {
+            return Color(1.0f - color.r, 1.0f - color.g, 1.0f - color.b, 1.0f);
+        }
+
+        Color optionChipColor(const String& hex)
+        {
+            Color chip(0.39f, 0.40f, 0.95f, 1.0f);
+            colorFromHex(hex, chip);
+            return chip;
         }
 
         std::shared_ptr<UIText> makeText(const String& value, const String& font, float size, const Color& color, float width, float height)
@@ -1021,19 +1022,14 @@ namespace eokas::RoseAxion {
         };
         auto makeOptionTag = [&](int row, int col, FieldKind kind, const String& label, const std::vector<FieldOption>& options)
         {
-            Color chip(0.39f, 0.40f, 0.95f, 1.0f);
-            Color tagInk = ink;
+            Color chip = optionChipColor(String::empty);
             for (const FieldOption& option : options)
             {
                 if (option.label != label)
                 {
                     continue;
                 }
-                if (colorFromHex(option.color, chip))
-                {
-                    float lum = chip.r * 0.3f + chip.g * 0.59f + chip.b * 0.11f;
-                    tagInk = lum > 0.62f ? Color(0.08f, 0.09f, 0.12f, 1.0f) : Color(0.96f, 0.97f, 0.98f, 1.0f);
-                }
+                chip = optionChipColor(option.color);
                 break;
             }
             auto tag = std::make_shared<UITag>();
@@ -1043,7 +1039,7 @@ namespace eokas::RoseAxion {
             tag->closeGap = 4.0f * s;
             tag->background = chip;
             tag->caption().text = label;
-            styleText(tag->caption(), fontPath, smallPx, tagInk);
+            styleText(tag->caption(), fontPath, smallPx, invertRgb(chip));
             tag->onClose = [this, row, col, label, kind]()
             {
                 if (kind == FieldKind::SingleOption)
@@ -1671,8 +1667,14 @@ namespace eokas::RoseAxion {
                 item->paddingX = 10.0f * s;
                 item->paddingY = 6.0f * s;
                 bool on = selectedContains(selectedLabels, option.label);
-                item->background = (info.kind == FieldKind::MultiOption && on) ? selected : popup;
+                item->background = popup;
                 item->hoverFill = selected;
+                item->selectedFill = selected;
+                item->selected = on;
+                item->showChip = true;
+                item->chip = optionChipColor(option.color);
+                item->chipSize = 18.0f * s;
+                item->chipGap = 8.0f * s;
                 item->setText(option.label);
                 if (UIText* text = item->label()) styleText(*text, fontPath, fontPx, ink);
                 String label = option.label;
@@ -2110,9 +2112,11 @@ namespace eokas::RoseAxion {
                         this->notifyRebuild();
                     };
                     line->attachChild(label);
-                    Color chip(0.39f, 0.40f, 0.95f, 1.0f);
-                    colorFromHex(info.options[static_cast<size_t>(i)].color, chip);
-                    auto swatch = makeButton(" ", fontPath, smallPx, 28.0f * s, 28.0f * s, chip, ink);
+                    Color chip = optionChipColor(info.options[static_cast<size_t>(i)].color);
+                    auto swatch = makeButton("", fontPath, smallPx, 28.0f * s, 28.0f * s, chip, ink);
+                    swatch->circle = true;
+                    swatch->paddingX = 0.0f;
+                    swatch->paddingY = 0.0f;
                     swatch->onClick = [this, i]()
                     {
                         mColorIndex = mColorIndex == i ? -1 : i;
@@ -2157,56 +2161,38 @@ namespace eokas::RoseAxion {
                     panel->attachChild(line);
                     if (mColorIndex == i)
                     {
-                        auto colors = std::make_shared<UIWidget>();
-                        colors->shape.pivot = Vector2(0.0f, 0.0f);
-                        colors->color = clear;
-                        setBox(colors, Rect(0.0f, 0.0f, drawerW - 40.0f * s, 120.0f * s));
-                        int presetCount = static_cast<int>(sizeof(kPresets) / sizeof(kPresets[0]));
-                        for (int p = 0; p < presetCount; ++p)
+                        const float palettePad = 4.0f;
+                        const float paletteGap = 2.0f;
+                        float paletteW = drawerW - 40.0f * s;
+                        float padPx = floorf(palettePad * s + 0.5f);
+                        float gapPx = floorf(paletteGap * s + 0.5f);
+                        float cellPx = floorf((paletteW - padPx * 2.0f - gapPx * (float)(UIPalette::kColumns - 1)) / (float)UIPalette::kColumns);
+                        if (cellPx < 16.0f)
                         {
-                            Color chipColor;
-                            colorFromHex(kPresets[p], chipColor);
-                            auto chipButton = makeButton(" ", fontPath, smallPx, 22.0f * s, 22.0f * s, chipColor, ink);
-                            float x = static_cast<float>(p % 10) * 26.0f * s;
-                            float y = static_cast<float>(p / 10) * 26.0f * s;
-                            chipButton->shape.pivot = Vector2(0.0f, 0.0f);
-                            chipButton->shape.setBox(Vector2(x, y), Vector2(22.0f * s, 22.0f * s));
-                            String hex = kPresets[p];
-                            chipButton->onClick = [this, settingsCol, i, hex]()
-                            {
-                                auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
-                                if (i < 0 || i >= static_cast<int>(options.size())) return;
-                                options[static_cast<size_t>(i)].color = hex;
-                                mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
-                                this->notifyRebuild();
-                            };
-                            colors->attachChild(chipButton);
+                            cellPx = 16.0f;
                         }
-                        panel->attachChild(colors);
-                        auto hex = std::make_shared<UIInput>();
-                        hex->shape.pivot = Vector2(0.0f, 0.0f);
-                        setBox(hex, Rect(0.0f, 0.0f, drawerW - 40.0f * s, 30.0f * s));
-                        styleInput(*hex);
-                        hex->placeholder = "#rrggbb";
-                        hex->setText(info.options[static_cast<size_t>(i)].color);
-                        hex->onSubmit = [this, settingsCol, i](const String& text)
+                        float cellSize = s > 0.0f ? cellPx / s : cellPx;
+                        Vector2 paletteSize = UIPalette::preferredSize(s, palettePad, paletteGap, cellSize);
+                        auto palette = std::make_shared<UIPalette>();
+                        palette->uiScale = s;
+                        palette->padding = palettePad;
+                        palette->spacing = paletteGap;
+                        palette->cellSize = cellSize;
+                        palette->background = field;
+                        palette->accent = accent;
+                        palette->line = Color(0.050f, 0.055f, 0.070f, 1.0f);
+                        setBox(palette, Rect(0.0f, 0.0f, paletteSize.x, paletteSize.y));
+                        Color current = optionChipColor(info.options[static_cast<size_t>(i)].color);
+                        palette->setColor(current);
+                        palette->onColorChanged = [this, settingsCol, i](const Color& value)
                         {
-                            Color parsed;
-                            if (!colorFromHex(text, parsed))
-                            {
-                                mDoc->setStatus("颜色需要是 #rrggbb");
-                                this->notifyRebuild();
-                                return;
-                            }
                             auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
                             if (i < 0 || i >= static_cast<int>(options.size())) return;
-                            String value = trimCopy(text);
-                            if (value.isEmpty() || value.at(0) != '#') value = String("#") + value;
-                            options[static_cast<size_t>(i)].color = value;
+                            options[static_cast<size_t>(i)].color = formatColor(value);
                             mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
                             this->notifyRebuild();
                         };
-                        panel->attachChild(hex);
+                        panel->attachChild(palette);
                     }
                 }
                 auto add = makeButton("添加选项", fontPath, smallPx, 120.0f * s, 30.0f * s, accent, ink);
@@ -2215,7 +2201,7 @@ namespace eokas::RoseAxion {
                     auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
                     FieldOption option;
                     option.label = String::format("选项%d", static_cast<int>(options.size()) + 1);
-                    option.color = "#6366f1";
+                    option.color = formatColor(UIPalette::paletteColor(7));
                     options.push_back(option);
                     mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
                     this->notifyRebuild();

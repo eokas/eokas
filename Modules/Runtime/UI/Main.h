@@ -24,6 +24,7 @@
 #include "widgets/UITag.h"
 #include "widgets/UISlider.h"
 #include "widgets/UIColorPicker.h"
+#include "widgets/UIPalette.h"
 #include "widgets/UINumberPicker.h"
 #include "widgets/UITimePicker.h"
 #include "widgets/UIDatePicker.h"

@@ -13,6 +13,12 @@ namespace eokas
         float paddingY = 2.0f;
         Color background { Color(0.16f, 0.16f, 0.20f, 1.0f) };
         Color hoverFill { Color(0.28f, 0.38f, 0.58f, 1.0f) };
+        Color selectedFill { Color(0.32f, 0.44f, 0.68f, 1.0f) };
+        bool selected = false;
+        bool showChip = false;
+        Color chip { Color(0.39f, 0.40f, 0.95f, 1.0f) };
+        float chipSize = 12.0f;
+        float chipGap = 8.0f;
         UIWidget::Ref content;
 
         UIMenuItem();
