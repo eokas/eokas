@@ -1,8 +1,22 @@
 #include "Unit.h"
 #include "Rose/Library.h"
 
+#include <cstdio>
+
 using namespace eokas;
 using namespace eokas::rose;
+
+static bool rose_save_load_memory(Library& library, Library& loaded) {
+    MemoryStream memory;
+    if (!memory.open())
+        return false;
+    BinaryStream stream(memory);
+    if (!library.save(stream))
+        return false;
+    if (!stream.seek(0, 0))
+        return false;
+    return loaded.load(stream);
+}
 
 EOKAS_TEST_CASE(schema) {
     SchemaHeap heap;
@@ -69,8 +83,10 @@ EOKAS_TEST_CASE(schema_options) {
 
     Library library("options");
     Schema* status = library.addSchema(SchemaType::Options, "Status");
-    EOKAS_EXPECT(status->addOption("todo", "Todo"));
-    EOKAS_EXPECT(status->addOption("done", "Done"));
+    static const u32_t kTodoColor = 0xFF0000FFu;
+    static const u32_t kDoneColor = 0xff00ff00u;
+    EOKAS_EXPECT(status->addOption("todo", "Todo", kTodoColor));
+    EOKAS_EXPECT(status->addOption("done", "Done", kDoneColor));
     Value* picked = library.make(status);
     EOKAS_EXPECT(library.set(picked, String("done")));
     String got;
@@ -90,10 +106,29 @@ EOKAS_TEST_CASE(schema_options) {
     EOKAS_EXPECT(loadedStatus->is(SchemaType::Options));
     EOKAS_EXPECT(loadedStatus->getOptionCount() == 2);
     EOKAS_EXPECT(loadedStatus->getOption(0)->name == "todo");
+    EOKAS_EXPECT(loadedStatus->getOption(0)->color == kTodoColor);
     EOKAS_EXPECT(loadedStatus->getOption(1)->label == "Done");
+    EOKAS_EXPECT(loadedStatus->getOption(1)->color == kDoneColor);
     String loadedPicked;
     EOKAS_EXPECT(loaded.get("picked", loadedPicked));
     EOKAS_EXPECT(loadedPicked == "done");
+    return 0;
+}
+
+EOKAS_TEST_CASE(schema_load_rejects_reload_same_instance) {
+    Library library("reload");
+    Schema* text = library.getSchema("String");
+    Schema* row = library.addSchema(SchemaType::Struct, "Row");
+    EOKAS_EXPECT(row->addMember("id", text));
+    MemoryStream memory;
+    EOKAS_EXPECT(memory.open());
+    BinaryStream stream(memory);
+    EOKAS_EXPECT(library.save(stream));
+    EOKAS_EXPECT(stream.seek(0, 0));
+    Library once("once");
+    EOKAS_EXPECT(once.load(stream));
+    EOKAS_EXPECT(stream.seek(0, 0));
+    EOKAS_EXPECT(!once.load(stream));
     return 0;
 }
 
@@ -291,3 +326,147 @@ EOKAS_TEST_CASE(struct_member_list_grows) {
     return 0;
 }
 
+EOKAS_TEST_CASE(library_schema_dependency_and_roots) {
+    Library library("dep-roots");
+    Schema* orphan = library.addSchema(SchemaType::Struct, "Unused");
+    EOKAS_EXPECT(orphan != nullptr);
+    EOKAS_EXPECT(!library.hasValueDependOnSchema(orphan));
+
+    Schema* text = library.getSchema("String");
+    Schema* person = library.addSchema(SchemaType::Struct, "Person");
+    person->addMember("name", text);
+    Value* who = library.make(person);
+    EOKAS_EXPECT(library.set(who, "name", String("Ada")));
+    library.set("who", who);
+    EOKAS_EXPECT(library.hasValueDependOnSchema(person));
+    EOKAS_EXPECT(library.hasValueDependOnSchema(text));
+
+    std::vector<String> roots;
+    library.getRootNames(roots);
+    EOKAS_EXPECT(roots.size() == 1);
+    bool foundWho = false;
+    for (const String& n : roots) {
+        if (n == "who")
+            foundWho = true;
+    }
+    EOKAS_EXPECT(foundWho);
+    return 0;
+}
+
+EOKAS_TEST_CASE(library_file_roundtrip) {
+    Library library("file-trip");
+    library.set("pi", 3.14159);
+    library.set("big", i64_t(424242424242LL));
+    library.set("label", String("rose-file"));
+
+    const String path = "eokas-unit-rose.bin";
+    EOKAS_EXPECT(library.save(path));
+    EOKAS_EXPECT(File::exists(path));
+
+    Library loaded("file-loaded");
+    EOKAS_EXPECT(loaded.load(path));
+    std::remove(path.cstr());
+    EOKAS_EXPECT(!File::exists(path));
+
+    f64_t pi = 0;
+    i64_t big = 0;
+    String label;
+    EOKAS_EXPECT(loaded.get("pi", pi));
+    EOKAS_EXPECT(pi == 3.14159);
+    EOKAS_EXPECT(loaded.get("big", big));
+    EOKAS_EXPECT(big == 424242424242LL);
+    EOKAS_EXPECT(loaded.get("label", label));
+    EOKAS_EXPECT(label == "rose-file");
+    return 0;
+}
+
+EOKAS_TEST_CASE(rose_full_chain) {
+    Library library("rose-full-chain");
+    EOKAS_EXPECT(library.getSchemaCount() == 4);
+
+    Schema* text = library.getSchema("String");
+    Schema* integer = library.getSchema("Int");
+    Schema* flt = library.getSchema("Float");
+    Schema* boolean = library.getSchema("Bool");
+
+    Schema* priority = library.addSchema(SchemaType::Options, "Priority");
+    static const u32_t kLowColor = 0xFF3366FFu;
+    static const u32_t kHighColor = 0xFFFF6633u;
+    EOKAS_EXPECT(priority->addOption("low", "Low", kLowColor));
+    EOKAS_EXPECT(priority->addOption("high", "High", kHighColor));
+
+    Schema* task = library.addSchema(SchemaType::Struct, "Task");
+    task->addMember("title", text, "Title");
+    task->addMember("done", boolean);
+    task->addMember("score", flt);
+    task->addMember("order", integer);
+    task->addMember("priority", priority);
+
+    Schema* backlog = library.addSchema(SchemaType::List, "Backlog");
+    backlog->setElementSchema(task);
+
+    Value* tasks = library.make(backlog);
+    Value* first = library.make(task);
+    EOKAS_EXPECT(library.set(first, "title", String("Ship Rose tests")));
+    EOKAS_EXPECT(library.set(first, "done", false));
+    EOKAS_EXPECT(library.set(first, "score", 9.5));
+    EOKAS_EXPECT(library.set(first, "order", 1));
+    EOKAS_EXPECT(library.set(first, "priority", String("high")));
+    EOKAS_EXPECT(library.push(tasks, first));
+
+    Value* second = library.make(task);
+    EOKAS_EXPECT(library.set(second, "title", String("Review")));
+    EOKAS_EXPECT(library.set(second, "priority", String("low")));
+    EOKAS_EXPECT(library.push(tasks, second));
+
+    library.set("backlog", tasks);
+    library.set("version", 4);
+
+    Library memoryLoaded("rose-full-chain-mem");
+    EOKAS_EXPECT(rose_save_load_memory(library, memoryLoaded));
+
+    EOKAS_EXPECT(memoryLoaded.getSchemaCount() == library.getSchemaCount());
+    Schema* loadedPriority = memoryLoaded.getSchema("Priority");
+    EOKAS_EXPECT(loadedPriority != nullptr);
+    EOKAS_EXPECT(loadedPriority->getOptionCount() == 2);
+    EOKAS_EXPECT(loadedPriority->getOption(1)->color == kHighColor);
+
+    Value* loadedBacklog = memoryLoaded.get("backlog");
+    EOKAS_EXPECT(loadedBacklog != nullptr);
+    EOKAS_EXPECT(memoryLoaded.count(loadedBacklog) == 2);
+
+    String title;
+    f64_t score = 0;
+    String pri;
+    EOKAS_EXPECT(memoryLoaded.get(memoryLoaded.get(loadedBacklog, 0), "title", title));
+    EOKAS_EXPECT(title == "Ship Rose tests");
+    EOKAS_EXPECT(memoryLoaded.get(memoryLoaded.get(loadedBacklog, 0), "score", score));
+    EOKAS_EXPECT(score == 9.5);
+    EOKAS_EXPECT(memoryLoaded.get(memoryLoaded.get(loadedBacklog, 1), "priority", pri));
+    EOKAS_EXPECT(pri == "low");
+
+    i32_t ver = 0;
+    EOKAS_EXPECT(memoryLoaded.get("version", ver));
+    EOKAS_EXPECT(ver == 4);
+
+    EOKAS_EXPECT(memoryLoaded.set(memoryLoaded.get(loadedBacklog, 0), "order", 99));
+    bool done = true;
+    EOKAS_EXPECT(memoryLoaded.get(memoryLoaded.get(loadedBacklog, 0), "done", done));
+    EOKAS_EXPECT(!done);
+    i32_t order = 0;
+    EOKAS_EXPECT(memoryLoaded.get(memoryLoaded.get(loadedBacklog, 0), "order", order));
+    EOKAS_EXPECT(order == 99);
+
+    const String path = "eokas-unit-rose-full-chain.bin";
+    EOKAS_EXPECT(library.save(path));
+    Library fileLoaded("rose-full-chain-file");
+    EOKAS_EXPECT(fileLoaded.load(path));
+    std::remove(path.cstr());
+
+    EOKAS_EXPECT(fileLoaded.count(fileLoaded.get("backlog")) == 2);
+    EOKAS_EXPECT(fileLoaded.hasValueDependOnSchema(fileLoaded.getSchema("Task")));
+    Schema* unused = fileLoaded.addSchema(SchemaType::Struct, "FreshUnused");
+    EOKAS_EXPECT(unused != nullptr);
+    EOKAS_EXPECT(!fileLoaded.hasValueDependOnSchema(unused));
+    return 0;
+}
