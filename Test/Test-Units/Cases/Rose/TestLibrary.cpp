@@ -28,6 +28,78 @@ EOKAS_TEST_CASE(schema) {
     people->setElementSchema(person);
     EOKAS_EXPECT(people->getElementSchema() == person);
     EOKAS_EXPECT(heap.count() == 6);
+
+    EOKAS_EXPECT(heap.rename("Person", "Human"));
+    EOKAS_EXPECT(heap.get("Person") == nullptr);
+    EOKAS_EXPECT(heap.get("Human") == person);
+    EOKAS_EXPECT(person->name() == "Human");
+    EOKAS_EXPECT(heap.rename("Human", "Human"));
+    EOKAS_EXPECT(!heap.rename("Human", "Int"));
+    EOKAS_EXPECT(!heap.rename("Missing", "X"));
+    EOKAS_EXPECT(!heap.rename("Human", String::empty));
+    Schema* extra = heap.add(SchemaType::Struct, "Extra");
+    EOKAS_EXPECT(extra != nullptr);
+    EOKAS_EXPECT(heap.remove("Extra"));
+    EOKAS_EXPECT(heap.get("Extra") == nullptr);
+    EOKAS_EXPECT(heap.get("Human") == person);
+    EOKAS_EXPECT(people->getElementSchema() == person);
+    EOKAS_EXPECT(!heap.remove("NoSuch"));
+    EOKAS_EXPECT(heap.count() == 6);
+    return 0;
+}
+
+EOKAS_TEST_CASE(schema_options) {
+    SchemaHeap heap;
+    Schema* color = heap.add(SchemaType::Options, "Color");
+    EOKAS_EXPECT(color != nullptr);
+    EOKAS_EXPECT(color->is(SchemaType::Options));
+    color->setOptions({ "red", "green", "blue" });
+    EOKAS_EXPECT(color->getOptions().size() == 3);
+    EOKAS_EXPECT(color->getOptions()[1] == "green");
+
+    Schema* integer = heap.get("Int");
+    integer->setOptions({ "nope" });
+    EOKAS_EXPECT(integer->getOptions().empty());
+
+    Library library("options");
+    Schema* status = library.addSchema(SchemaType::Options, "Status");
+    status->setOptions({ "todo", "done" });
+    Value* picked = library.make(status);
+    EOKAS_EXPECT(library.set(picked, String("done")));
+    String got;
+    EOKAS_EXPECT(library.get(picked, got));
+    EOKAS_EXPECT(got == "done");
+
+    library.set("picked", picked);
+    MemoryStream memory;
+    EOKAS_EXPECT(memory.open());
+    BinaryStream stream(memory);
+    EOKAS_EXPECT(library.save(stream));
+    EOKAS_EXPECT(stream.seek(0, 0));
+    Library loaded("loaded-options");
+    EOKAS_EXPECT(loaded.load(stream));
+    Schema* loadedStatus = loaded.getSchema("Status");
+    EOKAS_EXPECT(loadedStatus != nullptr);
+    EOKAS_EXPECT(loadedStatus->is(SchemaType::Options));
+    EOKAS_EXPECT(loadedStatus->getOptions().size() == 2);
+    EOKAS_EXPECT(loadedStatus->getOptions()[0] == "todo");
+    String loadedPicked;
+    EOKAS_EXPECT(loaded.get("picked", loadedPicked));
+    EOKAS_EXPECT(loadedPicked == "done");
+    return 0;
+}
+
+EOKAS_TEST_CASE(schema_library_rename_remove) {
+    Library library("schema-rename");
+    Schema* person = library.addSchema(SchemaType::Struct, "Person");
+    EOKAS_EXPECT(person != nullptr);
+    EOKAS_EXPECT(library.renameSchema("Person", "Human"));
+    EOKAS_EXPECT(library.getSchema("Person") == nullptr);
+    EOKAS_EXPECT(library.getSchema("Human") == person);
+    EOKAS_EXPECT(!library.renameSchema("Human", "String"));
+    EOKAS_EXPECT(library.removeSchema("Human"));
+    EOKAS_EXPECT(library.getSchema("Human") == nullptr);
+    EOKAS_EXPECT(!library.removeSchema("Human"));
     return 0;
 }
 

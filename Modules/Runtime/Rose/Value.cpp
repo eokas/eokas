@@ -94,7 +94,7 @@ namespace eokas::rose
             return &value;
         }
 
-        if (schema->type() == SchemaType::String)
+        if (schema->is(SchemaType::String) || schema->is(SchemaType::Options))
         {
             size_t index = this->strings.size();
             String &str = this->strings.emplace_back("");
@@ -294,7 +294,7 @@ namespace eokas::rose
     {
         if (ptr == nullptr)
             return false;
-        if (!ptr->schema->is(SchemaType::String))
+        if (!ptr->schema->is(SchemaType::String) && !ptr->schema->is(SchemaType::Options))
             return false;
         i64_t index = ptr->value.i64;
         if (index < 0 || index >= this->strings.size())
@@ -347,7 +347,7 @@ namespace eokas::rose
     {
         if (ptr == nullptr)
             return false;
-        if (!ptr->schema->is(SchemaType::String))
+        if (!ptr->schema->is(SchemaType::String) && !ptr->schema->is(SchemaType::Options))
             return false;
 
         size_t index = this->strings.size();
@@ -389,5 +389,56 @@ namespace eokas::rose
         this->lists.clear();
         this->objects.clear();
         this->strings.clear();
+    }
+
+    bool ValueHeap::doesValueDependOnSchema(const Value *value, const Schema *schema) const
+    {
+        if (value == nullptr || schema == nullptr || value->schema == nullptr)
+        {
+            return false;
+        }
+        if (value->schema == schema)
+        {
+            return true;
+        }
+
+        const SchemaType type = value->schema->type();
+        if (type == SchemaType::List)
+        {
+            const i64_t index = value->value.i64;
+            if (index < 0 || static_cast<size_t>(index) >= this->lists.size())
+            {
+                return false;
+            }
+            const List &list = this->lists.at(static_cast<size_t>(index));
+            for (const Value &element : list.elements)
+            {
+                if (this->doesValueDependOnSchema(&element, schema))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        if (type == SchemaType::Struct)
+        {
+            const i64_t index = value->value.i64;
+            if (index < 0 || static_cast<size_t>(index) >= this->objects.size())
+            {
+                return false;
+            }
+            const Object &object = this->objects.at(static_cast<size_t>(index));
+            for (const auto &pair : object.members)
+            {
+                if (this->doesValueDependOnSchema(&pair.second, schema))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        return false;
     }
 }

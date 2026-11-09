@@ -1,10 +1,13 @@
 #include "./Schema.h"
 
+#include <cstddef>
+
 namespace eokas::rose
 {
     Schema::Schema(SchemaType type, const String &name)
         : mType(type)
           , mName(name)
+          , mBody{}
     {
         if (mType == SchemaType::List)
         {
@@ -12,6 +15,10 @@ namespace eokas::rose
         } else if (mType == SchemaType::Struct)
         {
             mBody.structBody = new StructBody();
+        }
+        else if (mType == SchemaType::Options)
+        {
+            mBody.optionsBody = new OptionsBody();
         }
     }
 
@@ -24,6 +31,10 @@ namespace eokas::rose
         if (mType == SchemaType::Struct)
         {
             _DeletePointer(mBody.structBody);
+        }
+        if (mType == SchemaType::Options)
+        {
+            _DeletePointer(mBody.optionsBody);
         }
     }
 
@@ -140,6 +151,21 @@ namespace eokas::rose
         return -1;
     }
 
+    void Schema::setOptions(const std::vector<String>& options)
+    {
+        if (mType != SchemaType::Options)
+            return;
+        mBody.optionsBody->options = options;
+    }
+
+    const std::vector<String>& Schema::getOptions() const
+    {
+        static const std::vector<String> kEmpty;
+        if (mType != SchemaType::Options)
+            return kEmpty;
+        return mBody.optionsBody->options;
+    }
+
     SchemaHeap::SchemaHeap()
         : mSchemas()
     {
@@ -197,5 +223,51 @@ namespace eokas::rose
         if (iter == mSchemaMap.end())
             return -1;
         return u32_t(iter->second);
+    }
+
+    bool SchemaHeap::rename(const String &from, const String &to)
+    {
+        if (from == to)
+        {
+            return this->get(from) != nullptr;
+        }
+        if (to.isEmpty())
+        {
+            return false;
+        }
+        auto iter = mSchemaMap.find(from);
+        if (iter == mSchemaMap.end())
+        {
+            return false;
+        }
+        if (mSchemaMap.find(to) != mSchemaMap.end())
+        {
+            return false;
+        }
+        u32_t index = iter->second;
+        Schema *schema = mSchemas.at(index);
+        mSchemaMap.erase(iter);
+        schema->setName(to);
+        mSchemaMap.insert(std::make_pair(to, index));
+        return true;
+    }
+
+    bool SchemaHeap::remove(const String &name)
+    {
+        auto iter = mSchemaMap.find(name);
+        if (iter == mSchemaMap.end())
+        {
+            return false;
+        }
+        u32_t index = iter->second;
+        Schema *schema = mSchemas.at(index);
+        mSchemas.erase(mSchemas.begin() + static_cast<std::ptrdiff_t>(index));
+        mSchemaMap.clear();
+        for (u32_t i = 0; i < u32_t(mSchemas.size()); ++i)
+        {
+            mSchemaMap.insert(std::make_pair(mSchemas[i]->name(), i));
+        }
+        delete schema;
+        return true;
     }
 }

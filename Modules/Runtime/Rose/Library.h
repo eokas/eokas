@@ -25,6 +25,9 @@ namespace eokas::rose
         Schema* getSchema(u32_t index) const;
         u32_t getSchemaCount() const;
         u32_t getSchemaIndex(const String& name) const;
+        bool renameSchema(const String& from, const String& to);
+        bool removeSchema(const String& name);
+        bool hasValueDependOnSchema(const Schema* schema) const;
 
         void getRootNames(std::vector<String>& names) const;
 

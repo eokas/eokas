@@ -42,7 +42,7 @@ namespace eokas::rose
     bool Library::load(BinaryStream &stream)
     {
         static const String MAGIC = "ROSE";
-        static const i32_t VERSION = 1;
+        static const i32_t VERSION = 2;
 
         if (!stream.isOpen())
         {
@@ -68,6 +68,14 @@ namespace eokas::rose
             if (!stream.read(name)) return false;
 
             Schema *schema = mSchemas.add(type, name);
+            if (schema == nullptr)
+            {
+                schema = mSchemas.get(name);
+            }
+            if (schema == nullptr)
+            {
+                return false;
+            }
 
             if (type == SchemaType::List)
             {
@@ -88,6 +96,20 @@ namespace eokas::rose
                     Schema *memberSchema = mSchemas.get(memberSchemaIndex);
                     schema->addMember(memberName, memberSchema);
                 }
+            }
+            else if (type == SchemaType::Options)
+            {
+                u32_t optionCount = 0;
+                if (!stream.read(optionCount)) return false;
+                std::vector<String> options;
+                options.reserve(optionCount);
+                for (u32_t optionIndex = 0; optionIndex < optionCount; optionIndex++)
+                {
+                    String option;
+                    if (!stream.read(option)) return false;
+                    options.push_back(option);
+                }
+                schema->setOptions(options);
             }
         }
 
@@ -175,7 +197,7 @@ namespace eokas::rose
     bool Library::save(BinaryStream &stream)
     {
         static const String MAGIC_TOKEN = "ROSE";
-        static const i32_t VERSION = 1;
+        static const i32_t VERSION = 2;
 
         if (!stream.isOpen())
         {
@@ -209,6 +231,15 @@ namespace eokas::rose
                     auto *member = schema->getMember(memberIndex);
                     stream.write(member->name);
                     stream.write(mSchemas.indexOf(member->schema->name()));
+                }
+            }
+            else if (type == SchemaType::Options)
+            {
+                const std::vector<String>& options = schema->getOptions();
+                stream.write(u32_t(options.size()));
+                for (const String& option : options)
+                {
+                    stream.write(option);
                 }
             }
         }
@@ -286,6 +317,32 @@ namespace eokas::rose
     u32_t Library::getSchemaIndex(const String &name) const
     {
         return mSchemas.indexOf(name);
+    }
+
+    bool Library::renameSchema(const String &from, const String &to)
+    {
+        return mSchemas.rename(from, to);
+    }
+
+    bool Library::removeSchema(const String &name)
+    {
+        return mSchemas.remove(name);
+    }
+
+    bool Library::hasValueDependOnSchema(const Schema *schema) const
+    {
+        if (schema == nullptr)
+        {
+            return false;
+        }
+        for (const Value &value : mValues.values)
+        {
+            if (mValues.doesValueDependOnSchema(&value, schema))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     void Library::getRootNames(std::vector<String> &names) const

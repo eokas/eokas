@@ -169,6 +169,8 @@ namespace eokas::rose {
         bool clear(Value* value);
         void clear();
 
+        bool doesValueDependOnSchema(const Value* value, const Schema* schema) const;
+
     private:
         SchemaHeap& mSchemaHeap;
     };

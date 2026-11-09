@@ -13,6 +13,7 @@ namespace eokas::rose
         String,
         List,
         Struct,
+        Options,
     };
 
     class Schema
@@ -33,6 +34,11 @@ namespace eokas::rose
         {
             std::vector<Member> members = {};
         };
+
+        struct OptionsBody
+        {
+            std::vector<String> options = {};
+        };
         
         Schema(SchemaType type, const String& name);
         virtual ~Schema();
@@ -42,6 +48,7 @@ namespace eokas::rose
 
         SchemaType type() const { return mType; }
         String name() const { return mName; }
+        void setName(const String& name) { mName = name; }
         bool is(SchemaType type) const { return mType == type; }
 
         void setElementSchema(Schema* schema);
@@ -55,6 +62,9 @@ namespace eokas::rose
         u32_t getMemberCount();
         u32_t getMemberIndex(const String& name);
 
+        void setOptions(const std::vector<String>& options);
+        const std::vector<String>& getOptions() const;
+
     private:
         SchemaType mType;
         String mName;
@@ -62,6 +72,7 @@ namespace eokas::rose
         {
             ListBody* listBody;
             StructBody* structBody;
+            OptionsBody* optionsBody;
         } mBody;
     };
 
@@ -76,6 +87,8 @@ namespace eokas::rose
         Schema* get(u32_t index) const;
         u32_t count() const;
         u32_t indexOf(const String& name) const;
+        bool rename(const String& from, const String& to);
+        bool remove(const String& name);
 
     private:
         std::map<String, u32_t> mSchemaMap;
