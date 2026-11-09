@@ -42,7 +42,7 @@ namespace eokas::rose
     bool Library::load(BinaryStream &stream)
     {
         static const String MAGIC = "ROSE";
-        static const i32_t VERSION = 2;
+        static const i32_t VERSION = 4;
 
         if (!stream.isOpen())
         {
@@ -91,25 +91,34 @@ namespace eokas::rose
                 {
                     String memberName;
                     u32_t memberSchemaIndex = -1;
+                    String memberLabel;
+                    u32_t memberColor = 0;
                     if (!stream.read(memberName)) return false;
                     if (!stream.read(memberSchemaIndex)) return false;
+                    if (!stream.read(memberLabel)) return false;
+                    if (!stream.read(memberColor)) return false;
                     Schema *memberSchema = mSchemas.get(memberSchemaIndex);
-                    schema->addMember(memberName, memberSchema);
+                    if (memberSchema == nullptr)
+                        return false;
+                    if (!schema->addMember(memberName, memberSchema, memberLabel, memberColor))
+                        return false;
                 }
             }
             else if (type == SchemaType::Options)
             {
                 u32_t optionCount = 0;
                 if (!stream.read(optionCount)) return false;
-                std::vector<String> options;
-                options.reserve(optionCount);
                 for (u32_t optionIndex = 0; optionIndex < optionCount; optionIndex++)
                 {
-                    String option;
-                    if (!stream.read(option)) return false;
-                    options.push_back(option);
+                    String name;
+                    String label;
+                    u32_t color = 0;
+                    if (!stream.read(name)) return false;
+                    if (!stream.read(label)) return false;
+                    if (!stream.read(color)) return false;
+                    if (!schema->addOption(name, label, color))
+                        return false;
                 }
-                schema->setOptions(options);
             }
         }
 
@@ -197,7 +206,7 @@ namespace eokas::rose
     bool Library::save(BinaryStream &stream)
     {
         static const String MAGIC_TOKEN = "ROSE";
-        static const i32_t VERSION = 2;
+        static const i32_t VERSION = 4;
 
         if (!stream.isOpen())
         {
@@ -231,15 +240,20 @@ namespace eokas::rose
                     auto *member = schema->getMember(memberIndex);
                     stream.write(member->name);
                     stream.write(mSchemas.indexOf(member->schema->name()));
+                    stream.write(member->label);
+                    stream.write(member->color);
                 }
             }
             else if (type == SchemaType::Options)
             {
-                const std::vector<String>& options = schema->getOptions();
-                stream.write(u32_t(options.size()));
-                for (const String& option : options)
+                u32_t optionCount = schema->getOptionCount();
+                stream.write(optionCount);
+                for (u32_t i = 0; i < optionCount; ++i)
                 {
-                    stream.write(option);
+                    Schema::Option* option = schema->getOption(i);
+                    stream.write(option->name);
+                    stream.write(option->label);
+                    stream.write(option->color);
                 }
             }
         }

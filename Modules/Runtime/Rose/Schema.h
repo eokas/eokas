@@ -22,7 +22,16 @@ namespace eokas::rose
         struct Member
         {
             String name;
-            Schema* schema;
+            Schema* schema = nullptr;
+            String label;
+            u32_t color = 0; // R8G8B8A8: R|G<<8|B<<16|A<<24 (little-endian byte order)
+        };
+
+        struct Option
+        {
+            String name;
+            String label;
+            u32_t color = 0; // R8G8B8A8: R|G<<8|B<<16|A<<24 (little-endian byte order)
         };
 
         struct ListBody
@@ -37,7 +46,7 @@ namespace eokas::rose
 
         struct OptionsBody
         {
-            std::vector<String> options = {};
+            std::vector<Option> options = {};
         };
         
         Schema(SchemaType type, const String& name);
@@ -54,16 +63,21 @@ namespace eokas::rose
         void setElementSchema(Schema* schema);
         Schema* getElementSchema() const;
 
-        void addMember(const String& name, Schema* schema);
-        void setMember(const String& name, Schema* schema);
+        bool addMember(const String& name, Schema* schema, const String& label = String::empty, u32_t color = 0);
+        bool setMember(const String& name, Schema* schema, const String& label = String::empty, u32_t color = 0);
         void delMember(const String& name);
         Member* getMember(const String& name);
         Member* getMember(u32_t index);
         u32_t getMemberCount();
         u32_t getMemberIndex(const String& name);
 
-        void setOptions(const std::vector<String>& options);
-        const std::vector<String>& getOptions() const;
+        bool addOption(const String& name, const String& label = String::empty, u32_t color = 0);
+        bool setOption(const String& name, const String& label = String::empty, u32_t color = 0);
+        void delOption(const String& name);
+        Option* getOption(const String& name);
+        Option* getOption(u32_t index);
+        u32_t getOptionCount();
+        u32_t getOptionIndex(const String& name);
 
     private:
         SchemaType mType;

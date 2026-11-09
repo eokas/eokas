@@ -67,29 +67,37 @@ namespace eokas::rose
         return nullptr;
     }
 
-    void Schema::addMember(const String &name, Schema *schema)
+    bool Schema::addMember(const String &name, Schema *schema, const String &label, u32_t color)
     {
         if (mType != SchemaType::Struct)
-            return;
+            return false;
+        if (name.isEmpty() || this->getMember(name) != nullptr)
+            return false;
 
         Member &mem = mBody.structBody->members.emplace_back();
         mem.name = name;
         mem.schema = schema;
+        mem.label = label;
+        mem.color = color;
+        return true;
     }
 
-    void Schema::setMember(const String &name, Schema *schema)
+    bool Schema::setMember(const String &name, Schema *schema, const String &label, u32_t color)
     {
         if (mType != SchemaType::Struct)
-            return;
+            return false;
+        if (name.isEmpty())
+            return false;
 
         Member *exists = this->getMember(name);
         if (exists != nullptr)
         {
             exists->schema = schema;
-        } else
-        {
-            this->addMember(name, schema);
+            exists->label = label;
+            exists->color = color;
+            return true;
         }
+        return this->addMember(name, schema, label, color);
     }
 
     void Schema::delMember(const String &name)
@@ -151,19 +159,95 @@ namespace eokas::rose
         return -1;
     }
 
-    void Schema::setOptions(const std::vector<String>& options)
+    bool Schema::addOption(const String &name, const String &label, u32_t color)
+    {
+        if (mType != SchemaType::Options)
+            return false;
+        if (name.isEmpty() || this->getOption(name) != nullptr)
+            return false;
+
+        Option &opt = mBody.optionsBody->options.emplace_back();
+        opt.name = name;
+        opt.label = label;
+        opt.color = color;
+        return true;
+    }
+
+    bool Schema::setOption(const String &name, const String &label, u32_t color)
+    {
+        if (mType != SchemaType::Options)
+            return false;
+        if (name.isEmpty())
+            return false;
+
+        Option *exists = this->getOption(name);
+        if (exists != nullptr)
+        {
+            exists->label = label;
+            exists->color = color;
+            return true;
+        }
+        return this->addOption(name, label, color);
+    }
+
+    void Schema::delOption(const String &name)
     {
         if (mType != SchemaType::Options)
             return;
-        mBody.optionsBody->options = options;
+
+        auto &options = mBody.optionsBody->options;
+        auto iter = options.begin();
+        while (iter != options.end())
+        {
+            if (iter->name == name)
+            {
+                iter = options.erase(iter);
+                continue;
+            }
+            ++iter;
+        }
     }
 
-    const std::vector<String>& Schema::getOptions() const
+    Schema::Option *Schema::getOption(const String &name)
     {
-        static const std::vector<String> kEmpty;
         if (mType != SchemaType::Options)
-            return kEmpty;
-        return mBody.optionsBody->options;
+            return nullptr;
+
+        for (auto &opt: mBody.optionsBody->options)
+        {
+            if (opt.name == name)
+                return &opt;
+        }
+        return nullptr;
+    }
+
+    Schema::Option *Schema::getOption(u32_t index)
+    {
+        if (mType != SchemaType::Options)
+            return nullptr;
+        return &mBody.optionsBody->options.at(index);
+    }
+
+    u32_t Schema::getOptionCount()
+    {
+        if (mType != SchemaType::Options)
+            return 0;
+        return u32_t(mBody.optionsBody->options.size());
+    }
+
+    u32_t Schema::getOptionIndex(const String &name)
+    {
+        if (mType != SchemaType::Options)
+            return -1;
+        const auto &options = mBody.optionsBody->options;
+        for (u32_t i = 0; i < u32_t(options.size()); i++)
+        {
+            if (options[i].name == name)
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     SchemaHeap::SchemaHeap()

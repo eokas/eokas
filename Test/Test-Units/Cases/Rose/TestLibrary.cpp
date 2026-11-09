@@ -18,8 +18,9 @@ EOKAS_TEST_CASE(schema) {
     EOKAS_EXPECT(*integer != *text);
 
     Schema* person = heap.add(SchemaType::Struct, "Person");
-    person->addMember("name", text);
-    person->addMember("age", integer);
+    EOKAS_EXPECT(person->addMember("name", text));
+    EOKAS_EXPECT(person->addMember("age", integer));
+    EOKAS_EXPECT(!person->addMember("name", text));
     EOKAS_EXPECT(person->getMemberCount() == 2);
     EOKAS_EXPECT(person->getMember("name")->schema == text);
     EOKAS_EXPECT(person->getMemberIndex("age") == 1);
@@ -53,17 +54,23 @@ EOKAS_TEST_CASE(schema_options) {
     Schema* color = heap.add(SchemaType::Options, "Color");
     EOKAS_EXPECT(color != nullptr);
     EOKAS_EXPECT(color->is(SchemaType::Options));
-    color->setOptions({ "red", "green", "blue" });
-    EOKAS_EXPECT(color->getOptions().size() == 3);
-    EOKAS_EXPECT(color->getOptions()[1] == "green");
+    EOKAS_EXPECT(color->addOption("red", "Red"));
+    EOKAS_EXPECT(color->addOption("green", "Green"));
+    EOKAS_EXPECT(color->addOption("blue", "Blue"));
+    EOKAS_EXPECT(!color->addOption("red", "Dup"));
+    EOKAS_EXPECT(color->getOptionCount() == 3);
+    EOKAS_EXPECT(color->getOption(1)->name == "green");
+    EOKAS_EXPECT(color->getOptionIndex("green") == 1);
+    EOKAS_EXPECT(color->setOption("green", "Greenish", 0xff00ff00u));
 
     Schema* integer = heap.get("Int");
-    integer->setOptions({ "nope" });
-    EOKAS_EXPECT(integer->getOptions().empty());
+    EOKAS_EXPECT(!integer->addOption("nope"));
+    EOKAS_EXPECT(integer->getOptionCount() == 0);
 
     Library library("options");
     Schema* status = library.addSchema(SchemaType::Options, "Status");
-    status->setOptions({ "todo", "done" });
+    EOKAS_EXPECT(status->addOption("todo", "Todo"));
+    EOKAS_EXPECT(status->addOption("done", "Done"));
     Value* picked = library.make(status);
     EOKAS_EXPECT(library.set(picked, String("done")));
     String got;
@@ -81,8 +88,9 @@ EOKAS_TEST_CASE(schema_options) {
     Schema* loadedStatus = loaded.getSchema("Status");
     EOKAS_EXPECT(loadedStatus != nullptr);
     EOKAS_EXPECT(loadedStatus->is(SchemaType::Options));
-    EOKAS_EXPECT(loadedStatus->getOptions().size() == 2);
-    EOKAS_EXPECT(loadedStatus->getOptions()[0] == "todo");
+    EOKAS_EXPECT(loadedStatus->getOptionCount() == 2);
+    EOKAS_EXPECT(loadedStatus->getOption(0)->name == "todo");
+    EOKAS_EXPECT(loadedStatus->getOption(1)->label == "Done");
     String loadedPicked;
     EOKAS_EXPECT(loaded.get("picked", loadedPicked));
     EOKAS_EXPECT(loadedPicked == "done");
@@ -219,6 +227,36 @@ EOKAS_TEST_CASE(row_string_list) {
     EOKAS_EXPECT(loaded.get(loadedTags, 1, second));
     EOKAS_EXPECT(first == "red");
     EOKAS_EXPECT(second == "blue");
+    return 0;
+}
+
+EOKAS_TEST_CASE(schema_member_meta) {
+    Library library("member-meta");
+    Schema* text = library.getSchema("String");
+    Schema* row = library.addSchema(SchemaType::Struct, "Row");
+    static const u32_t kRed = 0xFF0000FFu;
+    row->addMember("id", text, String("编号"), kRed);
+    Schema::Member* m = row->getMember("id");
+    EOKAS_EXPECT(m != nullptr);
+    EOKAS_EXPECT(m->label == "编号");
+    EOKAS_EXPECT(m->color == kRed);
+
+    row->setMember("id", text, String("ID"), 0u);
+    EOKAS_EXPECT(m->label == "ID");
+    EOKAS_EXPECT(m->color == 0u);
+
+    MemoryStream memory;
+    EOKAS_EXPECT(memory.open());
+    BinaryStream stream(memory);
+    EOKAS_EXPECT(library.save(stream));
+    EOKAS_EXPECT(stream.seek(0, 0));
+    Library loaded("loaded-member-meta");
+    EOKAS_EXPECT(loaded.load(stream));
+    Schema* loadedRow = loaded.getSchema("Row");
+    Schema::Member* loadedMember = loadedRow->getMember("id");
+    EOKAS_EXPECT(loadedMember != nullptr);
+    EOKAS_EXPECT(loadedMember->label == "ID");
+    EOKAS_EXPECT(loadedMember->color == 0u);
     return 0;
 }
 
