@@ -93,6 +93,7 @@ namespace eokas
         }
         Matrix3 localToScreen = matrixLocalToScreen();
         Color bg = background;
+        bool on = false;
         if (isPressed())
         {
             bg = pressedFill;
@@ -104,6 +105,11 @@ namespace eokas
         else if (selected)
         {
             bg = selectedFill;
+            on = true;
+        }
+        if (mLabel)
+        {
+            mLabel->style.color = on ? selectedInk : ink;
         }
         primitive.addQuad(localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         UIWidget::render(primitive);
@@ -340,6 +346,8 @@ namespace eokas
             item->hoverFill = itemHover;
             item->pressedFill = itemPressed;
             item->selectedFill = itemSelected;
+            item->ink = itemInk;
+            item->selectedInk = itemSelectedInk;
             this->copyFont(item->label());
             dropdown->placeChild(*item, Vector2(0.0f, snap(y)), Vector2(shape.size.x, rowH));
             y += rowH;

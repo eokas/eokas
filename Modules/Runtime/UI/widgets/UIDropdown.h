@@ -19,6 +19,8 @@ namespace eokas
         Color hoverFill { Color(0.28f, 0.38f, 0.58f, 1.0f) };
         Color pressedFill { Color(0.18f, 0.28f, 0.50f, 1.0f) };
         Color selectedFill { Color(0.32f, 0.44f, 0.68f, 1.0f) };
+        Color ink { Color(0.92f, 0.92f, 0.94f, 1.0f) };
+        Color selectedInk { Color(0.08f, 0.08f, 0.10f, 1.0f) };
 
         void setLabel(const String& text);
         UIText* label() const;
@@ -53,6 +55,8 @@ namespace eokas
         Color itemHover { Color(0.28f, 0.38f, 0.58f, 1.0f) };
         Color itemPressed { Color(0.18f, 0.28f, 0.50f, 1.0f) };
         Color itemSelected { Color(0.32f, 0.44f, 0.68f, 1.0f) };
+        Color itemInk { Color(0.92f, 0.92f, 0.94f, 1.0f) };
+        Color itemSelectedInk { Color(0.08f, 0.08f, 0.10f, 1.0f) };
         std::function<void(int)> onValueChanged;
 
         UIDropdown();
