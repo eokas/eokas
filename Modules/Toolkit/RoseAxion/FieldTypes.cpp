@@ -1,4 +1,5 @@
 #include "./FieldTypes.h"
+#include "./BuildinSchema.h"
 
 #include <cstdlib>
 
@@ -272,6 +273,62 @@ namespace eokas::RoseAxion {
     bool fieldKindIsText(FieldKind kind)
     {
         return kind != FieldKind::Integer && kind != FieldKind::Float && kind != FieldKind::Boolean;
+    }
+
+    const char* schemaNameFromFieldKind(FieldKind kind)
+    {
+        switch (kind)
+        {
+        case FieldKind::Integer: return "Int";
+        case FieldKind::Float: return "Float";
+        case FieldKind::Boolean: return "Bool";
+        case FieldKind::Date: return "Date";
+        case FieldKind::Time: return "Time";
+        case FieldKind::DateTime: return "DateTime";
+        case FieldKind::Url: return "URL";
+        case FieldKind::Email: return "Email";
+        case FieldKind::Color: return "Color";
+        case FieldKind::FilePath: return "FilePath";
+        case FieldKind::FolderPath: return "FolderPath";
+        case FieldKind::Text:
+        default:
+            return "String";
+        }
+    }
+
+    FieldKind fieldKindFromSchemaName(const String& name)
+    {
+        if (name == "Int" || name == "integer") return FieldKind::Integer;
+        if (name == "Float" || name == "float") return FieldKind::Float;
+        if (name == "Bool" || name == "boolean") return FieldKind::Boolean;
+        if (name == "Date" || name == "date") return FieldKind::Date;
+        if (name == "Time" || name == "time") return FieldKind::Time;
+        if (name == "DateTime" || name == "datetime") return FieldKind::DateTime;
+        if (name == "URL" || name == "Url" || name == "url") return FieldKind::Url;
+        if (name == "Email" || name == "email") return FieldKind::Email;
+        if (name == "Color" || name == "color") return FieldKind::Color;
+        if (name == "FilePath" || name == "filePath") return FieldKind::FilePath;
+        if (name == "FolderPath" || name == "folderPath") return FieldKind::FolderPath;
+        return FieldKind::Text;
+    }
+
+    String canonicalizeColumnType(const String& stored)
+    {
+        if (stored.isEmpty())
+        {
+            return String("String");
+        }
+        return stored;
+    }
+
+    String schemaLabel(const String& schemaName)
+    {
+        String canonical = canonicalizeColumnType(schemaName);
+        if (isBuildinSchema(canonical))
+        {
+            return String(fieldKindLabel(fieldKindFromSchemaName(canonical)));
+        }
+        return schemaName;
     }
 
     String trimCopy(const String& text)

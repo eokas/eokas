@@ -29,6 +29,10 @@ namespace eokas::RoseAxion {
     const char* fieldKindLabel(FieldKind kind);
     FieldKind fieldKindFromKey(const String& key);
     bool fieldKindIsText(FieldKind kind);
+    const char* schemaNameFromFieldKind(FieldKind kind);
+    FieldKind fieldKindFromSchemaName(const String& name);
+    String canonicalizeColumnType(const String& stored);
+    String schemaLabel(const String& schemaName);
 
     String trimCopy(const String& text);
     bool validateField(FieldKind kind, const String& text);

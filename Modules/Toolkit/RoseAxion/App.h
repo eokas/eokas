@@ -43,7 +43,7 @@ namespace eokas::RoseAxion {
         bool requestClose();
 
     private:
-        enum class ConfirmKind { None, ChangeType, DeleteColumn, Unsaved };
+        enum class ConfirmKind { None, ChangeType, DeleteColumn, DeleteTable, DeleteSchema, Unsaved };
         enum class PendingAction { None, New, Open, Close };
 
         void requestRebuild();
@@ -77,7 +77,10 @@ namespace eokas::RoseAxion {
         PendingAction mPending = PendingAction::None;
         bool mCloseAllowed = false;
         int mConfirmCol = -1;
-        FieldKind mPendingKind = FieldKind::Text;
+        int mConfirmTable = -1;
+        int mConfirmSchema = -1;
+        int mBoundTable = -1;
+        String mPendingType;
         bool mResetScroll = false;
     };
 

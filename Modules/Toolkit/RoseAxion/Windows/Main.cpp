@@ -1,4 +1,5 @@
 #include "../App.h"
+#include "../Theme.h"
 
 #include "Base/IO.h"
 #include "Base/Time.h"
@@ -375,6 +376,7 @@ namespace {
             mFont->prepareSize(static_cast<uint32_t>(15.0f * mScale + 0.5f));
             mFont->prepareSize(static_cast<uint32_t>(13.0f * mScale + 0.5f));
             mFont->prepareSize(static_cast<uint32_t>(17.0f * mScale + 0.5f));
+            mFont->prepareSize(static_cast<uint32_t>(20.0f * mScale + 0.5f));
             eokas::UIFont::bind(mFontPath, mFont.get());
             this->uploadFont();
 
@@ -400,7 +402,7 @@ namespace {
             camera->viewport.front = 0.0f;
             camera->viewport.back = 1.0f;
             mCamera = camera;
-            mSpace.clearColor = eokas::Color(0.102f, 0.110f, 0.133f, 1.0f);
+            mSpace.clearColor = eokas::RoseAxion::theme().canvas;
             mSpace.add(camera);
             mSpace.activeCamera = camera;
             mSpace.add(mWindow.primitive());
@@ -438,6 +440,7 @@ namespace {
                 return;
             }
             mApp.tick();
+            mSpace.clearColor = eokas::RoseAxion::theme().canvas;
             this->uploadFont();
             mWindow.tick(delta);
             this->uploadFont();

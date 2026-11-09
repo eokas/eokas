@@ -1,60 +1,18 @@
 #include "./App.h"
+#include "./Prefs.h"
+#include "./Theme.h"
+#include "./UiKit.h"
 
 #include "UI/Main.h"
 #include "UI/UIFont.h"
 #include "UI/UIWindow.h"
 
+#include <cmath>
 #include <utility>
 
 namespace eokas::RoseAxion {
 
     namespace {
-
-        void setBox(UIWidget& widget, const Rect& box)
-        {
-            widget.shape.size = box.size;
-            widget.shape.origin = box.origin + widget.shape.pivot * widget.shape.size;
-        }
-
-        void setBox(const std::shared_ptr<UIWidget>& widget, const Rect& box)
-        {
-            setBox(*widget, box);
-        }
-
-        void styleText(UIText& text, const String& font, float size, const Color& color)
-        {
-            text.style.fontPath = font;
-            text.style.fontSize = size;
-            text.style.color = color;
-        }
-
-        std::shared_ptr<UIText> makeText(const String& value, const String& font, float size, const Color& color, float width, float height)
-        {
-            auto text = std::make_shared<UIText>();
-            text->text = value;
-            styleText(*text, font, size, color);
-            text->maxWidth = width;
-            setBox(text, Rect(0.0f, 0.0f, width, height));
-            return text;
-        }
-
-        std::shared_ptr<UIButton> makeButton(const String& label, const String& font, float size, float width, float height, const Color& fill, const Color& ink)
-        {
-            auto button = std::make_shared<UIButton>();
-            button->shape.pivot = Vector2(0.0f, 0.0f);
-            setBox(button, Rect(0.0f, 0.0f, width, height));
-            button->paddingX = 8.0f;
-            button->paddingY = 4.0f;
-            button->background = fill;
-            button->hoverFill = Color(fill.r + 0.08f, fill.g + 0.08f, fill.b + 0.08f, 1.0f);
-            button->pressedFill = Color(fill.r * 0.8f, fill.g * 0.8f, fill.b * 0.8f, 1.0f);
-            button->setText(label);
-            if (UIText* text = button->label())
-            {
-                styleText(*text, font, size, ink);
-            }
-            return button;
-        }
 
         bool statusFailed(const String& text)
         {
@@ -65,7 +23,16 @@ namespace eokas::RoseAxion {
                 || text == "这不是 RoseAxion 表格"
                 || text == "保存失败"
                 || text == "颜色需要是 #rrggbb"
-                || text == "日期时间格式无效";
+                || text == "日期时间格式无效"
+                || text == "表格名称不能为空"
+                || text == "表格名称已存在"
+                || text == "无法创建表格"
+                || text == "模式名称不能为空"
+                || text == "模式名称已存在"
+                || text == "无法创建模式"
+                || text == "无法删除模式"
+                || text == "成员名称不能为空"
+                || text == "成员名称已存在";
         }
 
         struct MenuGate
@@ -89,6 +56,7 @@ namespace eokas::RoseAxion {
         mHost = host;
         mFont = fontPath;
         mScale = scale < 0.5f ? 1.0f : scale;
+        loadPrefs();
         mRebuild = true;
     }
 
@@ -192,10 +160,10 @@ namespace eokas::RoseAxion {
         host.pickFolderPath = mHost.pickFolderPath;
         host.ctrlDown = mHost.ctrlDown;
         host.handleShortcut = [this](UIKeyCode key, bool ctrl) { return this->handleShortcut(key, ctrl); };
-        host.confirmChangeType = [this](int col, FieldKind kind)
+        host.confirmChangeType = [this](int col, const String& typeName)
         {
             mConfirmCol = col;
-            mPendingKind = kind;
+            mPendingType = typeName;
             mConfirm = ConfirmKind::ChangeType;
             this->requestRebuild();
         };
@@ -203,6 +171,18 @@ namespace eokas::RoseAxion {
         {
             mConfirmCol = col;
             mConfirm = ConfirmKind::DeleteColumn;
+            this->requestRebuild();
+        };
+        host.confirmDeleteTable = [this](int index)
+        {
+            mConfirmTable = index;
+            mConfirm = ConfirmKind::DeleteTable;
+            this->requestRebuild();
+        };
+        host.confirmDeleteSchema = [this](int index)
+        {
+            mConfirmSchema = index;
+            mConfirm = ConfirmKind::DeleteSchema;
             this->requestRebuild();
         };
         host.font = mFont;
@@ -216,9 +196,15 @@ namespace eokas::RoseAxion {
         mPending = PendingAction::None;
         mResetScroll = true;
         mConfirmCol = -1;
+        mConfirmTable = -1;
+        mConfirmSchema = -1;
+        mBoundTable = -1;
         if (mEditor)
         {
+            mEditor->resetOutliner();
             mEditor->reset();
+            mEditor->resetSchema();
+            mEditor->selectTables();
         }
     }
 
@@ -422,16 +408,28 @@ namespace eokas::RoseAxion {
         const float s = mScale;
         const float fontPx = 15.0f * s;
         const float smallPx = 13.0f * s;
-        const float barH = 52.0f * s;
-        const Color canvas(0.102f, 0.110f, 0.133f, 1.0f);
-        const Color bar(0.078f, 0.086f, 0.110f, 1.0f);
-        const Color selected(0.275f, 0.400f, 0.620f, 1.0f);
-        const Color ink(0.925f, 0.933f, 0.953f, 1.0f);
-        const Color mute(0.620f, 0.660f, 0.720f, 1.0f);
-        const Color accent(0.345f, 0.545f, 0.930f, 1.0f);
-        const Color popup(0.160f, 0.176f, 0.220f, 1.0f);
+        const float titlePx = 20.0f * s;
+        const float headerH = 42.0f * s;
+        const float statusH = 26.0f * s;
+        const RoseTheme& t = theme();
+        const Color canvas = t.canvas;
+        const Color bar = t.bar;
+        const Color selected = t.selected;
+        const Color ink = t.ink;
+        const Color mute = t.mute;
+        const Color accent = t.accent;
+        const Color popup = t.popup;
         const Color clear(0.0f, 0.0f, 0.0f, 0.0f);
-        const Color warn(0.96f, 0.72f, 0.42f, 1.0f);
+        const Color warn = t.warn;
+        const Color quiet = t.quiet;
+        const Color line = t.line;
+        const bool showStatus = mDoc.isOpen() || !mDoc.status().isEmpty();
+        float workY = headerH;
+        float workH = mHeight - headerH - (showStatus ? statusH : 0.0f);
+        if (workH < 40.0f)
+        {
+            workH = 40.0f;
+        }
 
         auto root = std::make_shared<UIWidget>();
         root->shape.pivot = Vector2(0.0f, 0.0f);
@@ -449,13 +447,11 @@ namespace eokas::RoseAxion {
             this->handleShortcut(event.key, event.ctrl);
         };
 
-        auto menuBar = std::make_shared<UIMenu>();
-        menuBar->direction = UIDirection::Horizontal;
-        menuBar->padding = 2.0f * s;
-        menuBar->spacing = 0.0f;
-        menuBar->color = bar;
-        menuBar->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(menuBar, Rect(0.0f, 0.0f, mWidth, 0.0f));
+        auto header = std::make_shared<UIWidget>();
+        header->shape.pivot = Vector2(0.0f, 0.0f);
+        header->pickable = false;
+        header->color = bar;
+        setBox(header, Rect(0.0f, 0.0f, mWidth, headerH));
 
         auto fileMenu = std::make_shared<UIMenu>();
         fileMenu->direction = UIDirection::Vertical;
@@ -483,13 +479,8 @@ namespace eokas::RoseAxion {
             auto item = std::make_shared<UIMenuItem>();
             item->paddingX = 14.0f * s;
             item->paddingY = 8.0f * s;
-            item->background = popup;
-            item->hoverFill = selected;
             item->setText(label);
-            if (UIText* text = item->label())
-            {
-                styleText(*text, mFont, fontPx, ink);
-            }
+            styleMenuItem(*item, mFont, fontPx);
             item->onClick = [action, gate]()
             {
                 gate->hide();
@@ -499,24 +490,18 @@ namespace eokas::RoseAxion {
             return item;
         };
         auto fileItem = std::make_shared<UIMenuItem>();
-        fileItem->paddingX = 16.0f * s;
-        fileItem->paddingY = 8.0f * s;
+        fileItem->paddingX = 14.0f * s;
+        fileItem->paddingY = 6.0f * s;
         fileItem->background = bar;
-        fileItem->hoverFill = Color(0.196f, 0.275f, 0.412f, 1.0f);
+        fileItem->hoverFill = selected;
+        fileItem->selectedFill = selected;
         fileItem->setText("文件");
         if (UIText* text = fileItem->label())
         {
             styleText(*text, mFont, fontPx, ink);
         }
-        menuBar->addItem(fileItem);
+        fileItem->syncSize();
         fileMenu->host = fileItem.get();
-        menuBar->layout();
-        float menuH = menuBar->shape.size.y;
-        if (menuH < 28.0f * s)
-        {
-            menuH = 28.0f * s;
-        }
-        setBox(menuBar, Rect(0.0f, 0.0f, mWidth, menuH));
         UIMenuItem* fileRaw = fileItem.get();
         UIMenu* fileMenuRaw = fileMenu.get();
         UIWidget* rootRawForMenu = root.get();
@@ -539,59 +524,121 @@ namespace eokas::RoseAxion {
         addMenuItem(*fileMenu, "保存", [this]() { this->saveDocument(); });
         addMenuItem(*fileMenu, "另存为...", [this]() { this->saveDocumentAs(); });
 
-        auto toolbar = std::make_shared<UIList>();
-        toolbar->direction = UIDirection::Horizontal;
-        toolbar->padding = 8.0f * s;
-        toolbar->spacing = 8.0f * s;
-        toolbar->color = bar;
-        toolbar->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(toolbar, Rect(0.0f, menuH, mWidth, barH));
+        auto left = std::make_shared<UIList>();
+        left->direction = UIDirection::Horizontal;
+        left->padding = 6.0f * s;
+        left->spacing = 8.0f * s;
+        left->centerCross = true;
+        left->color = clear;
+        left->shape.pivot = Vector2(0.0f, 0.0f);
+        setBox(left, Rect(0.0f, 0.0f, 0.0f, headerH));
+        left->attachChild(fileItem);
+        left->layout();
+        header->attachChild(left);
 
-        auto addTool = [&](const char* label, const std::function<void()>& action)
+        if (mDoc.isOpen())
         {
-            auto button = makeButton(label, mFont, fontPx, 120.0f * s, 32.0f * s, accent, ink);
-            button->onClick = action;
-            toolbar->attachChild(button);
-        };
-        addTool("新建表格", [this]() { this->newDocument(); });
-        addTool("打开 Library", [this]() { this->openDocument(); });
-        addTool("保存 Library", [this]() { this->saveDocument(); });
-        const float toolW = 120.0f * s;
-        const float toolPad = 8.0f * s;
-        const float toolGap = 8.0f * s;
-        float statusW = mWidth - (toolPad * 2.0f + toolW * 3.0f + toolGap * 3.0f);
-        if (statusW < 80.0f * s) statusW = 80.0f * s;
-        String statusText = mDoc.status();
-        Color statusColor = statusFailed(statusText) ? warn : mute;
-        if (statusText.isEmpty()) statusText = String(" ");
-        auto status = makeText(statusText, mFont, smallPx, statusColor, statusW, 24.0f * s);
-        toolbar->attachChild(status);
-        root->attachChild(menuBar);
-        root->attachChild(toolbar);
-        root->attachChild(dismiss);
-        root->attachChild(fileMenu);
+            String name = this->fileTitle();
+            if (mDoc.dirty())
+            {
+                name = name + " *";
+            }
+            float nameMax = mWidth - left->shape.size.x - 24.0f * s;
+            if (nameMax < 48.0f * s)
+            {
+                nameMax = 48.0f * s;
+            }
+            auto nameText = makeText(name, mFont, smallPx, mute, nameMax, 20.0f * s);
+            nameText->layout();
+            float nw = nameText->shape.size.x;
+            float nh = nameText->shape.size.y;
+            float nx = mWidth - nw - 16.0f * s;
+            if (nx < left->shape.size.x + 8.0f * s)
+            {
+                nx = left->shape.size.x + 8.0f * s;
+            }
+            setBox(nameText, Rect(nx, (headerH - nh) * 0.5f, nw, nh));
+            header->attachChild(nameText);
+        }
 
-        const float chromeH = menuH + barH;
-        float gridH = mHeight - chromeH;
-        if (gridH < 40.0f) gridH = 40.0f;
+        auto headerRule = makeRule(mWidth, line);
+        setBox(headerRule, Rect(0.0f, headerH - 1.0f, mWidth, 1.0f));
+        header->attachChild(headerRule);
+        root->attachChild(header);
 
         if (!mDoc.isOpen())
         {
-            auto empty = makeText("点击「打开 Library」或「新建表格」开始", mFont, fontPx + 2.0f, mute, 640.0f * s, 32.0f * s);
-            empty->shape.pivot = Vector2(0.0f, 0.0f);
-            setBox(empty, Rect(48.0f * s, chromeH + 80.0f * s, 640.0f * s, 32.0f * s));
-            root->attachChild(empty);
+            auto splash = std::make_shared<PaintPanel>();
+            splash->fill(t.voidBg, t.canvas);
+            splash->hair = t.hair;
+            if (t.glow)
+            {
+                splash->orbs = {
+                    { mWidth * 0.78f, -40.0f * s, 220.0f * s, t.orbA, 0.2f, true },
+                    { mWidth * 0.92f, mHeight * 0.42f, 180.0f * s, t.orbB, 1.7f, true },
+                    { -30.0f * s, mHeight * 0.72f, 160.0f * s, t.orbC, 2.9f, true },
+                };
+            }
+            setBox(splash, Rect(0.0f, workY, mWidth, workH));
+            root->attachChild(splash);
+            float textMax = mWidth - 80.0f * s;
+            if (textMax < 200.0f * s)
+            {
+                textMax = mWidth - 32.0f * s;
+            }
+            auto title = makeText("RoseAxion", mFont, titlePx, ink, textMax, 32.0f * s);
+            title->layout();
+            auto hint = makeText("打开 Library 或新建表格开始", mFont, fontPx, mute, textMax, 28.0f * s);
+            hint->layout();
+            auto actions = std::make_shared<UIList>();
+            actions->direction = UIDirection::Horizontal;
+            actions->padding = 0.0f;
+            actions->spacing = 12.0f * s;
+            actions->centerCross = true;
+            actions->color = clear;
+            actions->shape.pivot = Vector2(0.0f, 0.0f);
+            auto create = makeButton("新建表格", mFont, fontPx, 128.0f * s, 36.0f * s, accent, t.inkOnAccent);
+            create->onClick = [this]() { this->newDocument(); };
+            auto open = makeButton("打开 Library", mFont, fontPx, 128.0f * s, 36.0f * s, quiet, ink);
+            open->onClick = [this]() { this->openDocument(); };
+            actions->attachChild(create);
+            actions->attachChild(open);
+            setBox(actions, Rect(0.0f, 0.0f, 0.0f, 0.0f));
+            actions->layout();
+            float clusterH = title->shape.size.y + 10.0f * s + hint->shape.size.y + 24.0f * s + actions->shape.size.y;
+            float clusterY = workY + (workH - clusterH) * 0.5f;
+            if (clusterY < workY + 24.0f * s)
+            {
+                clusterY = workY + 24.0f * s;
+            }
+            setBox(title, Rect((mWidth - title->shape.size.x) * 0.5f, clusterY, title->shape.size.x, title->shape.size.y));
+            setBox(hint, Rect((mWidth - hint->shape.size.x) * 0.5f, clusterY + title->shape.size.y + 10.0f * s, hint->shape.size.x, hint->shape.size.y));
+            setBox(actions, Rect((mWidth - actions->shape.size.x) * 0.5f, clusterY + title->shape.size.y + 10.0f * s + hint->shape.size.y + 24.0f * s, actions->shape.size.x, actions->shape.size.y));
+            root->attachChild(title);
+            root->attachChild(hint);
+            root->attachChild(actions);
             focus = root.get();
         }
         else
         {
+            int activeTable = mDoc.hasActiveTable() ? static_cast<int>(mDoc.activeTableIndex()) : -1;
+            if (activeTable != mBoundTable)
+            {
+                if (mEditor)
+                {
+                    mEditor->reset();
+                }
+                keepX = 0.0f;
+                keepY = 0.0f;
+                mBoundTable = activeTable;
+            }
             if (!mEditor)
             {
                 mEditor = std::make_shared<RoseEditor>();
             }
             mEditor->bind(mDoc, this->editorHost());
             mEditor->shape.pivot = Vector2(0.0f, 0.0f);
-            setBox(mEditor, Rect(0.0f, chromeH, mWidth, gridH));
+            setBox(mEditor, Rect(0.0f, workY, mWidth, workH));
             mEditor->setScroll(keepX, keepY);
             mEditor->rebuild();
             root->attachChild(mEditor);
@@ -602,23 +649,45 @@ namespace eokas::RoseAxion {
             }
         }
 
+        if (showStatus)
+        {
+            auto statusBar = std::make_shared<UIWidget>();
+            statusBar->shape.pivot = Vector2(0.0f, 0.0f);
+            statusBar->pickable = false;
+            statusBar->color = bar;
+            setBox(statusBar, Rect(0.0f, mHeight - statusH, mWidth, statusH));
+            auto statusRule = makeRule(mWidth, line);
+            setBox(statusRule, Rect(0.0f, 0.0f, mWidth, 1.0f));
+            statusBar->attachChild(statusRule);
+            String statusText = mDoc.status();
+            Color statusColor = statusFailed(statusText) ? warn : mute;
+            if (statusText.isEmpty())
+            {
+                statusText = String("就绪");
+            }
+            float statusW = mWidth - 24.0f * s;
+            if (statusW < 40.0f * s)
+            {
+                statusW = 40.0f * s;
+            }
+            auto status = makeText(statusText, mFont, smallPx, statusColor, statusW, 18.0f * s);
+            status->layout();
+            setBox(status, Rect(12.0f * s, (statusH - status->shape.size.y) * 0.5f, status->shape.size.x, status->shape.size.y));
+            statusBar->attachChild(status);
+            root->attachChild(statusBar);
+        }
+
+        root->attachChild(dismiss);
+        root->attachChild(fileMenu);
+
         if (mConfirm != ConfirmKind::None)
         {
             const bool unsaved = mConfirm == ConfirmKind::Unsaved;
-            float panelW = unsaved ? 480.0f * s : 420.0f * s;
-            float panelH = unsaved ? 168.0f * s : 150.0f * s;
             auto shade = std::make_shared<UIWidget>();
             shade->overlay = true;
             shade->shape.pivot = Vector2(0.0f, 0.0f);
-            shade->color = Color(0.0f, 0.0f, 0.0f, 0.45f);
+            shade->color = t.shade;
             setBox(shade, Rect(0.0f, 0.0f, mWidth, mHeight));
-            auto panel = std::make_shared<UIList>();
-            panel->direction = UIDirection::Vertical;
-            panel->padding = 16.0f * s;
-            panel->spacing = 12.0f * s;
-            panel->color = Color(0.145f, 0.157f, 0.196f, 1.0f);
-            panel->shape.pivot = Vector2(0.0f, 0.0f);
-            setBox(panel, Rect((mWidth - panelW) * 0.5f, (mHeight - panelH) * 0.5f, panelW, panelH));
             const char* message = "部分单元格无法转换为新类型，这些单元格会被清空。是否继续？";
             if (unsaved)
             {
@@ -628,14 +697,32 @@ namespace eokas::RoseAxion {
             {
                 message = "删除该字段？只剩一列时会清空内容并保留这一列。";
             }
-            panel->attachChild(makeText(message, mFont, fontPx, ink, panelW - 40.0f * s, 48.0f * s));
+            else if (mConfirm == ConfirmKind::DeleteTable)
+            {
+                message = "删除该表格？此操作无法撤销。";
+            }
+            else if (mConfirm == ConfirmKind::DeleteSchema)
+            {
+                message = "删除该模式？此操作无法撤销。";
+            }
+            const float padX = 24.0f * s;
+            const float padY = 20.0f * s;
+            const float gap = 18.0f * s;
+            float textMax = mWidth - padX * 2.0f - 48.0f * s;
+            if (textMax < 200.0f * s)
+            {
+                textMax = mWidth - 32.0f * s;
+            }
+            auto text = makeText(message, mFont, fontPx, ink, textMax, 0.0f);
+            text->layout();
             auto actions = std::make_shared<UIList>();
             actions->direction = UIDirection::Horizontal;
             actions->padding = 0.0f;
             actions->spacing = 8.0f * s;
+            actions->centerCross = true;
             actions->color = clear;
             actions->shape.pivot = Vector2(0.0f, 0.0f);
-            auto cancel = makeButton("取消", mFont, fontPx, 80.0f * s, 32.0f * s, Color(0.227f, 0.247f, 0.306f, 1.0f), ink);
+            auto cancel = makeButton("取消", mFont, fontPx, 80.0f * s, 32.0f * s, quiet, ink);
             cancel->onClick = [this]()
             {
                 mConfirm = ConfirmKind::None;
@@ -649,8 +736,8 @@ namespace eokas::RoseAxion {
             cancel->onKeyPress = escapeConfirm;
             if (unsaved)
             {
-                auto discard = makeButton("不保存", mFont, fontPx, 96.0f * s, 32.0f * s, Color(0.227f, 0.247f, 0.306f, 1.0f), ink);
-                auto save = makeButton("保存", mFont, fontPx, 80.0f * s, 32.0f * s, accent, ink);
+                auto discard = makeButton("不保存", mFont, fontPx, 96.0f * s, 32.0f * s, quiet, ink);
+                auto save = makeButton("保存", mFont, fontPx, 80.0f * s, 32.0f * s, accent, t.inkOnAccent);
                 discard->onKeyPress = escapeConfirm;
                 save->onKeyPress = escapeConfirm;
                 discard->onClick = [this]() { this->runPending(); };
@@ -669,13 +756,13 @@ namespace eokas::RoseAxion {
             }
             else
             {
-                auto ok = makeButton("确定", mFont, fontPx, 80.0f * s, 32.0f * s, accent, ink);
+                auto ok = makeButton("确定", mFont, fontPx, 80.0f * s, 32.0f * s, accent, t.inkOnAccent);
                 ok->onKeyPress = escapeConfirm;
                 ok->onClick = [this]()
                 {
                     if (mConfirm == ConfirmKind::ChangeType && mConfirmCol >= 0)
                     {
-                        mDoc.setColumnType(static_cast<u32_t>(mConfirmCol), mPendingKind);
+                        mDoc.setColumnType(static_cast<u32_t>(mConfirmCol), mPendingType);
                     }
                     else if (mConfirm == ConfirmKind::DeleteColumn && mConfirmCol >= 0)
                     {
@@ -686,14 +773,51 @@ namespace eokas::RoseAxion {
                             mEditor->closeSettings();
                         }
                     }
+                    else if (mConfirm == ConfirmKind::DeleteTable && mConfirmTable >= 0)
+                    {
+                        mDoc.deleteTable(static_cast<u32_t>(mConfirmTable));
+                    }
+                    else if (mConfirm == ConfirmKind::DeleteSchema && mConfirmSchema >= 0)
+                    {
+                        mDoc.deleteUserSchema(static_cast<u32_t>(mConfirmSchema));
+                    }
                     mConfirm = ConfirmKind::None;
                     mConfirmCol = -1;
+                    mConfirmTable = -1;
+                    mConfirmSchema = -1;
                     this->requestRebuild();
                 };
                 actions->attachChild(cancel);
                 actions->attachChild(ok);
                 focus = ok.get();
             }
+            setBox(actions, Rect(0.0f, 0.0f, 0.0f, 0.0f));
+            actions->layout();
+            float innerW = text->shape.size.x;
+            if (actions->shape.size.x > innerW)
+            {
+                innerW = actions->shape.size.x;
+            }
+            float panelW = innerW + padX * 2.0f;
+            float panelH = padY + text->shape.size.y + gap + actions->shape.size.y + padY;
+            float panelX = (mWidth - panelW) * 0.5f;
+            float panelY = (mHeight - panelH) * 0.5f;
+            if (panelX < 16.0f * s)
+            {
+                panelX = 16.0f * s;
+            }
+            if (panelY < 16.0f * s)
+            {
+                panelY = 16.0f * s;
+            }
+            auto panel = std::make_shared<UIWidget>();
+            panel->pickable = true;
+            panel->color = t.raised;
+            panel->shape.pivot = Vector2(0.0f, 0.0f);
+            setBox(panel, Rect(panelX, panelY, panelW, panelH));
+            setBox(text, Rect(padX, padY, text->shape.size.x, text->shape.size.y));
+            setBox(actions, Rect(panelW - padX - actions->shape.size.x, padY + text->shape.size.y + gap, actions->shape.size.x, actions->shape.size.y));
+            panel->attachChild(text);
             panel->attachChild(actions);
             shade->attachChild(panel);
             root->attachChild(shade);
