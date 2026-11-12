@@ -2,6 +2,7 @@
 #define _EOKAS_ROSE_AXION_TABLE_EDITOR_H_
 
 #include "./Document.h"
+#include "./Host.h"
 
 #include "UI/UIEvent.h"
 #include "UI/UIWidget.h"
@@ -22,26 +23,22 @@ namespace eokas::RoseAxion {
     class RoseTableEditor : public UIWidget
     {
     public:
-        struct Host
+        struct Host : RoseUiHost
         {
-            std::function<void()> requestRebuild;
-            std::function<void(const String&)> writeClipboard;
-            std::function<String()> readClipboard;
             std::function<void(const String&)> openExternal;
             std::function<String(const String& suggested)> pickFilePath;
             std::function<String(const String& suggested)> pickFolderPath;
             std::function<bool()> ctrlDown;
             std::function<bool(UIKeyCode, bool)> handleShortcut;
-            std::function<void(int, const String&)> confirmChangeType;
-            std::function<void(int)> confirmDeleteColumn;
-            String font;
-            float scale = 1.0f;
+            std::function<void(int)> openObject;
+            std::function<void(int)> openField;
+            std::function<void(int)> noteRowDeleted;
+            std::function<void(int)> noteRowInserted;
         };
 
         void bind(TableDocument& doc, const Host& host);
         void setOverlay(UIWidget* overlay);
         void reset();
-        void closeSettings();
         void rebuild();
         void cancelResize();
         bool resizeCursorAt(float x, float y) const;
@@ -53,6 +50,7 @@ namespace eokas::RoseAxion {
         float scrollY() const;
         void setScroll(float x, float y);
         UIWidget* focusWidget() const { return mFocus; }
+        bool hasPopupEdit() const;
 
         void layout() override;
 
@@ -64,6 +62,7 @@ namespace eokas::RoseAxion {
         void finishEdit(const String& text, int rowDelta, int colDelta);
         void beginEdit(int row, int col, const String& seed);
         void selectCell(int row, int col);
+        void openObjectEditor(int row);
         void setBoolCell(int row, int col, bool value);
         void toggleBoolCell(int row, int col);
         void selectAll();
@@ -91,7 +90,6 @@ namespace eokas::RoseAxion {
         UIWidget* mDatePanel = nullptr;
         UIWidget* mColorPanel = nullptr;
         UIColorPicker* mColorPicker = nullptr;
-        UIWidget* mSettingsPanel = nullptr;
         UIWidget* mFocus = nullptr;
         Color mEditFill { 0.145f, 0.157f, 0.196f, 1.0f };
 
@@ -102,7 +100,6 @@ namespace eokas::RoseAxion {
         int mEditRow = 0;
         int mEditCol = 0;
         String mEditSeed;
-        int mSettingsCol = -1;
         int mDateRow = -1;
         int mDateCol = -1;
         int mPickRow = -1;
@@ -119,6 +116,7 @@ namespace eokas::RoseAxion {
         int mClickRow = -1;
         int mClickCol = -1;
         bool mClickHeader = false;
+        bool mClickRowHead = false;
         float mKeepX = 0.0f;
         float mKeepY = 0.0f;
         int mResizeCol = -1;

@@ -1,4 +1,5 @@
 #include "./TableOutliner.h"
+#include "./FieldEditors.h"
 #include "./Theme.h"
 #include "./UiKit.h"
 
@@ -10,62 +11,6 @@
 #include <vector>
 
 namespace eokas::RoseAxion {
-
-    namespace {
-
-        struct EscapeInput : UIInput
-        {
-            std::function<void()> onEscape;
-            bool handleKeyPress(const UIKeyEvent& event) override
-            {
-                if (event.key == UIKeyCode::Escape)
-                {
-                    if (onEscape)
-                    {
-                        onEscape();
-                    }
-                    return true;
-                }
-                return UIInput::handleKeyPress(event);
-            }
-        };
-
-        void placeOnOverlay(UIWidget& overlay, UIWidget& widget, const Rect& screen)
-        {
-            Vector2 topLeft = overlay.screenToLocal(Vector2(screen.origin.x, screen.origin.y));
-            widget.shape.setBox(topLeft, screen.size);
-        }
-
-        void placePopup(UIWidget& overlay, UIWidget& menu, const Rect& anchor)
-        {
-            menu.layout();
-            Vector2 size = menu.shape.size;
-            Rect limit = overlay.screenBounds();
-            float x = anchor.origin.x;
-            float y = anchor.origin.y + anchor.size.y;
-            float limitRight = limit.origin.x + limit.size.x;
-            float limitBottom = limit.origin.y + limit.size.y;
-            if (x + size.x > limitRight)
-            {
-                x = limitRight - size.x;
-            }
-            if (x < limit.origin.x)
-            {
-                x = limit.origin.x;
-            }
-            if (y + size.y > limitBottom)
-            {
-                y = anchor.origin.y - size.y;
-            }
-            if (y < limit.origin.y)
-            {
-                y = limit.origin.y;
-            }
-            Vector2 local = overlay.screenToLocal(Vector2(x, y));
-            menu.shape.setBox(local, size);
-        }
-
-    }
 
     void RoseTableOutliner::bind(TableDocument& doc, const Host& host)
     {
@@ -102,7 +47,7 @@ namespace eokas::RoseAxion {
 
     float RoseTableOutliner::scale() const
     {
-        return mHost.scale < 0.5f ? 1.0f : mHost.scale;
+        return hostScale(mHost.scale);
     }
 
     void RoseTableOutliner::notifyRebuild()
@@ -237,11 +182,22 @@ namespace eokas::RoseAxion {
 
     void RoseTableOutliner::rebuild()
     {
+        if (mOverlay != nullptr)
+        {
+            if (mRenameInput != nullptr)
+            {
+                mOverlay->detachChild(mRenameInput);
+            }
+            if (mMenu != nullptr)
+            {
+                mOverlay->detachChild(mMenu);
+            }
+        }
+        mRenameInput = nullptr;
+        mMenu = nullptr;
         this->detachChildren();
         mView = nullptr;
         mRenameAnchor = nullptr;
-        mRenameInput = nullptr;
-        mMenu = nullptr;
         mFocus = nullptr;
         if (mDoc == nullptr || !mDoc->isOpen())
         {

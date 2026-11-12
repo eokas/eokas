@@ -2,6 +2,7 @@
 #define _EOKAS_ROSE_AXION_SCHEMA_EDITOR_H_
 
 #include "./Document.h"
+#include "./Host.h"
 
 #include "UI/UIEvent.h"
 #include "UI/UIWidget.h"
@@ -18,13 +19,8 @@ namespace eokas::RoseAxion {
     class RoseSchemaEditor : public UIWidget
     {
     public:
-        struct Host
+        struct Host : RoseUiHost
         {
-            std::function<void()> requestRebuild;
-            std::function<void(const String&)> writeClipboard;
-            std::function<String()> readClipboard;
-            String font;
-            float scale = 1.0f;
         };
 
         void bind(TableDocument& doc, const Host& host);

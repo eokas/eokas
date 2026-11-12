@@ -1,4 +1,5 @@
 #include "./SchemaEditor.h"
+#include "./FieldEditors.h"
 #include "./Theme.h"
 #include "./UiKit.h"
 
@@ -13,23 +14,6 @@
 namespace eokas::RoseAxion {
 
     namespace {
-
-        struct EscapeInput : UIInput
-        {
-            std::function<void()> onEscape;
-            bool handleKeyPress(const UIKeyEvent& event) override
-            {
-                if (event.key == UIKeyCode::Escape)
-                {
-                    if (onEscape)
-                    {
-                        onEscape();
-                    }
-                    return true;
-                }
-                return UIInput::handleKeyPress(event);
-            }
-        };
 
         struct TypeDrop : UIWidget
         {
@@ -115,65 +99,6 @@ namespace eokas::RoseAxion {
             }
         };
 
-        void placeOnOverlay(UIWidget& overlay, UIWidget& widget, const Rect& screen)
-        {
-            Vector2 topLeft = overlay.screenToLocal(Vector2(screen.origin.x, screen.origin.y));
-            widget.shape.setBox(topLeft, screen.size);
-        }
-
-        void placePopup(UIWidget& overlay, UIWidget& menu, const Rect& anchor)
-        {
-            menu.layout();
-            Vector2 size = menu.shape.size;
-            Rect limit = overlay.screenBounds();
-            float x = anchor.origin.x;
-            float y = anchor.origin.y + anchor.size.y;
-            float limitRight = limit.origin.x + limit.size.x;
-            float limitBottom = limit.origin.y + limit.size.y;
-            if (x + size.x > limitRight)
-            {
-                x = limitRight - size.x;
-            }
-            if (x < limit.origin.x)
-            {
-                x = limit.origin.x;
-            }
-            if (y + size.y > limitBottom)
-            {
-                y = anchor.origin.y - size.y;
-            }
-            if (y < limit.origin.y)
-            {
-                y = limit.origin.y;
-            }
-            Vector2 local = overlay.screenToLocal(Vector2(x, y));
-            menu.shape.setBox(local, size);
-        }
-
-        const char* schemaKindLabel(rose::SchemaType type)
-        {
-            if (type == rose::SchemaType::Struct)
-            {
-                return "结构";
-            }
-            if (type == rose::SchemaType::List)
-            {
-                return "列表";
-            }
-            if (type == rose::SchemaType::Options)
-            {
-                return "单选";
-            }
-            return "";
-        }
-
-        Color optionChipColor(const String& hex)
-        {
-            Color chip = theme().chip;
-            parseColor(hex, chip);
-            return chip;
-        }
-
     }
 
     void RoseSchemaEditor::bind(TableDocument& doc, const Host& host)
@@ -216,7 +141,7 @@ namespace eokas::RoseAxion {
 
     float RoseSchemaEditor::scale() const
     {
-        return mHost.scale < 0.5f ? 1.0f : mHost.scale;
+        return hostScale(mHost.scale);
     }
 
     void RoseSchemaEditor::notifyRebuild()
@@ -388,7 +313,7 @@ namespace eokas::RoseAxion {
         }
         if (next.isEmpty())
         {
-            mDoc->setStatus("选项名称不能为空");
+            mDoc->setStatus(DocStatus::OptionNameEmpty);
             mRenameSeed = text;
             mRenameIndex = static_cast<int>(optionIndex);
             this->notifyRebuild();
@@ -666,7 +591,7 @@ namespace eokas::RoseAxion {
         {
             hitH = titlePx + 12.0f * s;
         }
-        auto chip = makeChip(schemaKindLabel(kind), fontPath, smallPx, withAlpha(accent, t.washAlpha), accent);
+        auto chip = makeChip(schemaTypeLabel(kind), fontPath, smallPx, withAlpha(accent, t.washAlpha), accent);
         chip->pickable = false;
         float chipW = chip->shape.size.x;
         float chipH = chip->shape.size.y;

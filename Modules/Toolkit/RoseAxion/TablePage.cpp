@@ -23,6 +23,10 @@ namespace eokas::RoseAxion {
         {
             mTableEditor->setOverlay(overlay);
         }
+        if (mDetails)
+        {
+            mDetails->setOverlay(overlay);
+        }
         mOverlay = overlay;
     }
 
@@ -33,7 +37,7 @@ namespace eokas::RoseAxion {
 
     float RoseTablePage::scale() const
     {
-        return mHost.scale < 0.5f ? 1.0f : mHost.scale;
+        return hostScale(mHost.scale);
     }
 
     RoseTableEditor::Host RoseTablePage::tableHost() const
@@ -47,8 +51,34 @@ namespace eokas::RoseAxion {
         host.pickFolderPath = mHost.pickFolderPath;
         host.ctrlDown = mHost.ctrlDown;
         host.handleShortcut = mHost.handleShortcut;
-        host.confirmChangeType = mHost.confirmChangeType;
-        host.confirmDeleteColumn = mHost.confirmDeleteColumn;
+        host.openObject = [this](int row)
+        {
+            if (mDetails)
+            {
+                mDetails->openObject(row);
+            }
+        };
+        host.openField = [this](int col)
+        {
+            if (mDetails)
+            {
+                mDetails->openField(col);
+            }
+        };
+        host.noteRowDeleted = [this](int row)
+        {
+            if (mDetails)
+            {
+                mDetails->noteRowDeleted(row);
+            }
+        };
+        host.noteRowInserted = [this](int index)
+        {
+            if (mDetails)
+            {
+                mDetails->noteRowInserted(index);
+            }
+        };
         host.font = mHost.font;
         host.scale = mHost.scale;
         return host;
@@ -64,16 +94,40 @@ namespace eokas::RoseAxion {
         return host;
     }
 
+    RoseTableDetails::Host RoseTablePage::detailsHost() const
+    {
+        RoseTableDetails::Host host;
+        host.requestRebuild = mHost.requestRebuild;
+        host.writeClipboard = mHost.writeClipboard;
+        host.readClipboard = mHost.readClipboard;
+        host.openExternal = mHost.openExternal;
+        host.pickFilePath = mHost.pickFilePath;
+        host.pickFolderPath = mHost.pickFolderPath;
+        host.ctrlDown = mHost.ctrlDown;
+        host.confirmChangeType = mHost.confirmChangeType;
+        host.confirmDeleteColumn = mHost.confirmDeleteColumn;
+        host.overlay = mOverlay;
+        host.font = mHost.font;
+        host.scale = mHost.scale;
+        return host;
+    }
+
     void RoseTablePage::reset()
     {
-        mResizePane = false;
+        mResizeSide = PaneResize::None;
         this->setOverlay(nullptr);
         if (mTableEditor)
         {
             mTableEditor->reset();
         }
-        mSplit = nullptr;
-        mSplitHandle = nullptr;
+        if (mDetails)
+        {
+            mDetails->reset();
+        }
+        mOutlinerSplit = nullptr;
+        mDetailsSplit = nullptr;
+        mOutlinerHandle = nullptr;
+        mDetailsHandle = nullptr;
         mHint = nullptr;
         this->detachChildren();
     }
@@ -90,14 +144,28 @@ namespace eokas::RoseAxion {
 
     void RoseTablePage::closeSettings()
     {
-        if (mTableEditor)
+        if (mDetails)
         {
-            mTableEditor->closeSettings();
+            mDetails->close();
         }
     }
 
     UIWidget* RoseTablePage::focusWidget() const
     {
+        if (mTableEditor != nullptr && mTableEditor->hasPopupEdit())
+        {
+            if (UIWidget* focus = mTableEditor->focusWidget())
+            {
+                return focus;
+            }
+        }
+        if (mDetails != nullptr && mDetails->hasPopupEdit())
+        {
+            if (UIWidget* focus = mDetails->focusWidget())
+            {
+                return focus;
+            }
+        }
         if (mOutliner != nullptr)
         {
             if (UIWidget* focus = mOutliner->focusWidget())
@@ -127,36 +195,64 @@ namespace eokas::RoseAxion {
         mTableEditor->setScroll(x, y);
     }
 
-    float RoseTablePage::outlinerWidth() const
+    void RoseTablePage::paneRects(float& outlinerW, float& tableX, float& tableW, float& detailsX, float& detailsW) const
     {
         const float s = this->scale();
-        const float minW = 160.0f * s;
-        float maxW = shape.size.x - 80.0f * s;
-        if (maxW < minW)
+        const float split = 1.0f;
+        const float minOutliner = 160.0f * s;
+        const float minDetails = 200.0f * s;
+        const float minTable = 80.0f * s;
+        float available = shape.size.x - 2.0f * split;
+        if (available < 40.0f)
         {
-            maxW = minW;
+            available = 40.0f;
         }
-        float width = mOutlinerW * s;
-        if (width > maxW)
-        {
-            width = maxW;
-        }
-        if (width < minW)
-        {
-            width = minW;
-        }
-        return width;
-    }
 
-    void RoseTablePage::paneRects(float& outlinerW, float& tableX, float& tableW) const
-    {
-        outlinerW = this->outlinerWidth();
-        tableX = outlinerW + 1.0f;
-        tableW = shape.size.x - tableX;
-        if (tableW < 40.0f)
+        outlinerW = mOutlinerW * s;
+        detailsW = mDetailsW * s;
+        if (outlinerW < minOutliner)
         {
-            tableW = 40.0f;
+            outlinerW = minOutliner;
         }
+        if (detailsW < minDetails)
+        {
+            detailsW = minDetails;
+        }
+
+        float leftover = available - outlinerW - detailsW;
+        if (leftover < minTable)
+        {
+            float overflow = minTable - leftover;
+            float detailsSlack = detailsW - minDetails;
+            if (detailsSlack < 0.0f)
+            {
+                detailsSlack = 0.0f;
+            }
+            if (overflow > 0.0f && detailsSlack > 0.0f)
+            {
+                float cut = overflow < detailsSlack ? overflow : detailsSlack;
+                detailsW -= cut;
+                overflow -= cut;
+            }
+            float outlinerSlack = outlinerW - minOutliner;
+            if (outlinerSlack < 0.0f)
+            {
+                outlinerSlack = 0.0f;
+            }
+            if (overflow > 0.0f && outlinerSlack > 0.0f)
+            {
+                float cut = overflow < outlinerSlack ? overflow : outlinerSlack;
+                outlinerW -= cut;
+            }
+            leftover = available - outlinerW - detailsW;
+            if (leftover < 40.0f)
+            {
+                leftover = 40.0f;
+            }
+        }
+        tableW = leftover;
+        tableX = outlinerW + split;
+        detailsX = tableX + tableW + split;
     }
 
     void RoseTablePage::layout()
@@ -168,17 +264,18 @@ namespace eokas::RoseAxion {
         float outlinerW = 0.0f;
         float tableX = 0.0f;
         float tableW = 0.0f;
-        this->paneRects(outlinerW, tableX, tableW);
+        float detailsX = 0.0f;
+        float detailsW = 0.0f;
+        this->paneRects(outlinerW, tableX, tableW, detailsX, detailsW);
         const float height = shape.size.y;
         if (mOutliner != nullptr)
         {
             setBox(*mOutliner, Rect(0.0f, 0.0f, outlinerW, height));
         }
-        if (mSplit != nullptr)
+        if (mOutlinerSplit != nullptr)
         {
-            setBox(*mSplit, Rect(outlinerW, 0.0f, 1.0f, height));
+            setBox(*mOutlinerSplit, Rect(outlinerW, 0.0f, 1.0f, height));
         }
-        this->placePaneHandle();
         if (mTableEditor != nullptr && mTableEditor->parent() == this)
         {
             setBox(*mTableEditor, Rect(tableX, 0.0f, tableW, height));
@@ -189,6 +286,16 @@ namespace eokas::RoseAxion {
             mHint->layout();
             setBox(*mHint, Rect(tableX + (tableW - mHint->shape.size.x) * 0.5f, (height - mHint->shape.size.y) * 0.5f, mHint->shape.size.x, mHint->shape.size.y));
         }
+        if (mDetailsSplit != nullptr)
+        {
+            setBox(*mDetailsSplit, Rect(detailsX - 1.0f, 0.0f, 1.0f, height));
+        }
+        if (mDetails != nullptr)
+        {
+            setBox(*mDetails, Rect(detailsX, 0.0f, detailsW, height));
+            mDetails->layout();
+        }
+        this->placePaneHandles();
         if (mOutliner != nullptr)
         {
             mOutliner->layout();
@@ -202,21 +309,34 @@ namespace eokas::RoseAxion {
         {
             return true;
         }
-        if (mResizePane)
+        if (mResizeSide != PaneResize::None)
         {
             this->cancelResize();
             return true;
         }
-        return mTableEditor != nullptr && mTableEditor->handleEscape();
+        if (mTableEditor != nullptr && mTableEditor->handleEscape())
+        {
+            return true;
+        }
+        return mDetails != nullptr && mDetails->handleEscape();
     }
 
     bool RoseTablePage::colorDropping() const
     {
+        if (mDetails != nullptr && mDetails->colorDropping())
+        {
+            return true;
+        }
         return mTableEditor != nullptr && mTableEditor->colorDropping();
     }
 
     void RoseTablePage::sampleColorDropper(float x, float y, bool commit)
     {
+        if (mDetails != nullptr && mDetails->colorDropping())
+        {
+            mDetails->sampleColorDropper(x, y, commit);
+            return;
+        }
         if (mTableEditor)
         {
             mTableEditor->sampleColorDropper(x, y, commit);
@@ -225,6 +345,10 @@ namespace eokas::RoseAxion {
 
     void RoseTablePage::cancelColorDropper()
     {
+        if (mDetails)
+        {
+            mDetails->cancelColorDropper();
+        }
         if (mTableEditor)
         {
             mTableEditor->cancelColorDropper();
@@ -233,7 +357,7 @@ namespace eokas::RoseAxion {
 
     bool RoseTablePage::resizeCursorAt(float x, float y) const
     {
-        if (mResizePane)
+        if (mResizeSide != PaneResize::None)
         {
             return true;
         }
@@ -246,47 +370,68 @@ namespace eokas::RoseAxion {
 
     bool RoseTablePage::hitResizePane(float screenX, float screenY) const
     {
-        if (mSplitHandle != nullptr)
+        auto hitHandle = [](UIWidget* handle, float x, float y) -> bool
         {
-            Vector2 local = mSplitHandle->screenToLocal(Vector2(screenX, screenY));
-            return mSplitHandle->contains(local);
+            if (handle == nullptr)
+            {
+                return false;
+            }
+            Vector2 local = handle->screenToLocal(Vector2(x, y));
+            return handle->contains(local);
+        };
+        if (hitHandle(mOutlinerHandle, screenX, screenY) || hitHandle(mDetailsHandle, screenX, screenY))
+        {
+            return true;
         }
         Vector2 local = this->screenToLocal(Vector2(screenX, screenY));
-        const float grip = 6.0f * this->scale();
-        float outlinerW = this->outlinerWidth();
-        return local.y >= 0.0f && local.y <= shape.size.y
-            && local.x >= outlinerW - grip * 0.5f && local.x <= outlinerW + grip * 0.5f;
-    }
-
-    void RoseTablePage::placePaneHandle()
-    {
-        if (mSplitHandle == nullptr)
+        if (local.y < 0.0f || local.y > shape.size.y)
         {
-            return;
+            return false;
         }
         const float grip = 6.0f * this->scale();
-        float outlinerW = this->outlinerWidth();
-        setBox(*mSplitHandle, Rect(outlinerW - grip * 0.5f, 0.0f, grip, shape.size.y));
+        float outlinerW = 0.0f;
+        float tableX = 0.0f;
+        float tableW = 0.0f;
+        float detailsX = 0.0f;
+        float detailsW = 0.0f;
+        this->paneRects(outlinerW, tableX, tableW, detailsX, detailsW);
+        if (local.x >= outlinerW - grip * 0.5f && local.x <= outlinerW + grip * 0.5f)
+        {
+            return true;
+        }
+        return local.x >= detailsX - grip * 0.5f && local.x <= detailsX + grip * 0.5f;
     }
 
-    void RoseTablePage::applyPaneWidth(float pixelWidth)
+    void RoseTablePage::placePaneHandles()
+    {
+        const float grip = 6.0f * this->scale();
+        float outlinerW = 0.0f;
+        float tableX = 0.0f;
+        float tableW = 0.0f;
+        float detailsX = 0.0f;
+        float detailsW = 0.0f;
+        this->paneRects(outlinerW, tableX, tableW, detailsX, detailsW);
+        if (mOutlinerHandle != nullptr)
+        {
+            setBox(*mOutlinerHandle, Rect(outlinerW - grip * 0.5f, 0.0f, grip, shape.size.y));
+        }
+        if (mDetailsHandle != nullptr)
+        {
+            setBox(*mDetailsHandle, Rect(detailsX - grip * 0.5f, 0.0f, grip, shape.size.y));
+        }
+    }
+
+    void RoseTablePage::applyOutlinerWidth(float pixelWidth)
     {
         const float s = this->scale();
-        const float minW = 160.0f * s;
-        float maxW = shape.size.x - 80.0f * s;
-        if (maxW < minW)
-        {
-            maxW = minW;
-        }
-        if (pixelWidth < minW)
-        {
-            pixelWidth = minW;
-        }
-        if (pixelWidth > maxW)
-        {
-            pixelWidth = maxW;
-        }
         mOutlinerW = pixelWidth / s;
+        float outlinerW = 0.0f;
+        float tableX = 0.0f;
+        float tableW = 0.0f;
+        float detailsX = 0.0f;
+        float detailsW = 0.0f;
+        this->paneRects(outlinerW, tableX, tableW, detailsX, detailsW);
+        mOutlinerW = outlinerW / s;
         this->layout();
         if (mOutliner != nullptr)
         {
@@ -297,37 +442,75 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseTablePage::commitPaneResize()
+    void RoseTablePage::applyDetailsWidth(float pixelWidth)
     {
-        mResizePane = false;
+        const float s = this->scale();
+        mDetailsW = pixelWidth / s;
+        float outlinerW = 0.0f;
+        float tableX = 0.0f;
+        float tableW = 0.0f;
+        float detailsX = 0.0f;
+        float detailsW = 0.0f;
+        this->paneRects(outlinerW, tableX, tableW, detailsX, detailsW);
+        mDetailsW = detailsW / s;
+        this->layout();
+        if (mDetails != nullptr)
+        {
+            mDetails->rebuild();
+            mDetails->layout();
+        }
     }
 
-    void RoseTablePage::attachPaneHandle()
+    void RoseTablePage::commitPaneResize()
+    {
+        mResizeSide = PaneResize::None;
+    }
+
+    void RoseTablePage::attachSplitHandle(PaneResize side)
     {
         const float grip = 6.0f * this->scale();
-        float outlinerW = this->outlinerWidth();
+        float outlinerW = 0.0f;
+        float tableX = 0.0f;
+        float tableW = 0.0f;
+        float detailsX = 0.0f;
+        float detailsW = 0.0f;
+        this->paneRects(outlinerW, tableX, tableW, detailsX, detailsW);
+        float x = side == PaneResize::Outliner ? outlinerW : detailsX;
         auto handle = std::make_shared<UIWidget>();
         handle->overlay = true;
         handle->pickable = true;
         handle->color = Color(0.0f, 0.0f, 0.0f, 0.0f);
         handle->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(handle, Rect(outlinerW - grip * 0.5f, 0.0f, grip, shape.size.y));
-        handle->onPointerPress = [this](const UIPointerEvent& event)
+        setBox(handle, Rect(x - grip * 0.5f, 0.0f, grip, shape.size.y));
+        handle->onPointerPress = [this, side](const UIPointerEvent& event)
         {
             if (event.pointerCode != UIPointerCode::Left)
             {
                 return;
             }
-            mResizePane = true;
-            mResizeOriginPaneW = this->outlinerWidth();
+            mResizeSide = side;
+            float outlinerW = 0.0f;
+            float tableX = 0.0f;
+            float tableW = 0.0f;
+            float detailsX = 0.0f;
+            float detailsW = 0.0f;
+            this->paneRects(outlinerW, tableX, tableW, detailsX, detailsW);
+            mResizeOriginPaneW = side == PaneResize::Outliner ? outlinerW : detailsW;
         };
-        handle->onDrag = [this](const Vector2&, const Vector2& delta)
+        handle->onDrag = [this, side](const Vector2&, const Vector2& delta)
         {
-            if (!mResizePane)
+            if (mResizeSide != side)
             {
                 return;
             }
-            this->applyPaneWidth(mResizeOriginPaneW + delta.x);
+            if (side == PaneResize::Outliner)
+            {
+                this->applyOutlinerWidth(mResizeOriginPaneW + delta.x);
+            }
+            else
+            {
+                this->applyDetailsWidth(mResizeOriginPaneW - delta.x);
+            }
         };
         handle->onPointerRelease = [this](const UIPointerEvent&)
         {
@@ -338,16 +521,27 @@ namespace eokas::RoseAxion {
             this->commitPaneResize();
         };
         this->attachChild(handle);
-        mSplitHandle = handle.get();
+        if (side == PaneResize::Outliner)
+        {
+            mOutlinerHandle = handle.get();
+        }
+        else
+        {
+            mDetailsHandle = handle.get();
+        }
     }
 
     void RoseTablePage::cancelResize()
     {
-        if (mResizePane)
+        if (mResizeSide == PaneResize::Outliner)
         {
-            this->applyPaneWidth(mResizeOriginPaneW);
+            this->applyOutlinerWidth(mResizeOriginPaneW);
         }
-        mResizePane = false;
+        else if (mResizeSide == PaneResize::Details)
+        {
+            this->applyDetailsWidth(mResizeOriginPaneW);
+        }
+        mResizeSide = PaneResize::None;
         if (mTableEditor)
         {
             mTableEditor->cancelResize();
@@ -365,11 +559,17 @@ namespace eokas::RoseAxion {
         {
             mTableEditor->setOverlay(nullptr);
         }
+        if (mDetails)
+        {
+            mDetails->setOverlay(nullptr);
+        }
         this->detachChildren();
-        mSplit = nullptr;
-        mSplitHandle = nullptr;
+        mOutlinerSplit = nullptr;
+        mDetailsSplit = nullptr;
+        mOutlinerHandle = nullptr;
+        mDetailsHandle = nullptr;
         mHint = nullptr;
-        mResizePane = false;
+        mResizeSide = PaneResize::None;
         if (mDoc == nullptr || !mDoc->isOpen())
         {
             return;
@@ -385,9 +585,11 @@ namespace eokas::RoseAxion {
         this->color = canvas;
         const float height = shape.size.y;
         float outlinerW = 0.0f;
-        float paneX = 0.0f;
-        float paneW = 0.0f;
-        this->paneRects(outlinerW, paneX, paneW);
+        float tableX = 0.0f;
+        float tableW = 0.0f;
+        float detailsX = 0.0f;
+        float detailsW = 0.0f;
+        this->paneRects(outlinerW, tableX, tableW, detailsX, detailsW);
 
         if (!mOutliner)
         {
@@ -401,35 +603,57 @@ namespace eokas::RoseAxion {
         mOutliner->rebuild();
         this->attachChild(mOutliner);
 
-        auto split = std::make_shared<UIWidget>();
-        split->pickable = false;
-        split->color = line;
-        split->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(split, Rect(outlinerW, 0.0f, 1.0f, height));
-        this->attachChild(split);
-        mSplit = split.get();
-        this->attachPaneHandle();
+        auto outlinerSplit = std::make_shared<UIWidget>();
+        outlinerSplit->pickable = false;
+        outlinerSplit->color = line;
+        outlinerSplit->shape.pivot = Vector2(0.0f, 0.0f);
+        setBox(outlinerSplit, Rect(outlinerW, 0.0f, 1.0f, height));
+        this->attachChild(outlinerSplit);
+        mOutlinerSplit = outlinerSplit.get();
 
         if (!mDoc->hasActiveTable())
         {
-            auto hint = makeText("选择或新建表格", fontPath, fontPx, mute, paneW - 32.0f * s, 28.0f * s);
+            auto hint = makeText("选择或新建表格", fontPath, fontPx, mute, tableW - 32.0f * s, 28.0f * s);
             hint->layout();
-            setBox(hint, Rect(paneX + (paneW - hint->shape.size.x) * 0.5f, (height - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
+            setBox(hint, Rect(tableX + (tableW - hint->shape.size.x) * 0.5f, (height - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
             this->attachChild(hint);
             mHint = hint.get();
-            return;
+        }
+        else
+        {
+            if (!mTableEditor)
+            {
+                mTableEditor = std::make_shared<RoseTableEditor>();
+            }
+            mTableEditor->bind(*mDoc, this->tableHost());
+            mTableEditor->shape.pivot = Vector2(0.0f, 0.0f);
+            setBox(mTableEditor, Rect(tableX, 0.0f, tableW, height));
+            mTableEditor->setOverlay(mOverlay);
+            mTableEditor->rebuild();
+            this->attachChild(mTableEditor);
         }
 
-        if (!mTableEditor)
+        auto detailsSplit = std::make_shared<UIWidget>();
+        detailsSplit->pickable = false;
+        detailsSplit->color = line;
+        detailsSplit->shape.pivot = Vector2(0.0f, 0.0f);
+        setBox(detailsSplit, Rect(detailsX - 1.0f, 0.0f, 1.0f, height));
+        this->attachChild(detailsSplit);
+        mDetailsSplit = detailsSplit.get();
+
+        if (!mDetails)
         {
-            mTableEditor = std::make_shared<RoseTableEditor>();
+            mDetails = std::make_shared<RoseTableDetails>();
         }
-        mTableEditor->bind(*mDoc, this->tableHost());
-        mTableEditor->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(mTableEditor, Rect(paneX, 0.0f, paneW, height));
-        mTableEditor->setOverlay(mOverlay);
-        mTableEditor->rebuild();
-        this->attachChild(mTableEditor);
+        mDetails->bind(*mDoc, this->detailsHost());
+        mDetails->shape.pivot = Vector2(0.0f, 0.0f);
+        setBox(mDetails, Rect(detailsX, 0.0f, detailsW, height));
+        mDetails->setOverlay(mOverlay);
+        mDetails->rebuild();
+        this->attachChild(mDetails);
+
+        this->attachSplitHandle(PaneResize::Outliner);
+        this->attachSplitHandle(PaneResize::Details);
     }
 
 }

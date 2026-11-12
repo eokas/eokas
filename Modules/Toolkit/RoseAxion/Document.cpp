@@ -109,7 +109,7 @@ namespace eokas::RoseAxion {
             }
         }
 
-        const char* optionNameConflict(const std::vector<FieldOption>& options)
+        bool optionNameConflict(const std::vector<FieldOption>& options)
         {
             std::vector<String> seen;
             for (const FieldOption& option : options)
@@ -121,11 +121,11 @@ namespace eokas::RoseAxion {
                 }
                 if (optionNameTaken(seen, name))
                 {
-                    return "选项名称已存在";
+                    return true;
                 }
                 seen.push_back(name);
             }
-            return nullptr;
+            return false;
         }
 
         bool prepareSchemaOptions(const std::vector<FieldOption>& options, std::vector<FieldOption>& prepared)
@@ -273,6 +273,55 @@ namespace eokas::RoseAxion {
 
     }
 
+    const char* docStatusText(DocStatus status)
+    {
+        switch (status)
+        {
+        case DocStatus::Opened: return "已打开";
+        case DocStatus::Saved: return "已保存";
+        case DocStatus::OpenFailed: return "打开失败";
+        case DocStatus::CannotOpenFile: return "无法打开文件";
+        case DocStatus::NotATable: return "这不是 RoseAxion 表格";
+        case DocStatus::SaveFailed: return "保存失败";
+        case DocStatus::CannotSaveFile: return "无法保存文件";
+        case DocStatus::TableNameEmpty: return "表格名称不能为空";
+        case DocStatus::TableNameTaken: return "表格名称已存在";
+        case DocStatus::CannotCreateTable: return "无法创建表格";
+        case DocStatus::SchemaNameEmpty: return "模式名称不能为空";
+        case DocStatus::SchemaNameTaken: return "模式名称已存在";
+        case DocStatus::CannotCreateSchema: return "无法创建模式";
+        case DocStatus::CannotDeleteSchema: return "无法删除模式";
+        case DocStatus::CannotAddMember: return "无法添加成员";
+        case DocStatus::MemberNameEmpty: return "成员名称不能为空";
+        case DocStatus::MemberNameTaken: return "成员名称已存在";
+        case DocStatus::OptionNameEmpty: return "选项名称不能为空";
+        case DocStatus::OptionNameTaken: return "选项名称已存在";
+        case DocStatus::CannotUpdateOptions: return "无法更新选项";
+        case DocStatus::TypeMismatchCleared: return "内容与字段类型不符，已清空";
+        case DocStatus::Ready:
+        default:
+            return "";
+        }
+    }
+
+    bool docStatusFailed(DocStatus status)
+    {
+        switch (status)
+        {
+        case DocStatus::Ready:
+        case DocStatus::Opened:
+        case DocStatus::Saved:
+            return false;
+        default:
+            return true;
+        }
+    }
+
+    void TableDocument::markDirty()
+    {
+        mDirty = true;
+    }
+
     void TableDocument::createNew()
     {
         mLibrary = std::make_unique<rose::Library>("table");
@@ -284,7 +333,7 @@ namespace eokas::RoseAxion {
         {
             mLibrary.reset();
             mOpen = false;
-            mStatus = "无法创建表格";
+            this->setStatus(DocStatus::CannotCreateTable);
             return;
         }
         mTables = mLibrary->make(mTablesSchema);
@@ -294,7 +343,7 @@ namespace eokas::RoseAxion {
         mDirty = false;
         this->addTable();
         mDirty = false;
-        mStatus = String::empty;
+        this->setStatus(DocStatus::Ready);
     }
 
     bool TableDocument::load(const String& path)
@@ -302,7 +351,7 @@ namespace eokas::RoseAxion {
         auto next = std::make_unique<rose::Library>("table");
         if (!next->load(path))
         {
-            mStatus = "打开失败";
+            this->setStatus(DocStatus::OpenFailed);
             return false;
         }
         auto previous = std::move(mLibrary);
@@ -320,11 +369,11 @@ namespace eokas::RoseAxion {
                 mTables = nullptr;
                 mOpen = false;
             }
-            mStatus = "这不是 RoseAxion 表格";
+            this->setStatus(DocStatus::NotATable);
             return false;
         }
         mPath = path;
-        mStatus = "已打开";
+        this->setStatus(DocStatus::Opened);
         return true;
     }
 
@@ -336,12 +385,12 @@ namespace eokas::RoseAxion {
         }
         if (!mLibrary->save(path))
         {
-            mStatus = "保存失败";
+            this->setStatus(DocStatus::SaveFailed);
             return false;
         }
         mPath = path;
         mDirty = false;
-        mStatus = "已保存";
+        this->setStatus(DocStatus::Saved);
         return true;
     }
 
@@ -576,7 +625,7 @@ namespace eokas::RoseAxion {
         }
         if (this->rebuildRows(false))
         {
-            mDirty = true;
+            this->markDirty();
         }
         return true;
     }
@@ -725,7 +774,7 @@ namespace eokas::RoseAxion {
             return false;
         }
         this->insertColumn(0);
-        mDirty = true;
+        this->markDirty();
         return true;
     }
 
@@ -738,12 +787,12 @@ namespace eokas::RoseAxion {
         String next = name.trim();
         if (next.isEmpty())
         {
-            mStatus = "表格名称不能为空";
+            this->setStatus(DocStatus::TableNameEmpty);
             return false;
         }
         if (this->tableNameTaken(next, static_cast<int>(index)))
         {
-            mStatus = "表格名称已存在";
+            this->setStatus(DocStatus::TableNameTaken);
             return false;
         }
         if (this->tableName(index) == next)
@@ -751,7 +800,7 @@ namespace eokas::RoseAxion {
             return true;
         }
         mLibrary->set(this->tableValue(index), "name", next);
-        mDirty = true;
+        this->markDirty();
         return true;
     }
 
@@ -765,7 +814,7 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
-        mDirty = true;
+        this->markDirty();
         u32_t count = this->tableCount();
         if (count == 0)
         {
@@ -1070,28 +1119,28 @@ namespace eokas::RoseAxion {
     {
         if (!mOpen || mLibrary == nullptr)
         {
-            mStatus = "无法创建模式";
+            this->setStatus(DocStatus::CannotCreateSchema);
             return false;
         }
         if (type != rose::SchemaType::Struct && type != rose::SchemaType::List
             && type != rose::SchemaType::Options)
         {
-            mStatus = "无法创建模式";
+            this->setStatus(DocStatus::CannotCreateSchema);
             return false;
         }
         String name = this->nextNewSchemaName();
         Schema* schema = mLibrary->addSchema(type, name);
         if (schema == nullptr)
         {
-            mStatus = "无法创建模式";
+            this->setStatus(DocStatus::CannotCreateSchema);
             return false;
         }
         if (type == rose::SchemaType::List)
         {
             schema->setElementSchema(mString);
         }
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         u32_t count = this->userSchemaCount();
         if (count > 0)
         {
@@ -1114,12 +1163,12 @@ namespace eokas::RoseAxion {
         String next = name.trim();
         if (next.isEmpty())
         {
-            mStatus = "模式名称不能为空";
+            this->setStatus(DocStatus::SchemaNameEmpty);
             return false;
         }
         if (this->isReservedSchemaName(next))
         {
-            mStatus = "模式名称已存在";
+            this->setStatus(DocStatus::SchemaNameTaken);
             return false;
         }
         if (schema->name() == next)
@@ -1128,13 +1177,13 @@ namespace eokas::RoseAxion {
         }
         if (mLibrary->getSchema(next) != nullptr)
         {
-            mStatus = "模式名称已存在";
+            this->setStatus(DocStatus::SchemaNameTaken);
             return false;
         }
         String from = schema->name();
         if (!mLibrary->renameSchema(from, next))
         {
-            mStatus = "模式名称已存在";
+            this->setStatus(DocStatus::SchemaNameTaken);
             return false;
         }
         u32_t tables = this->tableCount();
@@ -1146,8 +1195,8 @@ namespace eokas::RoseAxion {
                 mLibrary->set(table, "rowSchema", next);
             }
         }
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1164,17 +1213,17 @@ namespace eokas::RoseAxion {
         }
         if (this->isReservedSchemaName(schema->name()) || this->schemaReferenced(schema))
         {
-            mStatus = "无法删除模式";
+            this->setStatus(DocStatus::CannotDeleteSchema);
             return false;
         }
         String name = schema->name();
         if (!mLibrary->removeSchema(name))
         {
-            mStatus = "无法删除模式";
+            this->setStatus(DocStatus::CannotDeleteSchema);
             return false;
         }
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         u32_t count = this->userSchemaCount();
         if (mActiveSchema == static_cast<int>(index))
         {
@@ -1273,11 +1322,11 @@ namespace eokas::RoseAxion {
         }
         if (!schema->addMember(this->nextMemberName(schema), mString))
         {
-            mStatus = "无法添加成员";
+            this->setStatus(DocStatus::CannotAddMember);
             return false;
         }
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1296,7 +1345,7 @@ namespace eokas::RoseAxion {
         String next = name.trim();
         if (next.isEmpty())
         {
-            mStatus = "成员名称不能为空";
+            this->setStatus(DocStatus::MemberNameEmpty);
             return false;
         }
         if (member->name == next)
@@ -1305,12 +1354,12 @@ namespace eokas::RoseAxion {
         }
         if (schema->getMember(next) != nullptr)
         {
-            mStatus = "成员名称已存在";
+            this->setStatus(DocStatus::MemberNameTaken);
             return false;
         }
         member->name = next;
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1335,8 +1384,8 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1357,8 +1406,8 @@ namespace eokas::RoseAxion {
             return true;
         }
         member->label = label;
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1380,8 +1429,8 @@ namespace eokas::RoseAxion {
             return true;
         }
         member->color = next;
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1409,8 +1458,8 @@ namespace eokas::RoseAxion {
             return false;
         }
         std::swap(*a, *b);
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1427,8 +1476,8 @@ namespace eokas::RoseAxion {
             return false;
         }
         schema->delMember(member->name);
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1460,8 +1509,8 @@ namespace eokas::RoseAxion {
             return false;
         }
         schema->setElementSchema(next);
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1524,6 +1573,671 @@ namespace eokas::RoseAxion {
         return this->isNestedColumnType(this->column(column).schemaName);
     }
 
+    bool TableDocument::isStructType(const String& typeName) const
+    {
+        Schema* schema = this->storageForType(typeName);
+        return schema != nullptr && schema->is(rose::SchemaType::Struct);
+    }
+
+    bool TableDocument::isListType(const String& typeName) const
+    {
+        if (!this->isNestedColumnType(typeName))
+        {
+            return false;
+        }
+        Schema* schema = this->storageForType(typeName);
+        return schema != nullptr && schema->is(rose::SchemaType::List);
+    }
+
+    bool TableDocument::isNestedStructColumn(u32_t column) const
+    {
+        return this->hasActiveTable() && column < this->columnCount()
+            && this->isStructType(this->column(column).schemaName);
+    }
+
+    bool TableDocument::isNestedListColumn(u32_t column) const
+    {
+        return this->hasActiveTable() && column < this->columnCount()
+            && this->isListType(this->column(column).schemaName);
+    }
+
+    NestedField TableDocument::fieldFromStorage(rose::Schema* storage, const String& id, const String& name) const
+    {
+        NestedField field;
+        field.id = id;
+        field.name = name;
+        field.schemaName = storage != nullptr ? storage->name() : String("String");
+        field.kind = this->fieldKindForColumnType(field.schemaName);
+        field.options = fieldOptionsFromSchema(optionsSchemaOf(storage));
+        field.nestedStruct = storage != nullptr && storage->is(rose::SchemaType::Struct);
+        field.nestedList = this->isListType(field.schemaName);
+        return field;
+    }
+
+    NestedField TableDocument::objectField(u32_t column) const
+    {
+        if (!this->hasActiveTable() || column >= this->columnCount())
+        {
+            return NestedField();
+        }
+        TableColumn info = this->column(column);
+        NestedField field = this->fieldFromStorage(this->storageForType(info.schemaName), info.id, info.name);
+        field.kind = info.kind;
+        field.options = info.options;
+        field.nestedStruct = this->isNestedStructColumn(column);
+        field.nestedList = this->isNestedListColumn(column);
+        return field;
+    }
+
+    rose::Schema* TableDocument::schemaAtPath(u32_t column, const std::vector<NestedHop>& path) const
+    {
+        if (!this->hasActiveTable() || column >= this->columnCount())
+        {
+            return nullptr;
+        }
+        Schema* schema = this->storageForType(this->column(column).schemaName);
+        for (const NestedHop& hop : path)
+        {
+            if (schema == nullptr)
+            {
+                return nullptr;
+            }
+            if (hop.list)
+            {
+                if (!schema->is(rose::SchemaType::List))
+                {
+                    return nullptr;
+                }
+                schema = schema->getElementSchema();
+                continue;
+            }
+            if (!schema->is(rose::SchemaType::Struct))
+            {
+                return nullptr;
+            }
+            Schema::Member* member = schema->getMember(hop.member);
+            if (member == nullptr)
+            {
+                return nullptr;
+            }
+            schema = member->schema;
+        }
+        return schema;
+    }
+
+    NestedField TableDocument::leafAtPath(u32_t column, const std::vector<NestedHop>& path) const
+    {
+        if (path.empty())
+        {
+            return this->objectField(column);
+        }
+        Schema* parent = this->schemaAtPath(column, std::vector<NestedHop>(path.begin(), path.end() - 1));
+        if (parent == nullptr)
+        {
+            return NestedField();
+        }
+        const NestedHop& hop = path.back();
+        if (hop.list)
+        {
+            if (!parent->is(rose::SchemaType::List))
+            {
+                return NestedField();
+            }
+            NestedField field = this->fieldFromStorage(parent->getElementSchema(), String::empty, String::format("第 %u 项", hop.index + 1));
+            field.listItem = true;
+            return field;
+        }
+        if (!parent->is(rose::SchemaType::Struct))
+        {
+            return NestedField();
+        }
+        Schema::Member* member = parent->getMember(hop.member);
+        if (member == nullptr)
+        {
+            return NestedField();
+        }
+        String name = member->label.isEmpty() ? member->name : member->label;
+        return this->fieldFromStorage(member->schema, member->name, name);
+    }
+
+    u32_t TableDocument::nestedFieldCount(u32_t column, const std::vector<NestedHop>& path) const
+    {
+        Schema* schema = this->schemaAtPath(column, path);
+        if (schema == nullptr || !schema->is(rose::SchemaType::Struct))
+        {
+            return 0;
+        }
+        return schema->getMemberCount();
+    }
+
+    NestedField TableDocument::nestedField(u32_t column, const std::vector<NestedHop>& path, u32_t index) const
+    {
+        Schema* schema = this->schemaAtPath(column, path);
+        if (schema == nullptr || !schema->is(rose::SchemaType::Struct) || index >= schema->getMemberCount())
+        {
+            return NestedField();
+        }
+        Schema::Member* member = schema->getMember(index);
+        if (member == nullptr)
+        {
+            return NestedField();
+        }
+        String name = member->label.isEmpty() ? member->name : member->label;
+        return this->fieldFromStorage(member->schema, member->name, name);
+    }
+
+    rose::Value* TableDocument::valueAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path) const
+    {
+        if (!this->hasActiveTable() || row >= this->rowCount() || column >= this->columnCount())
+        {
+            return nullptr;
+        }
+        Value* current = this->fieldAt(this->rowValue(row), this->column(column).id);
+        for (const NestedHop& hop : path)
+        {
+            if (current == nullptr)
+            {
+                return nullptr;
+            }
+            if (hop.list)
+            {
+                if (current->schema == nullptr || !current->schema->is(rose::SchemaType::List))
+                {
+                    return nullptr;
+                }
+                try
+                {
+                    current = mLibrary->get(current, hop.index);
+                }
+                catch (const std::out_of_range&)
+                {
+                    return nullptr;
+                }
+                continue;
+            }
+            current = this->fieldAt(current, hop.member);
+        }
+        return current;
+    }
+
+    rose::Value* TableDocument::ensureAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path)
+    {
+        if (!this->hasActiveTable() || row >= this->rowCount() || column >= this->columnCount() || mLibrary == nullptr)
+        {
+            return nullptr;
+        }
+        TableColumn info = this->column(column);
+        Schema* want = this->storageForType(info.schemaName);
+        Value* rowValue = this->rowValue(row);
+        auto ensureMember = [this](Value* parent, const String& field, Schema* want) -> Value*
+        {
+            if (parent == nullptr || want == nullptr)
+            {
+                return nullptr;
+            }
+            Value* slot = this->fieldAt(parent, field);
+            if (slot == nullptr || slot->schema == nullptr || slot->schema->is(rose::SchemaType::None) || slot->schema != want)
+            {
+                Value* made = mLibrary->make(want);
+                if (made == nullptr)
+                {
+                    return nullptr;
+                }
+                mLibrary->set(parent, field, made);
+                return this->fieldAt(parent, field);
+            }
+            return slot;
+        };
+        Value* current = ensureMember(rowValue, info.id, want);
+        Schema* walk = want;
+        for (const NestedHop& hop : path)
+        {
+            if (current == nullptr || walk == nullptr)
+            {
+                return nullptr;
+            }
+            if (hop.list)
+            {
+                if (!walk->is(rose::SchemaType::List))
+                {
+                    return nullptr;
+                }
+                Schema* element = walk->getElementSchema();
+                Value* item = nullptr;
+                try
+                {
+                    item = mLibrary->get(current, hop.index);
+                }
+                catch (const std::out_of_range&)
+                {
+                    item = nullptr;
+                }
+                if (item == nullptr || item->schema == nullptr || item->schema->is(rose::SchemaType::None) || item->schema != element)
+                {
+                    Value* made = mLibrary->make(element);
+                    if (made == nullptr)
+                    {
+                        return nullptr;
+                    }
+                    mLibrary->set(current, hop.index, made);
+                    try
+                    {
+                        item = mLibrary->get(current, hop.index);
+                    }
+                    catch (const std::out_of_range&)
+                    {
+                        return nullptr;
+                    }
+                }
+                current = item;
+                walk = element;
+                continue;
+            }
+            if (!walk->is(rose::SchemaType::Struct))
+            {
+                return nullptr;
+            }
+            Schema::Member* member = walk->getMember(hop.member);
+            if (member == nullptr)
+            {
+                return nullptr;
+            }
+            current = ensureMember(current, hop.member, member->schema);
+            walk = member->schema;
+        }
+        return current;
+    }
+
+    rose::Value* TableDocument::ensureParentAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path)
+    {
+        if (path.empty())
+        {
+            return this->rowValue(row);
+        }
+        return this->ensureAtPath(row, column, std::vector<NestedHop>(path.begin(), path.end() - 1));
+    }
+
+    u32_t TableDocument::nestedListCount(u32_t row, u32_t column, const std::vector<NestedHop>& path) const
+    {
+        Value* list = this->valueAtPath(row, column, path);
+        if (list == nullptr || list->schema == nullptr || !list->schema->is(rose::SchemaType::List))
+        {
+            return 0;
+        }
+        return mLibrary->count(list);
+    }
+
+    NestedField TableDocument::nestedListElement(u32_t column, const std::vector<NestedHop>& path) const
+    {
+        Schema* schema = this->schemaAtPath(column, path);
+        if (schema == nullptr || !schema->is(rose::SchemaType::List))
+        {
+            return NestedField();
+        }
+        return this->fieldFromStorage(schema->getElementSchema(), String::empty, String::empty);
+    }
+
+    bool TableDocument::nestedListInsert(u32_t row, u32_t column, const std::vector<NestedHop>& path, u32_t index)
+    {
+        Schema* schema = this->schemaAtPath(column, path);
+        if (schema == nullptr || !schema->is(rose::SchemaType::List))
+        {
+            return false;
+        }
+        Schema* element = schema->getElementSchema();
+        if (element == nullptr)
+        {
+            return false;
+        }
+        Value* list = this->ensureAtPath(row, column, path);
+        if (list == nullptr)
+        {
+            return false;
+        }
+        Value* item = mLibrary->make(element);
+        if (item == nullptr)
+        {
+            return false;
+        }
+        u32_t count = mLibrary->count(list);
+        if (index >= count)
+        {
+            mLibrary->push(list, item);
+        }
+        else
+        {
+            mLibrary->insert(list, index, item);
+        }
+        this->markDirty();
+        return true;
+    }
+
+    bool TableDocument::nestedListRemove(u32_t row, u32_t column, const std::vector<NestedHop>& path, u32_t index)
+    {
+        Value* list = this->valueAtPath(row, column, path);
+        if (list == nullptr || list->schema == nullptr || !list->schema->is(rose::SchemaType::List))
+        {
+            return false;
+        }
+        if (index >= mLibrary->count(list))
+        {
+            return false;
+        }
+        mLibrary->remove(list, index);
+        this->markDirty();
+        return true;
+    }
+
+    String TableDocument::displayFromValue(rose::Value* field, const NestedField& info) const
+    {
+        if (field == nullptr || field->schema == nullptr || field->schema->is(rose::SchemaType::None))
+        {
+            return String::empty;
+        }
+        if (info.nestedStruct)
+        {
+            return String::format("{%u}", field->schema->getMemberCount());
+        }
+        if (info.nestedList)
+        {
+            return String::format("[%u]", mLibrary->count(field));
+        }
+        if (info.kind == FieldKind::MultiOption)
+        {
+            return joinSelected(this->labelsFromValue(field, info));
+        }
+        if (field->schema->is(rose::SchemaType::Int))
+        {
+            i64_t value = 0;
+            return mLibrary->get(field, value) ? String::format("%lld", static_cast<long long>(value)) : String::empty;
+        }
+        if (field->schema->is(rose::SchemaType::Float))
+        {
+            f64_t value = 0;
+            return mLibrary->get(field, value) ? String::format("%.15g", value) : String::empty;
+        }
+        if (field->schema->is(rose::SchemaType::Bool))
+        {
+            bool value = false;
+            if (!mLibrary->get(field, value))
+            {
+                return String::empty;
+            }
+            return value ? "true" : "false";
+        }
+        String value;
+        if (!mLibrary->get(field, value))
+        {
+            return String::empty;
+        }
+        if (info.kind == FieldKind::Date)
+        {
+            return displayDate(value);
+        }
+        if (info.kind == FieldKind::Time)
+        {
+            return displayTime(value);
+        }
+        if (info.kind == FieldKind::DateTime)
+        {
+            return displayDateTime(value);
+        }
+        if (info.kind == FieldKind::Color)
+        {
+            Color color;
+            if (parseColor(value, color))
+            {
+                return formatColor(color);
+            }
+        }
+        if (info.kind == FieldKind::SingleOption)
+        {
+            return optionDisplayLabel(info.options, value);
+        }
+        return value;
+    }
+
+    String TableDocument::textFromValue(rose::Value* field, const NestedField& info) const
+    {
+        return this->displayFromValue(field, info);
+    }
+
+    std::vector<String> TableDocument::labelsFromValue(rose::Value* field, const NestedField& info) const
+    {
+        std::vector<String> names;
+        if (field == nullptr || field->schema == nullptr || field->schema->is(rose::SchemaType::None))
+        {
+            return {};
+        }
+        if (field->schema->is(rose::SchemaType::List))
+        {
+            u32_t count = mLibrary->count(field);
+            for (u32_t index = 0; index < count; ++index)
+            {
+                String item;
+                if (mLibrary->get(field, index, item) && !item.isEmpty())
+                {
+                    names.push_back(item);
+                }
+            }
+        }
+        else
+        {
+            String value;
+            if (mLibrary->get(field, value) && !value.isEmpty())
+            {
+                names.push_back(value);
+            }
+        }
+        std::vector<String> labels;
+        for (const String& name : names)
+        {
+            labels.push_back(optionDisplayLabel(info.options, name));
+        }
+        return this->filterLabels(labels, info.options);
+    }
+
+    String TableDocument::nestedText(u32_t row, u32_t column, const std::vector<NestedHop>& path) const
+    {
+        if (path.empty())
+        {
+            return this->cellText(row, column);
+        }
+        return this->textFromValue(this->valueAtPath(row, column, path), this->leafAtPath(column, path));
+    }
+
+    bool TableDocument::setNestedText(u32_t row, u32_t column, const std::vector<NestedHop>& path, const String& text)
+    {
+        if (!mOpen || path.empty() || row >= this->rowCount() || column >= this->columnCount())
+        {
+            return false;
+        }
+        String before = this->nestedText(row, column, path);
+        NestedField leaf = this->leafAtPath(column, path);
+        Value* parent = this->ensureParentAtPath(row, column, path);
+        if (parent == nullptr)
+        {
+            return false;
+        }
+        this->writeFieldValue(parent, path.back(), leaf, trimCopy(text));
+        if (before != this->nestedText(row, column, path))
+        {
+            this->markDirty();
+        }
+        return true;
+    }
+
+    std::vector<String> TableDocument::nestedLabels(u32_t row, u32_t column, const std::vector<NestedHop>& path) const
+    {
+        if (path.empty())
+        {
+            return this->cellLabels(row, column);
+        }
+        return this->labelsFromValue(this->valueAtPath(row, column, path), this->leafAtPath(column, path));
+    }
+
+    bool TableDocument::setNestedLabels(u32_t row, u32_t column, const std::vector<NestedHop>& path, const std::vector<String>& labels)
+    {
+        if (!mOpen || path.empty() || row >= this->rowCount() || column >= this->columnCount())
+        {
+            return false;
+        }
+        NestedField leaf = this->leafAtPath(column, path);
+        Value* parent = this->ensureParentAtPath(row, column, path);
+        if (parent == nullptr)
+        {
+            return false;
+        }
+        this->writeFieldLabels(parent, path.back(), leaf, labels);
+        this->markDirty();
+        return true;
+    }
+
+    rose::Value* TableDocument::makeStoredValue(FieldKind kind, const String& schemaName, const std::vector<FieldOption>& options, const String& text, bool nested)
+    {
+        if (mLibrary == nullptr)
+        {
+            return nullptr;
+        }
+        if (nested)
+        {
+            Schema* schema = this->storageForType(schemaName);
+            if (trimCopy(text).isEmpty())
+            {
+                return this->makeNone();
+            }
+            return schema != nullptr ? mLibrary->make(schema) : nullptr;
+        }
+        String value = trimCopy(text);
+        if (kind == FieldKind::SingleOption)
+        {
+            String name = optionStorageNameFromLabel(options, value);
+            if (!name.isEmpty())
+            {
+                value = name;
+            }
+        }
+        Schema* schema = this->storageForType(schemaName);
+        if (value.isEmpty() || !validateField(kind, value))
+        {
+            return this->makeNone();
+        }
+        Value* made = mLibrary->make(schema);
+        if (made == nullptr)
+        {
+            return nullptr;
+        }
+        switch (kind)
+        {
+        case FieldKind::Integer:
+        {
+            i64_t number = 0;
+            parseInteger(value, number);
+            mLibrary->set(made, number);
+            break;
+        }
+        case FieldKind::Float:
+        {
+            f64_t number = 0;
+            parseFloat(value, number);
+            mLibrary->set(made, number);
+            break;
+        }
+        case FieldKind::Boolean:
+        {
+            bool flag = false;
+            parseBool(value, flag);
+            mLibrary->set(made, flag);
+            break;
+        }
+        default:
+            mLibrary->set(made, canonicalText(kind, value));
+            break;
+        }
+        return made;
+    }
+
+    void TableDocument::writeFieldValue(rose::Value* parent, const NestedHop& hop, const NestedField& info, const String& text)
+    {
+        if (parent == nullptr || mLibrary == nullptr)
+        {
+            return;
+        }
+        if (info.kind == FieldKind::MultiOption)
+        {
+            this->writeFieldLabels(parent, hop, info, splitSelected(text));
+            return;
+        }
+        Value* made = this->makeStoredValue(info.kind, info.schemaName, info.options, text, info.nestedStruct || info.nestedList);
+        if (made == nullptr)
+        {
+            return;
+        }
+        if (hop.list)
+        {
+            mLibrary->set(parent, hop.index, made);
+        }
+        else
+        {
+            mLibrary->set(parent, hop.member, made);
+        }
+    }
+
+    void TableDocument::writeFieldLabels(rose::Value* parent, const NestedHop& hop, const NestedField& info, const std::vector<String>& labels)
+    {
+        if (parent == nullptr || mLibrary == nullptr)
+        {
+            return;
+        }
+        std::vector<String> filtered = this->filterLabels(labels, info.options);
+        Value* made = nullptr;
+        if (filtered.empty())
+        {
+            made = this->makeNone();
+        }
+        else
+        {
+            Schema* storage = this->storageForType(info.schemaName);
+            made = mLibrary->make(storage);
+            if (made != nullptr)
+            {
+                Schema* opts = optionsSchemaOf(storage);
+                mLibrary->clear(made);
+                for (const String& label : filtered)
+                {
+                    String name = optionStorageNameFromLabel(info.options, label);
+                    if (name.isEmpty())
+                    {
+                        continue;
+                    }
+                    if (info.kind == FieldKind::SingleOption)
+                    {
+                        mLibrary->set(made, name);
+                        break;
+                    }
+                    Value* item = opts != nullptr ? mLibrary->make(opts) : mLibrary->make(mString);
+                    if (item != nullptr)
+                    {
+                        mLibrary->set(item, name);
+                        mLibrary->push(made, item);
+                    }
+                }
+            }
+        }
+        if (made == nullptr)
+        {
+            return;
+        }
+        if (hop.list)
+        {
+            mLibrary->set(parent, hop.index, made);
+        }
+        else
+        {
+            mLibrary->set(parent, hop.member, made);
+        }
+    }
+
     std::vector<FieldOption> TableDocument::schemaOptions() const
     {
         return fieldOptionsFromSchema(this->activeSchema());
@@ -1536,18 +2250,18 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
-        if (const char* error = optionNameConflict(options))
+        if (optionNameConflict(options))
         {
-            mStatus = error;
+            this->setStatus(DocStatus::OptionNameTaken);
             return false;
         }
         if (!replaceSchemaOptions(schema, options))
         {
-            mStatus = "无法更新选项";
+            this->setStatus(DocStatus::CannotUpdateOptions);
             return false;
         }
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -1859,7 +2573,7 @@ namespace eokas::RoseAxion {
         {
             this->rebuildColumn(index, next);
         }
-        mDirty = true;
+        this->markDirty();
         return true;
     }
 
@@ -1884,7 +2598,7 @@ namespace eokas::RoseAxion {
             return true;
         }
         mLibrary->set(mActiveTable, "headWidth", static_cast<f64_t>(next));
-        mDirty = true;
+        this->markDirty();
         return true;
     }
 
@@ -2010,83 +2724,7 @@ namespace eokas::RoseAxion {
             return String::empty;
         }
         TableColumn info = this->column(column);
-        if (info.kind == FieldKind::MultiOption)
-        {
-            return joinSelected(this->cellLabels(row, column));
-        }
-        Value* field = this->fieldAt(this->rowValue(row), info.id);
-        if (field == nullptr || field->schema == nullptr)
-        {
-            return String::empty;
-        }
-        if (this->isNestedColumnType(info.schemaName))
-        {
-            if (field->schema->is(rose::SchemaType::Struct))
-            {
-                return String::format("{%u}", field->schema->getMemberCount());
-            }
-            if (field->schema->is(rose::SchemaType::List))
-            {
-                return String::format("[%u]", mLibrary->count(field));
-            }
-        }
-        if (field->schema->is(rose::SchemaType::Int))
-        {
-            i64_t value = 0;
-            if (!mLibrary->get(field, value))
-            {
-                return String::empty;
-            }
-            return String::format("%lld", static_cast<long long>(value));
-        }
-        if (field->schema->is(rose::SchemaType::Float))
-        {
-            f64_t value = 0;
-            if (!mLibrary->get(field, value))
-            {
-                return String::empty;
-            }
-            return String::format("%.15g", value);
-        }
-        if (field->schema->is(rose::SchemaType::Bool))
-        {
-            bool value = false;
-            if (!mLibrary->get(field, value))
-            {
-                return String::empty;
-            }
-            return value ? "true" : "false";
-        }
-        String value;
-        if (!mLibrary->get(field, value))
-        {
-            return String::empty;
-        }
-        if (info.kind == FieldKind::Date)
-        {
-            return displayDate(value);
-        }
-        if (info.kind == FieldKind::Time)
-        {
-            return displayTime(value);
-        }
-        if (info.kind == FieldKind::DateTime)
-        {
-            return displayDateTime(value);
-        }
-        if (info.kind == FieldKind::Color)
-        {
-            Color color;
-            if (parseColor(value, color))
-            {
-                return formatColor(color);
-            }
-        }
-        if (info.kind == FieldKind::SingleOption && !info.options.empty())
-        {
-            return optionDisplayLabel(info.options, value);
-        }
-        return value;
+        return this->displayFromValue(this->fieldAt(this->rowValue(row), info.id), this->objectField(column));
     }
 
     std::vector<String> TableDocument::cellLabels(u32_t row, u32_t column) const
@@ -2119,7 +2757,7 @@ namespace eokas::RoseAxion {
         bool nowNull = this->cellIsNull(row, column);
         if (before != after || wasNull != nowNull)
         {
-            mDirty = true;
+            this->markDirty();
         }
         return true;
     }
@@ -2173,75 +2811,12 @@ namespace eokas::RoseAxion {
 
     void TableDocument::writeCell(u32_t row, const TableColumn& column, const String& text)
     {
-        if (this->isNestedColumnType(column.schemaName))
-        {
-            Schema* schema = this->storageForType(column.schemaName);
-            Value* made = nullptr;
-            if (trimCopy(text).isEmpty())
-            {
-                made = this->makeNone();
-            }
-            else if (schema != nullptr)
-            {
-                made = mLibrary->make(schema);
-            }
-            if (made != nullptr)
-            {
-                mLibrary->set(this->rowValue(row), column.id, made);
-            }
-            return;
-        }
         if (column.kind == FieldKind::MultiOption)
         {
             this->writeLabels(row, column, splitSelected(text));
             return;
         }
-        String value = trimCopy(text);
-        if (column.kind == FieldKind::SingleOption)
-        {
-            String name = optionStorageNameFromLabel(column.options, value);
-            if (!name.isEmpty())
-            {
-                value = name;
-            }
-        }
-        Schema* schema = this->storageForType(column.schemaName);
-        Value* made = nullptr;
-        if (value.isEmpty() || !validateField(column.kind, value))
-        {
-            made = this->makeNone();
-        }
-        else
-        {
-            made = mLibrary->make(schema);
-            switch (column.kind)
-            {
-            case FieldKind::Integer:
-            {
-                i64_t number = 0;
-                parseInteger(value, number);
-                mLibrary->set(made, number);
-                break;
-            }
-            case FieldKind::Float:
-            {
-                f64_t number = 0;
-                parseFloat(value, number);
-                mLibrary->set(made, number);
-                break;
-            }
-            case FieldKind::Boolean:
-            {
-                bool flag = false;
-                parseBool(value, flag);
-                mLibrary->set(made, flag);
-                break;
-            }
-            default:
-                mLibrary->set(made, canonicalText(column.kind, value));
-                break;
-            }
-        }
+        Value* made = this->makeStoredValue(column.kind, column.schemaName, column.options, text, this->isNestedColumnType(column.schemaName));
         if (made == nullptr)
         {
             return;
@@ -2265,11 +2840,11 @@ namespace eokas::RoseAxion {
         bool nowNull = this->cellIsNull(row, column);
         if (before != after || wasNull != nowNull)
         {
-            mDirty = true;
+            this->markDirty();
         }
         if (!valid)
         {
-            mStatus = "内容与字段类型不符，已清空";
+            this->setStatus(DocStatus::TypeMismatchCleared);
         }
         return valid;
     }
@@ -2285,7 +2860,7 @@ namespace eokas::RoseAxion {
             return true;
         }
         mLibrary->set(this->columnValue(column), "name", name);
-        mDirty = true;
+        this->markDirty();
         return true;
     }
 
@@ -2348,7 +2923,7 @@ namespace eokas::RoseAxion {
             texts.push_back(this->cellText(row, column));
         }
         FieldKind kind = this->fieldKindForColumnType(next);
-        Schema* storage = this->storageForType(next);
+        Schema* storage = mLibrary != nullptr ? mLibrary->getSchema(next) : nullptr;
         if (storage == nullptr)
         {
             return false;
@@ -2360,7 +2935,18 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
-        mLibrary->set(this->columnValue(column), "kind", storage->name());
+        info.schemaName = storage->name();
+        info.kind = kind;
+        if (!mLibrary->set(this->columnValue(column), "kind", info.schemaName))
+        {
+            Value* fresh = this->makeColumn(info.id, info.name, info.schemaName);
+            if (fresh == nullptr)
+            {
+                return false;
+            }
+            mLibrary->set(fresh, "width", static_cast<f64_t>(info.width));
+            mLibrary->set(mColumns, column, fresh);
+        }
         if (kind != FieldKind::SingleOption && kind != FieldKind::MultiOption)
         {
             info.options.clear();
@@ -2369,8 +2955,6 @@ namespace eokas::RoseAxion {
         {
             info.options = fieldOptionsFromSchema(optionsSchemaOf(storage));
         }
-        info.schemaName = storage->name();
-        info.kind = kind;
         for (u32_t row = 0; row < rows; ++row)
         {
             if (kind == FieldKind::SingleOption && splitSelected(texts[row]).size() > 1)
@@ -2382,7 +2966,7 @@ namespace eokas::RoseAxion {
                 this->writeCell(row, info, texts[row]);
             }
         }
-        mDirty = true;
+        this->markDirty();
         return true;
     }
 
@@ -2398,18 +2982,18 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
-        if (const char* error = optionNameConflict(options))
+        if (optionNameConflict(options))
         {
-            mStatus = error;
+            this->setStatus(DocStatus::OptionNameTaken);
             return false;
         }
         if (!replaceSchemaOptions(schema, options))
         {
-            mStatus = "无法更新选项";
+            this->setStatus(DocStatus::CannotUpdateOptions);
             return false;
         }
-        mDirty = true;
-        mStatus = String::empty;
+        this->markDirty();
+        this->setStatus(DocStatus::Ready);
         return true;
     }
 
@@ -2451,7 +3035,7 @@ namespace eokas::RoseAxion {
         {
             return;
         }
-        mDirty = true;
+        this->markDirty();
     }
 
     void TableDocument::deleteRow(u32_t index)
@@ -2472,7 +3056,7 @@ namespace eokas::RoseAxion {
         {
             return;
         }
-        mDirty = true;
+        this->markDirty();
     }
 
     void TableDocument::insertColumn(u32_t index)
@@ -2499,7 +3083,7 @@ namespace eokas::RoseAxion {
         {
             this->insertRow(0);
         }
-        mDirty = true;
+        this->markDirty();
     }
 
     void TableDocument::deleteColumn(u32_t index)
@@ -2527,14 +3111,14 @@ namespace eokas::RoseAxion {
             {
                 this->writeCell(row, info, String::empty);
             }
-            mDirty = true;
+            this->markDirty();
             return;
         }
         TableColumn info = this->column(index);
         mRowSchema->delMember(info.id);
         this->rebuildRows(true);
         mLibrary->remove(mColumns, index);
-        mDirty = true;
+        this->markDirty();
     }
 
 }

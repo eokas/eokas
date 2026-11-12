@@ -1,23 +1,9 @@
 #include "./Editor.h"
+#include "./UiKit.h"
 
 #include "UI/Main.h"
 
 namespace eokas::RoseAxion {
-
-    namespace {
-
-        void setBox(UIWidget& widget, const Rect& box)
-        {
-            widget.shape.size = box.size;
-            widget.shape.origin = box.origin + widget.shape.pivot * widget.shape.size;
-        }
-
-        void setBox(const std::shared_ptr<UIWidget>& widget, const Rect& box)
-        {
-            setBox(*widget, box);
-        }
-
-    }
 
     void RoseEditor::ensurePages()
     {

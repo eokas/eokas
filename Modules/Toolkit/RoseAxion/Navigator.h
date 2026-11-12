@@ -2,6 +2,7 @@
 #define _EOKAS_ROSE_AXION_NAVIGATOR_H_
 
 #include "./Document.h"
+#include "./Host.h"
 
 #include "UI/UIEvent.h"
 #include "UI/UIWidget.h"
@@ -23,12 +24,10 @@ namespace eokas::RoseAxion {
     class RoseNavigator : public UIWidget
     {
     public:
-        struct Host
+        struct Host : RoseUiHost
         {
             std::function<void(EditorPage)> selectPage;
             EditorPage current = EditorPage::Tables;
-            String font;
-            float scale = 1.0f;
         };
 
         void bind(const Host& host);

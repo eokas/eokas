@@ -1,7 +1,8 @@
 #ifndef _EOKAS_ROSE_AXION_SEARCH_PAGE_H_
 #define _EOKAS_ROSE_AXION_SEARCH_PAGE_H_
 
-#include "Base/String.h"
+#include "./Host.h"
+
 #include "UI/UIWidget.h"
 
 namespace eokas::RoseAxion {
@@ -9,10 +10,8 @@ namespace eokas::RoseAxion {
     class RoseSearchPage : public UIWidget
     {
     public:
-        struct Host
+        struct Host : RoseUiHost
         {
-            String font;
-            float scale = 1.0f;
         };
 
         void bind(const Host& host);

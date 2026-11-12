@@ -17,7 +17,7 @@ namespace eokas::RoseAxion {
         const RoseTheme& t = theme();
         this->color = t.canvas;
         this->shape.pivot = Vector2(0.0f, 0.0f);
-        const float s = mHost.scale < 0.5f ? 1.0f : mHost.scale;
+        const float s = hostScale(mHost.scale);
         const float pad = 28.0f * s;
         auto title = makeText("外观", mHost.font, 22.0f * s, t.ink, 400.0f * s, 28.0f * s);
         title->layout();

@@ -11,45 +11,6 @@
 
 namespace eokas::RoseAxion {
 
-    namespace {
-
-        const char* schemaKindLabel(rose::SchemaType type)
-        {
-            if (type == rose::SchemaType::Struct)
-            {
-                return "结构";
-            }
-            if (type == rose::SchemaType::List)
-            {
-                return "列表";
-            }
-            if (type == rose::SchemaType::Options)
-            {
-                return "单选";
-            }
-            return "";
-        }
-
-        String fileTitle(const String& path)
-        {
-            if (path.isEmpty())
-            {
-                return "未命名";
-            }
-            size_t slash = path.rfind('\\');
-            size_t slash2 = path.rfind('/');
-            size_t pos = String::npos;
-            if (slash != String::npos) pos = slash;
-            if (slash2 != String::npos && (pos == String::npos || slash2 > pos)) pos = slash2;
-            if (pos == String::npos)
-            {
-                return path;
-            }
-            return path.substr(pos + 1);
-        }
-
-    }
-
     void RoseHomePage::bind(TableDocument& doc, const Host& host)
     {
         mDoc = &doc;
@@ -71,7 +32,7 @@ namespace eokas::RoseAxion {
 
     float RoseHomePage::scale() const
     {
-        return mHost.scale < 0.5f ? 1.0f : mHost.scale;
+        return hostScale(mHost.scale);
     }
 
     void RoseHomePage::notifyRebuild()
@@ -136,7 +97,7 @@ namespace eokas::RoseAxion {
         {
             return "RoseAxion";
         }
-        return fileTitle(mDoc->path());
+        return fileTitleFromPath(mDoc->path());
     }
 
     String RoseHomePage::documentSubtitle() const
@@ -558,7 +519,7 @@ namespace eokas::RoseAxion {
             "还没有表格");
         auto schemas = makeSection("Schemas", violet, colW, schemaCount, mDoc->hasActiveSchema(), mDoc->activeSchemaIndex(),
             [this](u32_t index) { return mDoc->schemaName(index); },
-            [this](u32_t index) { return String(schemaKindLabel(mDoc->schemaType(index))); },
+            [this](u32_t index) { return String(schemaTypeLabel(mDoc->schemaType(index))); },
             [this, cyan, violet](u32_t index)
             {
                 return mDoc->schemaType(index) == rose::SchemaType::List ? cyan : violet;

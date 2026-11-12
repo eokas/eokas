@@ -18,6 +18,75 @@ namespace eokas::RoseAxion {
         setBox(*widget, box);
     }
 
+    void placeOnOverlay(UIWidget& overlay, UIWidget& widget, const Rect& screen, bool below)
+    {
+        Vector2 topLeft = overlay.screenToLocal(Vector2(screen.origin.x, below ? screen.origin.y + screen.size.y : screen.origin.y));
+        if (!below)
+        {
+            widget.shape.setBox(topLeft, screen.size);
+            return;
+        }
+        float w = widget.shape.size.x;
+        if (w < screen.size.x)
+        {
+            w = screen.size.x;
+        }
+        widget.shape.setBox(topLeft, Vector2(w, widget.shape.size.y));
+    }
+
+    void placePopup(UIWidget& overlay, UIWidget& menu, const Rect& anchor)
+    {
+        menu.layout();
+        Vector2 size = menu.shape.size;
+        Rect limit = overlay.screenBounds();
+        float x = anchor.origin.x;
+        float y = anchor.origin.y + anchor.size.y;
+        float limitRight = limit.origin.x + limit.size.x;
+        float limitBottom = limit.origin.y + limit.size.y;
+        if (x + size.x > limitRight)
+        {
+            x = limitRight - size.x;
+        }
+        if (x < limit.origin.x)
+        {
+            x = limit.origin.x;
+        }
+        if (y + size.y > limitBottom)
+        {
+            y = anchor.origin.y - size.y;
+        }
+        if (y < limit.origin.y)
+        {
+            y = limit.origin.y;
+        }
+        Vector2 local = overlay.screenToLocal(Vector2(x, y));
+        menu.shape.setBox(local, size);
+    }
+
+    String fileTitleFromPath(const String& path)
+    {
+        if (path.isEmpty())
+        {
+            return "未命名";
+        }
+        size_t slash = path.rfind('\\');
+        size_t slash2 = path.rfind('/');
+        size_t pos = String::npos;
+        if (slash != String::npos)
+        {
+            pos = slash;
+        }
+        if (slash2 != String::npos && (pos == String::npos || slash2 > pos))
+        {
+            pos = slash2;
+        }
+        if (pos == String::npos)
+        {
+            return path;
+        }
+        return path.substr(pos + 1);
+    }
+
     void styleText(UIText& text, const String& font, float size, const Color& color)
     {
         text.style.fontPath = font;

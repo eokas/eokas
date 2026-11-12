@@ -3,6 +3,8 @@
 
 #include "./Header.h"
 
+#include "Rose/Library.h"
+
 #include <vector>
 
 namespace eokas::RoseAxion {
@@ -25,6 +27,13 @@ namespace eokas::RoseAxion {
         FolderPath,
     };
 
+    struct FieldOption
+    {
+        String name;
+        String label;
+        String color;
+    };
+
     const char* fieldKindKey(FieldKind kind);
     const char* fieldKindLabel(FieldKind kind);
     FieldKind fieldKindFromKey(const String& key);
@@ -33,6 +42,7 @@ namespace eokas::RoseAxion {
     FieldKind fieldKindFromSchemaName(const String& name);
     String canonicalizeColumnType(const String& stored);
     String schemaLabel(const String& schemaName);
+    const char* schemaTypeLabel(rose::SchemaType type);
 
     String trimCopy(const String& text);
     bool validateField(FieldKind kind, const String& text);
@@ -46,6 +56,16 @@ namespace eokas::RoseAxion {
     String formatDate(int year, int month, int day);
     String formatTime(int hour, int minute, int second);
     String formatDateTime(int year, int month, int day, int hour, int minute, int second);
+
+    struct TemporalParts
+    {
+        int year = 1970;
+        int month = 1;
+        int day = 1;
+        int hour = 0;
+        int minute = 0;
+        int second = 0;
+    };
 
     bool parseInteger(const String& text, i64_t& out);
     bool parseFloat(const String& text, f64_t& out);

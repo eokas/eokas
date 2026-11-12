@@ -2,6 +2,7 @@
 #define _EOKAS_ROSE_AXION_TABLE_OUTLINER_H_
 
 #include "./Document.h"
+#include "./Host.h"
 
 #include "UI/UIEvent.h"
 #include "UI/UIWidget.h"
@@ -18,12 +19,9 @@ namespace eokas::RoseAxion {
     class RoseTableOutliner : public UIWidget
     {
     public:
-        struct Host
+        struct Host : RoseUiHost
         {
-            std::function<void()> requestRebuild;
             std::function<void(int)> confirmDeleteTable;
-            String font;
-            float scale = 1.0f;
         };
 
         void bind(TableDocument& doc, const Host& host);

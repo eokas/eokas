@@ -2,6 +2,8 @@
 #define _EOKAS_ROSE_AXION_TABLE_PAGE_H_
 
 #include "./Document.h"
+#include "./Host.h"
+#include "./TableDetails.h"
 #include "./TableEditor.h"
 #include "./TableOutliner.h"
 
@@ -16,11 +18,8 @@ namespace eokas::RoseAxion {
     class RoseTablePage : public UIWidget
     {
     public:
-        struct Host
+        struct Host : RoseUiHost
         {
-            std::function<void()> requestRebuild;
-            std::function<void(const String&)> writeClipboard;
-            std::function<String()> readClipboard;
             std::function<void(const String&)> openExternal;
             std::function<String(const String& suggested)> pickFilePath;
             std::function<String(const String& suggested)> pickFolderPath;
@@ -30,8 +29,6 @@ namespace eokas::RoseAxion {
             std::function<void(int)> confirmDeleteColumn;
             std::function<void(int)> confirmDeleteTable;
             std::function<void(int)> confirmDeleteSchema;
-            String font;
-            float scale = 1.0f;
         };
 
         void bind(TableDocument& doc, const Host& host);
@@ -53,30 +50,37 @@ namespace eokas::RoseAxion {
         void layout() override;
 
     private:
+        enum class PaneResize { None, Outliner, Details };
+
         const String& font() const;
         float scale() const;
-        float outlinerWidth() const;
-        void paneRects(float& outlinerW, float& tableX, float& tableW) const;
-        void applyPaneWidth(float pixelWidth);
-        void placePaneHandle();
-        void attachPaneHandle();
+        void paneRects(float& outlinerW, float& tableX, float& tableW, float& detailsX, float& detailsW) const;
+        void applyOutlinerWidth(float pixelWidth);
+        void applyDetailsWidth(float pixelWidth);
+        void placePaneHandles();
+        void attachSplitHandle(PaneResize side);
         void commitPaneResize();
         bool hitResizePane(float screenX, float screenY) const;
         void cancelResize();
         RoseTableEditor::Host tableHost() const;
         RoseTableOutliner::Host outlinerHost() const;
+        RoseTableDetails::Host detailsHost() const;
 
         TableDocument* mDoc = nullptr;
         Host mHost;
         std::shared_ptr<RoseTableOutliner> mOutliner;
         std::shared_ptr<RoseTableEditor> mTableEditor;
-        UIWidget* mSplit = nullptr;
-        UIWidget* mSplitHandle = nullptr;
+        std::shared_ptr<RoseTableDetails> mDetails;
+        UIWidget* mOutlinerSplit = nullptr;
+        UIWidget* mDetailsSplit = nullptr;
+        UIWidget* mOutlinerHandle = nullptr;
+        UIWidget* mDetailsHandle = nullptr;
         UIWidget* mHint = nullptr;
         UIWidget* mOverlay = nullptr;
         float mKeepOutlinerY = 0.0f;
         float mOutlinerW = 240.0f;
-        bool mResizePane = false;
+        float mDetailsW = 360.0f;
+        PaneResize mResizeSide = PaneResize::None;
         float mResizeOriginPaneW = 0.0f;
     };
 

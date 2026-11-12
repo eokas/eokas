@@ -14,27 +14,6 @@ namespace eokas::RoseAxion {
 
     namespace {
 
-        bool statusFailed(const String& text)
-        {
-            return text == "内容与字段类型不符，已清空"
-                || text == "无法打开文件"
-                || text == "无法保存文件"
-                || text == "打开失败"
-                || text == "这不是 RoseAxion 表格"
-                || text == "保存失败"
-                || text == "颜色需要是 #rrggbb"
-                || text == "日期时间格式无效"
-                || text == "表格名称不能为空"
-                || text == "表格名称已存在"
-                || text == "无法创建表格"
-                || text == "模式名称不能为空"
-                || text == "模式名称已存在"
-                || text == "无法创建模式"
-                || text == "无法删除模式"
-                || text == "成员名称不能为空"
-                || text == "成员名称已存在";
-        }
-
         struct MenuGate
         {
             UIMenu* file = nullptr;
@@ -90,21 +69,7 @@ namespace eokas::RoseAxion {
 
     String AxionApp::fileTitle() const
     {
-        const String& path = mDoc.path();
-        if (path.isEmpty())
-        {
-            return "未命名";
-        }
-        size_t slash = path.rfind('\\');
-        size_t slash2 = path.rfind('/');
-        size_t pos = String::npos;
-        if (slash != String::npos) pos = slash;
-        if (slash2 != String::npos && (pos == String::npos || slash2 > pos)) pos = slash2;
-        if (pos == String::npos)
-        {
-            return path;
-        }
-        return path.substr(pos + 1);
+        return fileTitleFromPath(mDoc.path());
     }
 
     void AxionApp::notifyTitle()
@@ -258,7 +223,7 @@ namespace eokas::RoseAxion {
     {
         if (!mHost.pickOpenPath)
         {
-            mDoc.setStatus("无法打开文件");
+            mDoc.setStatus(DocStatus::CannotOpenFile);
             this->requestRebuild();
             return;
         }
@@ -328,7 +293,7 @@ namespace eokas::RoseAxion {
         }
         if (!mHost.pickSavePath)
         {
-            mDoc.setStatus("无法保存文件");
+            mDoc.setStatus(DocStatus::CannotSaveFile);
             this->requestRebuild();
             return false;
         }
@@ -660,7 +625,7 @@ namespace eokas::RoseAxion {
             setBox(statusRule, Rect(0.0f, 0.0f, mWidth, 1.0f));
             statusBar->attachChild(statusRule);
             String statusText = mDoc.status();
-            Color statusColor = statusFailed(statusText) ? warn : mute;
+            Color statusColor = docStatusFailed(mDoc.statusKind()) ? warn : mute;
             if (statusText.isEmpty())
             {
                 statusText = String("就绪");

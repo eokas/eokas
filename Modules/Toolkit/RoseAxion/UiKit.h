@@ -10,6 +10,9 @@ namespace eokas::RoseAxion {
 
     void setBox(UIWidget& widget, const Rect& box);
     void setBox(const std::shared_ptr<UIWidget>& widget, const Rect& box);
+    void placeOnOverlay(UIWidget& overlay, UIWidget& widget, const Rect& screen, bool below = false);
+    void placePopup(UIWidget& overlay, UIWidget& menu, const Rect& anchor);
+    String fileTitleFromPath(const String& path);
     void styleText(UIText& text, const String& font, float size, const Color& color);
 
     std::shared_ptr<UIText> makeText(const String& value, const String& font, float size, const Color& color, float width, float height);

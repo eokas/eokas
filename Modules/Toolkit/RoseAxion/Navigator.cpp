@@ -20,7 +20,7 @@ namespace eokas::RoseAxion {
 
     float RoseNavigator::scale() const
     {
-        return mHost.scale < 0.5f ? 1.0f : mHost.scale;
+        return hostScale(mHost.scale);
     }
 
     float RoseNavigator::barWidth() const

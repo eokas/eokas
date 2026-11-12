@@ -33,7 +33,7 @@ namespace eokas::RoseAxion {
 
     float RoseSchemaPage::scale() const
     {
-        return mHost.scale < 0.5f ? 1.0f : mHost.scale;
+        return hostScale(mHost.scale);
     }
 
     RoseSchemaEditor::Host RoseSchemaPage::editorHost() const

@@ -206,67 +206,66 @@ namespace eokas::RoseAxion {
 
     }
 
+    namespace {
+
+        struct FieldKindMeta
+        {
+            FieldKind kind;
+            const char* key;
+            const char* label;
+            const char* schemaName;
+        };
+
+        const FieldKindMeta kFieldKinds[] = {
+            { FieldKind::Text, "text", "文本", "String" },
+            { FieldKind::Integer, "integer", "整数", "Int" },
+            { FieldKind::Float, "float", "浮点数", "Float" },
+            { FieldKind::Boolean, "boolean", "布尔值", "Bool" },
+            { FieldKind::Date, "date", "日期", "Date" },
+            { FieldKind::Time, "time", "时间", "Time" },
+            { FieldKind::DateTime, "datetime", "日期时间", "DateTime" },
+            { FieldKind::Url, "url", "网址", "URL" },
+            { FieldKind::Email, "email", "邮箱地址", "Email" },
+            { FieldKind::SingleOption, "singleOption", "单选", "String" },
+            { FieldKind::MultiOption, "multiOption", "多选", "String" },
+            { FieldKind::Color, "color", "颜色", "Color" },
+            { FieldKind::FilePath, "filePath", "文件路径", "FilePath" },
+            { FieldKind::FolderPath, "folderPath", "目录路径", "FolderPath" },
+        };
+
+        const FieldKindMeta& fieldKindMeta(FieldKind kind)
+        {
+            for (const FieldKindMeta& meta : kFieldKinds)
+            {
+                if (meta.kind == kind)
+                {
+                    return meta;
+                }
+            }
+            return kFieldKinds[0];
+        }
+
+    }
+
     const char* fieldKindKey(FieldKind kind)
     {
-        switch (kind)
-        {
-        case FieldKind::Integer: return "integer";
-        case FieldKind::Float: return "float";
-        case FieldKind::Boolean: return "boolean";
-        case FieldKind::Date: return "date";
-        case FieldKind::Time: return "time";
-        case FieldKind::DateTime: return "datetime";
-        case FieldKind::Url: return "url";
-        case FieldKind::Email: return "email";
-        case FieldKind::SingleOption: return "singleOption";
-        case FieldKind::MultiOption: return "multiOption";
-        case FieldKind::Color: return "color";
-        case FieldKind::FilePath: return "filePath";
-        case FieldKind::FolderPath: return "folderPath";
-        case FieldKind::Text:
-        default:
-            return "text";
-        }
+        return fieldKindMeta(kind).key;
     }
 
     const char* fieldKindLabel(FieldKind kind)
     {
-        switch (kind)
-        {
-        case FieldKind::Integer: return "整数";
-        case FieldKind::Float: return "浮点数";
-        case FieldKind::Boolean: return "布尔值";
-        case FieldKind::Date: return "日期";
-        case FieldKind::Time: return "时间";
-        case FieldKind::DateTime: return "日期时间";
-        case FieldKind::Url: return "网址";
-        case FieldKind::Email: return "邮箱地址";
-        case FieldKind::SingleOption: return "单选";
-        case FieldKind::MultiOption: return "多选";
-        case FieldKind::Color: return "颜色";
-        case FieldKind::FilePath: return "文件路径";
-        case FieldKind::FolderPath: return "目录路径";
-        case FieldKind::Text:
-        default:
-            return "文本";
-        }
+        return fieldKindMeta(kind).label;
     }
 
     FieldKind fieldKindFromKey(const String& key)
     {
-        if (key == "integer") return FieldKind::Integer;
-        if (key == "float") return FieldKind::Float;
-        if (key == "boolean") return FieldKind::Boolean;
-        if (key == "date") return FieldKind::Date;
-        if (key == "time") return FieldKind::Time;
-        if (key == "datetime") return FieldKind::DateTime;
-        if (key == "url") return FieldKind::Url;
-        if (key == "email") return FieldKind::Email;
-        if (key == "singleOption") return FieldKind::SingleOption;
-        if (key == "multiOption") return FieldKind::MultiOption;
-        if (key == "color") return FieldKind::Color;
-        if (key == "filePath") return FieldKind::FilePath;
-        if (key == "folderPath") return FieldKind::FolderPath;
+        for (const FieldKindMeta& meta : kFieldKinds)
+        {
+            if (key == meta.key)
+            {
+                return meta.kind;
+            }
+        }
         return FieldKind::Text;
     }
 
@@ -277,38 +276,30 @@ namespace eokas::RoseAxion {
 
     const char* schemaNameFromFieldKind(FieldKind kind)
     {
-        switch (kind)
+        if (kind == FieldKind::SingleOption || kind == FieldKind::MultiOption)
         {
-        case FieldKind::Integer: return "Int";
-        case FieldKind::Float: return "Float";
-        case FieldKind::Boolean: return "Bool";
-        case FieldKind::Date: return "Date";
-        case FieldKind::Time: return "Time";
-        case FieldKind::DateTime: return "DateTime";
-        case FieldKind::Url: return "URL";
-        case FieldKind::Email: return "Email";
-        case FieldKind::Color: return "Color";
-        case FieldKind::FilePath: return "FilePath";
-        case FieldKind::FolderPath: return "FolderPath";
-        case FieldKind::Text:
-        default:
             return "String";
         }
+        return fieldKindMeta(kind).schemaName;
     }
 
     FieldKind fieldKindFromSchemaName(const String& name)
     {
-        if (name == "Int" || name == "integer") return FieldKind::Integer;
-        if (name == "Float" || name == "float") return FieldKind::Float;
-        if (name == "Bool" || name == "boolean") return FieldKind::Boolean;
-        if (name == "Date" || name == "date") return FieldKind::Date;
-        if (name == "Time" || name == "time") return FieldKind::Time;
-        if (name == "DateTime" || name == "datetime") return FieldKind::DateTime;
-        if (name == "URL" || name == "Url" || name == "url") return FieldKind::Url;
-        if (name == "Email" || name == "email") return FieldKind::Email;
-        if (name == "Color" || name == "color") return FieldKind::Color;
-        if (name == "FilePath" || name == "filePath") return FieldKind::FilePath;
-        if (name == "FolderPath" || name == "folderPath") return FieldKind::FolderPath;
+        if (name == "Url")
+        {
+            return FieldKind::Url;
+        }
+        for (const FieldKindMeta& meta : kFieldKinds)
+        {
+            if (meta.kind == FieldKind::SingleOption || meta.kind == FieldKind::MultiOption)
+            {
+                continue;
+            }
+            if (name == meta.schemaName || name == meta.key)
+            {
+                return meta.kind;
+            }
+        }
         return FieldKind::Text;
     }
 
@@ -329,6 +320,23 @@ namespace eokas::RoseAxion {
             return String(fieldKindLabel(fieldKindFromSchemaName(canonical)));
         }
         return schemaName;
+    }
+
+    const char* schemaTypeLabel(rose::SchemaType type)
+    {
+        if (type == rose::SchemaType::Struct)
+        {
+            return "结构";
+        }
+        if (type == rose::SchemaType::List)
+        {
+            return "列表";
+        }
+        if (type == rose::SchemaType::Options)
+        {
+            return "单选";
+        }
+        return "";
     }
 
     String trimCopy(const String& text)

@@ -10,12 +10,34 @@
 
 namespace eokas::RoseAxion {
 
-    struct FieldOption
+    enum class DocStatus
     {
-        String name;
-        String label;
-        String color;
+        Ready,
+        Opened,
+        Saved,
+        OpenFailed,
+        CannotOpenFile,
+        NotATable,
+        SaveFailed,
+        CannotSaveFile,
+        TableNameEmpty,
+        TableNameTaken,
+        CannotCreateTable,
+        SchemaNameEmpty,
+        SchemaNameTaken,
+        CannotCreateSchema,
+        CannotDeleteSchema,
+        CannotAddMember,
+        MemberNameEmpty,
+        MemberNameTaken,
+        OptionNameEmpty,
+        OptionNameTaken,
+        CannotUpdateOptions,
+        TypeMismatchCleared,
     };
+
+    const char* docStatusText(DocStatus status);
+    bool docStatusFailed(DocStatus status);
 
     struct TableColumn
     {
@@ -27,14 +49,47 @@ namespace eokas::RoseAxion {
         float width = 168.0f;
     };
 
+    struct NestedHop
+    {
+        bool list = false;
+        String member;
+        u32_t index = 0;
+        static NestedHop field(const String& name)
+        {
+            NestedHop hop;
+            hop.member = name;
+            return hop;
+        }
+        static NestedHop at(u32_t index)
+        {
+            NestedHop hop;
+            hop.list = true;
+            hop.index = index;
+            return hop;
+        }
+    };
+
+    struct NestedField
+    {
+        String id;
+        String name;
+        String schemaName = "String";
+        FieldKind kind = FieldKind::Text;
+        std::vector<FieldOption> options;
+        bool nestedStruct = false;
+        bool nestedList = false;
+        bool listItem = false;
+    };
+
     class TableDocument
     {
     public:
         bool isOpen() const { return mOpen; }
         bool dirty() const { return mDirty; }
         const String& path() const { return mPath; }
-        const String& status() const { return mStatus; }
-        void setStatus(const String& text) { mStatus = text; }
+        DocStatus statusKind() const { return mStatus; }
+        String status() const { return docStatusText(mStatus); }
+        void setStatus(DocStatus status) { mStatus = status; }
 
         void createNew();
         bool load(const String& path);
@@ -81,6 +136,19 @@ namespace eokas::RoseAxion {
         bool setSchemaOptions(const std::vector<FieldOption>& options);
 
         bool isNestedColumn(u32_t column) const;
+        bool isNestedStructColumn(u32_t column) const;
+        bool isNestedListColumn(u32_t column) const;
+        NestedField objectField(u32_t column) const;
+        u32_t nestedFieldCount(u32_t column, const std::vector<NestedHop>& path) const;
+        NestedField nestedField(u32_t column, const std::vector<NestedHop>& path, u32_t index) const;
+        u32_t nestedListCount(u32_t row, u32_t column, const std::vector<NestedHop>& path) const;
+        NestedField nestedListElement(u32_t column, const std::vector<NestedHop>& path) const;
+        bool nestedListInsert(u32_t row, u32_t column, const std::vector<NestedHop>& path, u32_t index);
+        bool nestedListRemove(u32_t row, u32_t column, const std::vector<NestedHop>& path, u32_t index);
+        String nestedText(u32_t row, u32_t column, const std::vector<NestedHop>& path) const;
+        bool setNestedText(u32_t row, u32_t column, const std::vector<NestedHop>& path, const String& text);
+        std::vector<String> nestedLabels(u32_t row, u32_t column, const std::vector<NestedHop>& path) const;
+        bool setNestedLabels(u32_t row, u32_t column, const std::vector<NestedHop>& path, const std::vector<String>& labels);
 
         u32_t rowCount() const;
         u32_t columnCount() const;
@@ -136,6 +204,21 @@ namespace eokas::RoseAxion {
         rose::Schema* storageForType(const String& typeName) const;
         rose::Schema* optionsSchemaForStorage(rose::Schema* storage) const;
         bool isNestedColumnType(const String& typeName) const;
+        bool isStructType(const String& typeName) const;
+        bool isListType(const String& typeName) const;
+        NestedField fieldFromStorage(rose::Schema* storage, const String& id, const String& name) const;
+        NestedField leafAtPath(u32_t column, const std::vector<NestedHop>& path) const;
+        rose::Schema* schemaAtPath(u32_t column, const std::vector<NestedHop>& path) const;
+        rose::Value* valueAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path) const;
+        rose::Value* ensureAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path);
+        rose::Value* ensureParentAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path);
+        void markDirty();
+        String displayFromValue(rose::Value* field, const NestedField& info) const;
+        String textFromValue(rose::Value* field, const NestedField& info) const;
+        std::vector<String> labelsFromValue(rose::Value* field, const NestedField& info) const;
+        rose::Value* makeStoredValue(FieldKind kind, const String& schemaName, const std::vector<FieldOption>& options, const String& text, bool nested);
+        void writeFieldValue(rose::Value* parent, const NestedHop& hop, const NestedField& info, const String& text);
+        void writeFieldLabels(rose::Value* parent, const NestedHop& hop, const NestedField& info, const std::vector<String>& labels);
         rose::Value* columnValue(u32_t index) const;
         rose::Value* rowValue(u32_t index) const;
         String readString(rose::Value* object, const char* field) const;
@@ -166,7 +249,7 @@ namespace eokas::RoseAxion {
         rose::Value* mColumns = nullptr;
         rose::Value* mRows = nullptr;
         String mPath;
-        String mStatus;
+        DocStatus mStatus = DocStatus::Ready;
         u32_t mNextId = 0;
         u32_t mNextTableId = 0;
         int mActiveIndex = -1;
