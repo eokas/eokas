@@ -21,6 +21,8 @@ namespace eokas::RoseAxion {
         struct Host
         {
             std::function<void()> requestRebuild;
+            std::function<void(const String&)> writeClipboard;
+            std::function<String()> readClipboard;
             String font;
             float scale = 1.0f;
         };
@@ -39,9 +41,11 @@ namespace eokas::RoseAxion {
         void notifyRebuild();
         const String& font() const;
         float scale() const;
-        void beginRename(u32_t memberIndex);
+        void beginSchemaNameRename();
         void finishRename(const String& text);
         void cancelRename();
+        void commitMemberName(u32_t memberIndex, const String& text);
+        void commitOptionName(u32_t optionIndex, const String& text);
         void applyType(const String& typeName);
         void placeOverlayEditors();
 
@@ -53,9 +57,13 @@ namespace eokas::RoseAxion {
         UIWidget* mRenameInput = nullptr;
         UIWidget* mTypeAnchor = nullptr;
         UIWidget* mMenu = nullptr;
+        UIWidget* mColorAnchor = nullptr;
+        UIWidget* mColorPanel = nullptr;
         UIWidget* mFocus = nullptr;
         int mRenameIndex = -1;
+        bool mRenameSchemaName = false;
         int mTypeIndex = -2;
+        int mColorIndex = -1;
         String mRenameSeed;
         float mKeepY = 0.0f;
     };

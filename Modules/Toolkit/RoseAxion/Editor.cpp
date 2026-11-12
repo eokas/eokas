@@ -80,6 +80,8 @@ namespace eokas::RoseAxion {
     {
         RoseSchemaPage::Host host;
         host.requestRebuild = mHost.requestRebuild;
+        host.writeClipboard = mHost.writeClipboard;
+        host.readClipboard = mHost.readClipboard;
         host.confirmDeleteSchema = mHost.confirmDeleteSchema;
         host.font = mHost.font;
         host.scale = mHost.scale;

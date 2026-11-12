@@ -19,6 +19,8 @@ namespace eokas::RoseAxion {
         struct Host
         {
             std::function<void()> requestRebuild;
+            std::function<void(const String&)> writeClipboard;
+            std::function<String()> readClipboard;
             std::function<void(int)> confirmDeleteSchema;
             String font;
             float scale = 1.0f;

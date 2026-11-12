@@ -109,7 +109,6 @@ namespace eokas::RoseAxion {
         int mPickCol = -1;
         int mColorRow = -1;
         int mColorCol = -1;
-        int mColorIndex = -1;
         int mDateYear = 1970;
         int mDateMonth = 1;
         int mDateDay = 1;

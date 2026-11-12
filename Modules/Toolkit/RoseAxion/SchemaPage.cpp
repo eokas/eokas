@@ -40,6 +40,8 @@ namespace eokas::RoseAxion {
     {
         RoseSchemaEditor::Host host;
         host.requestRebuild = mHost.requestRebuild;
+        host.writeClipboard = mHost.writeClipboard;
+        host.readClipboard = mHost.readClipboard;
         host.font = mHost.font;
         host.scale = mHost.scale;
         return host;
@@ -361,11 +363,28 @@ namespace eokas::RoseAxion {
 
         if (!mDoc->hasActiveSchema())
         {
-            auto hint = makeText("选择或新建模式", fontPath, fontPx, mute, paneW - 32.0f * s, 28.0f * s);
+            auto card = std::make_shared<PaintPanel>();
+            card->pickable = false;
+            card->fill(t.cardTop, t.cardBottom);
+            card->hair = t.hair;
+            card->framed = true;
+            float cardW = paneW - 32.0f * s;
+            if (cardW > 320.0f * s)
+            {
+                cardW = 320.0f * s;
+            }
+            if (cardW < 1.0f)
+            {
+                cardW = 1.0f;
+            }
+            auto hint = makeText("选择或新建模式", fontPath, fontPx, mute, cardW - 32.0f * s, 28.0f * s);
             hint->layout();
-            setBox(hint, Rect(paneX + (paneW - hint->shape.size.x) * 0.5f, (height - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
-            this->attachChild(hint);
-            mHint = hint.get();
+            float cardH = 48.0f * s + hint->shape.size.y;
+            setBox(card, Rect(paneX + (paneW - cardW) * 0.5f, (height - cardH) * 0.5f, cardW, cardH));
+            setBox(hint, Rect((cardW - hint->shape.size.x) * 0.5f, (cardH - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
+            card->attachChild(hint);
+            this->attachChild(card);
+            mHint = card.get();
             return;
         }
 

@@ -79,6 +79,20 @@ namespace eokas::RoseAxion {
         return button;
     }
 
+    std::shared_ptr<UIButton> makeDangerButton(const String& label, const String& font, float size, float minWidth, float minHeight)
+    {
+        const RoseTheme& t = theme();
+        auto button = makeButton(label, font, size, minWidth, minHeight, t.raised, t.danger);
+        float unit = size / 15.0f;
+        if (unit < 1.0f)
+        {
+            unit = 1.0f;
+        }
+        button->border.color = t.danger;
+        button->border.thickness = unit;
+        return button;
+    }
+
     std::shared_ptr<UIButton> makeMoreButton(const String& font, float size, float width, float height, const Color& ink)
     {
         auto button = makeButton("...", font, size, width, height, Color(0.0f, 0.0f, 0.0f, 0.0f), ink);

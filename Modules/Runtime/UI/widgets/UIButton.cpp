@@ -1,11 +1,14 @@
 #include "UIButton.h"
 #include "../UIFont.h"
+#include "../UIStroke.h"
 #include <cmath>
 
 namespace eokas
 {
     UIButton::UIButton()
     {
+        border.thickness = 0.0f;
+        border.color.a = 0.0f;
         this->setContent(std::make_shared<UIText>());
     }
 
@@ -96,6 +99,10 @@ namespace eokas
             primitive.addQuad(matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
         }
         UIWidget::render(primitive);
+        if (!circle && border.thickness > 0.0f && border.color.a > 0.0f)
+        {
+            UIStroke::border(primitive, this->matrixLocalToScreen(), Rect(0.0f, 0.0f, shape.size.x, shape.size.y), border);
+        }
     }
 
     bool UIButton::contains(const Vector2& point) const

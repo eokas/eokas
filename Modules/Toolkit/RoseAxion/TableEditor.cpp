@@ -102,6 +102,38 @@ namespace eokas::RoseAxion {
             }
         };
 
+        struct SettingsDrawer : UIWidget
+        {
+            UIWidget* footer = nullptr;
+            float pad = 16.0f;
+            void layout() override
+            {
+                if (!visible)
+                {
+                    return;
+                }
+                for (auto& child : children())
+                {
+                    if (!child || child.get() == footer)
+                    {
+                        continue;
+                    }
+                    child->layout();
+                }
+                if (footer == nullptr)
+                {
+                    return;
+                }
+                footer->layout();
+                float y = shape.size.y - pad - footer->shape.size.y;
+                if (y < pad)
+                {
+                    y = pad;
+                }
+                this->placeChild(*footer, Vector2(floorf(pad + 0.5f), floorf(y + 0.5f)));
+            }
+        };
+
         void revealCell(UIView& view, int row, int col, float headW, const std::vector<float>& colWs, float rowH)
         {
             if (row < 0 || col < 0 || col >= static_cast<int>(colWs.size()))
@@ -272,7 +304,6 @@ namespace eokas::RoseAxion {
         mPickCol = -1;
         mColorRow = -1;
         mColorCol = -1;
-        mColorIndex = -1;
         mClickHeader = false;
         mClickRow = -1;
         mClickCol = -1;
@@ -295,7 +326,6 @@ namespace eokas::RoseAxion {
     void RoseTableEditor::closeSettings()
     {
         mSettingsCol = -1;
-        mColorIndex = -1;
         mColorRow = -1;
         mColorCol = -1;
     }
@@ -847,7 +877,6 @@ namespace eokas::RoseAxion {
         const Color url = t.url;
         const Color clear(0.0f, 0.0f, 0.0f, 0.0f);
         const Color quiet = t.quiet;
-        const Color danger = t.danger;
         const String& fontPath = this->font();
         this->color = canvas;
         const float height = shape.size.y;
@@ -1201,7 +1230,7 @@ namespace eokas::RoseAxion {
                 more->onClick = [this, col, moreRaw, showPopup]()
                 {
                     showPopup(*moreRaw, {
-                        {"字段设置", [this, col]() { mSettingsCol = col; mDateRow = -1; mDateCol = -1; mColorRow = -1; mColorCol = -1; mColorIndex = -1; this->notifyRebuild(); }},
+                        {"字段设置", [this, col]() { mSettingsCol = col; mDateRow = -1; mDateCol = -1; mColorRow = -1; mColorCol = -1; this->notifyRebuild(); }},
                         {"在左边插入一列", [this, col]() { mDoc->insertColumn(static_cast<u32_t>(col)); mSelect = SelectKind::Column; mSelectCol = col; this->notifyRebuild(); }},
                         {"在右边插入一列", [this, col]() { mDoc->insertColumn(static_cast<u32_t>(col + 1)); mSelect = SelectKind::Column; mSelectCol = col + 1; this->notifyRebuild(); }},
                     });
@@ -1959,14 +1988,20 @@ namespace eokas::RoseAxion {
         if (overlay != nullptr && mSettingsCol >= 0)
         {
             TableColumn info = mDoc->column(static_cast<u32_t>(mSettingsCol));
-            auto panel = std::make_shared<UIList>();
-            panel->direction = UIDirection::Vertical;
-            panel->padding = 16.0f * s;
-            panel->spacing = 10.0f * s;
+            auto panel = std::make_shared<SettingsDrawer>();
+            panel->pickable = true;
             panel->color = t.raised;
             panel->shape.pivot = Vector2(0.0f, 0.0f);
+            panel->pad = 16.0f * s;
             setBox(panel, Rect(0.0f, 0.0f, drawerW, shape.size.y > 1.0f ? shape.size.y : 400.0f * s));
             float innerW = drawerW - 32.0f * s;
+            auto body = std::make_shared<UIList>();
+            body->direction = UIDirection::Vertical;
+            body->padding = 16.0f * s;
+            body->spacing = 10.0f * s;
+            body->color = clear;
+            body->shape.pivot = Vector2(0.0f, 0.0f);
+            setBox(body, Rect(0.0f, 0.0f, drawerW, 0.0f));
             auto head = std::make_shared<UIWidget>();
             head->pickable = false;
             head->shape.pivot = Vector2(0.0f, 0.0f);
@@ -1978,10 +2013,10 @@ namespace eokas::RoseAxion {
             head->attachChild(title);
             auto close = makeButton("关闭", fontPath, smallPx, 64.0f * s, 28.0f * s, quiet, ink);
             close->shape.setBox(Vector2(innerW - 64.0f * s, 2.0f * s), Vector2(64.0f * s, 28.0f * s));
-            close->onClick = [this]() { mSettingsCol = -1; mColorIndex = -1; this->notifyRebuild(); };
+            close->onClick = [this]() { mSettingsCol = -1; this->notifyRebuild(); };
             head->attachChild(close);
-            panel->attachChild(head);
-            panel->attachChild(makeText("字段名称", fontPath, smallPx, mute, 200.0f * s, 18.0f * s));
+            body->attachChild(head);
+            body->attachChild(makeText("字段名称", fontPath, smallPx, mute, 200.0f * s, 18.0f * s));
             auto name = std::make_shared<UIInput>();
             name->shape.pivot = Vector2(0.0f, 0.0f);
             setBox(name, Rect(0.0f, 0.0f, drawerW - 40.0f * s, 32.0f * s));
@@ -1999,8 +2034,8 @@ namespace eokas::RoseAxion {
                 mDoc->setColumnName(static_cast<u32_t>(settingsCol), text);
                 this->notifyRebuild();
             };
-            panel->attachChild(name);
-            panel->attachChild(makeText("字段类型", fontPath, smallPx, mute, 200.0f * s, 18.0f * s));
+            body->attachChild(name);
+            body->attachChild(makeText("字段类型", fontPath, smallPx, mute, 200.0f * s, 18.0f * s));
             auto drop = std::make_shared<UIDropdown>();
             drop->overlay = true;
             drop->shape.pivot = Vector2(0.0f, 0.0f);
@@ -2035,132 +2070,11 @@ namespace eokas::RoseAxion {
                 }
                 this->notifyRebuild();
             };
-            panel->attachChild(drop);
+            body->attachChild(drop);
+            panel->attachChild(body);
 
-            if (optionKind(info.kind))
-            {
-                panel->attachChild(makeText("选项", fontPath, smallPx, mute, 200.0f * s, 18.0f * s));
-                for (int i = 0; i < static_cast<int>(info.options.size()); ++i)
-                {
-                    auto line = std::make_shared<UIList>();
-                    line->direction = UIDirection::Horizontal;
-                    line->padding = 0.0f;
-                    line->spacing = 6.0f * s;
-                    line->color = clear;
-                    line->shape.pivot = Vector2(0.0f, 0.0f);
-                    auto label = std::make_shared<UIInput>();
-                    label->shape.pivot = Vector2(0.0f, 0.0f);
-                    setBox(label, Rect(0.0f, 0.0f, 150.0f * s, 30.0f * s));
-                    styleInput(*label);
-                    label->setText(info.options[static_cast<size_t>(i)].label);
-                    UIInput* labelRaw = label.get();
-                    label->onFocusLoss = [this, settingsCol, i, labelRaw]()
-                    {
-                        auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
-                        if (i < 0 || i >= static_cast<int>(options.size())) return;
-                        options[static_cast<size_t>(i)].label = labelRaw->text;
-                        mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
-                        this->notifyRebuild();
-                    };
-                    line->attachChild(label);
-                    Color chip = optionChipColor(info.options[static_cast<size_t>(i)].color);
-                    auto swatch = makeButton("", fontPath, smallPx, 28.0f * s, 28.0f * s, chip, ink);
-                    swatch->circle = true;
-                    swatch->paddingX = 0.0f;
-                    swatch->paddingY = 0.0f;
-                    swatch->onClick = [this, i]()
-                    {
-                        mColorIndex = mColorIndex == i ? -1 : i;
-                        this->notifyRebuild();
-                    };
-                    line->attachChild(swatch);
-                    auto up = makeButton("上", fontPath, smallPx, 32.0f * s, 28.0f * s, quiet, ink);
-                    up->onClick = [this, settingsCol, i]()
-                    {
-                        if (i <= 0) return;
-                        auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
-                        std::swap(options[static_cast<size_t>(i)], options[static_cast<size_t>(i - 1)]);
-                        mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
-                        mColorIndex = -1;
-                        this->notifyRebuild();
-                    };
-                    auto down = makeButton("下", fontPath, smallPx, 32.0f * s, 28.0f * s, quiet, ink);
-                    down->onClick = [this, settingsCol, i]()
-                    {
-                        auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
-                        if (i + 1 >= static_cast<int>(options.size())) return;
-                        std::swap(options[static_cast<size_t>(i)], options[static_cast<size_t>(i + 1)]);
-                        mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
-                        mColorIndex = -1;
-                        this->notifyRebuild();
-                    };
-                    auto remove = makeButton("删", fontPath, smallPx, 32.0f * s, 28.0f * s, danger, ink);
-                    remove->onClick = [this, settingsCol, i]()
-                    {
-                        auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
-                        if (i < 0 || i >= static_cast<int>(options.size())) return;
-                        String gone = options[static_cast<size_t>(i)].name;
-                        options.erase(options.begin() + i);
-                        mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
-                        mDoc->dropOptionLabel(static_cast<u32_t>(settingsCol), gone);
-                        mColorIndex = -1;
-                        this->notifyRebuild();
-                    };
-                    line->attachChild(up);
-                    line->attachChild(down);
-                    line->attachChild(remove);
-                    panel->attachChild(line);
-                    if (mColorIndex == i)
-                    {
-                        const float palettePad = 4.0f;
-                        const float paletteGap = 2.0f;
-                        float paletteW = drawerW - 40.0f * s;
-                        float padPx = floorf(palettePad * s + 0.5f);
-                        float gapPx = floorf(paletteGap * s + 0.5f);
-                        float cellPx = floorf((paletteW - padPx * 2.0f - gapPx * (float)(UIPalette::kColumns - 1)) / (float)UIPalette::kColumns);
-                        if (cellPx < 16.0f)
-                        {
-                            cellPx = 16.0f;
-                        }
-                        float cellSize = s > 0.0f ? cellPx / s : cellPx;
-                        Vector2 paletteSize = UIPalette::preferredSize(s, palettePad, paletteGap, cellSize);
-                        auto palette = std::make_shared<UIPalette>();
-                        palette->uiScale = s;
-                        palette->padding = palettePad;
-                        palette->spacing = paletteGap;
-                        palette->cellSize = cellSize;
-                        palette->background = field;
-                        palette->accent = accent;
-                        palette->line = t.line;
-                        setBox(palette, Rect(0.0f, 0.0f, paletteSize.x, paletteSize.y));
-                        Color current = optionChipColor(info.options[static_cast<size_t>(i)].color);
-                        palette->setColor(current);
-                        palette->onColorChanged = [this, settingsCol, i](const Color& value)
-                        {
-                            auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
-                            if (i < 0 || i >= static_cast<int>(options.size())) return;
-                            options[static_cast<size_t>(i)].color = formatColor(value);
-                            mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
-                            this->notifyRebuild();
-                        };
-                        panel->attachChild(palette);
-                    }
-                }
-                auto add = makeButton("添加选项", fontPath, smallPx, 120.0f * s, 30.0f * s, accent, t.inkOnAccent);
-                add->onClick = [this, settingsCol]()
-                {
-                    auto options = mDoc->column(static_cast<u32_t>(settingsCol)).options;
-                    FieldOption option;
-                    option.label = String::format("选项%d", static_cast<int>(options.size()) + 1);
-                    option.color = formatColor(UIPalette::paletteColor(7));
-                    options.push_back(option);
-                    mDoc->setOptions(static_cast<u32_t>(settingsCol), options);
-                    this->notifyRebuild();
-                };
-                panel->attachChild(add);
-            }
-
-            auto removeField = makeButton("删除字段", fontPath, fontPx, 120.0f * s, 32.0f * s, danger, ink);
+            auto removeField = makeDangerButton("删除字段", fontPath, fontPx, innerW, 32.0f * s);
+            setBox(removeField, Rect(0.0f, 0.0f, innerW, 32.0f * s));
             removeField->onClick = [this, settingsCol]()
             {
                 if (mHost.confirmDeleteColumn)
@@ -2169,6 +2083,7 @@ namespace eokas::RoseAxion {
                 }
             };
             panel->attachChild(removeField);
+            panel->footer = removeField.get();
             overlay->attachChild(panel);
             mSettingsPanel = panel.get();
         }

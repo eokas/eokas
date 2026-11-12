@@ -63,20 +63,22 @@ namespace eokas::RoseAxion {
         u32_t schemaMemberCount() const;
         String schemaMemberName(u32_t memberIndex) const;
         String schemaMemberTypeName(u32_t memberIndex) const;
+        String schemaMemberLabel(u32_t memberIndex) const;
+        String schemaMemberColor(u32_t memberIndex) const;
         bool addSchemaMember();
         bool renameSchemaMember(u32_t memberIndex, const String& name);
         bool setSchemaMemberType(u32_t memberIndex, const String& typeName);
+        bool setSchemaMemberLabel(u32_t memberIndex, const String& label);
+        bool setSchemaMemberColor(u32_t memberIndex, const String& hex);
+        bool moveSchemaMember(u32_t memberIndex, int delta);
         bool deleteSchemaMember(u32_t memberIndex);
 
         String schemaElementTypeName() const;
         bool setSchemaElementType(const String& typeName);
         std::vector<String> schemaAssignableTypeNames() const;
         std::vector<String> columnTypeNames() const;
-        u32_t schemaOptionCount() const;
-        String schemaOptionLabel(u32_t index) const;
-        bool setSchemaOptionLabel(u32_t index, const String& label);
-        bool addSchemaOption();
-        bool deleteSchemaOption(u32_t index);
+        std::vector<FieldOption> schemaOptions() const;
+        bool setSchemaOptions(const std::vector<FieldOption>& options);
 
         bool isNestedColumn(u32_t column) const;
 

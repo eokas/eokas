@@ -4,6 +4,7 @@
 #include <functional>
 #include <set>
 #include <stdexcept>
+#include <utility>
 
 namespace eokas::RoseAxion {
 
@@ -82,18 +83,79 @@ namespace eokas::RoseAxion {
             return formatColor(color);
         }
 
-        String uniqueSchemaOptionName(Schema* schema, const char* prefix)
+        bool optionNameTaken(const std::vector<String>& taken, const String& name)
         {
-            u32_t number = schema != nullptr ? schema->getOptionCount() + 1 : 1;
+            for (const String& existing : taken)
+            {
+                if (existing == name)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        String uniquePreparedOptionName(const std::vector<String>& taken, const char* prefix)
+        {
+            u32_t number = static_cast<u32_t>(taken.size()) + 1;
             for (;;)
             {
                 String name = String::format("%s%u", prefix, number);
-                if (schema == nullptr || schema->getOption(name) == nullptr)
+                if (!optionNameTaken(taken, name))
                 {
                     return name;
                 }
                 ++number;
             }
+        }
+
+        const char* optionNameConflict(const std::vector<FieldOption>& options)
+        {
+            std::vector<String> seen;
+            for (const FieldOption& option : options)
+            {
+                String name = option.name.trim();
+                if (name.isEmpty())
+                {
+                    continue;
+                }
+                if (optionNameTaken(seen, name))
+                {
+                    return "选项名称已存在";
+                }
+                seen.push_back(name);
+            }
+            return nullptr;
+        }
+
+        bool prepareSchemaOptions(const std::vector<FieldOption>& options, std::vector<FieldOption>& prepared)
+        {
+            prepared.clear();
+            std::vector<String> taken;
+            for (const FieldOption& option : options)
+            {
+                String name = option.name.trim();
+                String label = option.label;
+                if (name.isEmpty() && label.trim().isEmpty())
+                {
+                    continue;
+                }
+                if (name.isEmpty())
+                {
+                    name = uniquePreparedOptionName(taken, "opt_");
+                }
+                else if (optionNameTaken(taken, name))
+                {
+                    return false;
+                }
+                FieldOption item;
+                item.name = name;
+                item.label = label;
+                item.color = option.color;
+                taken.push_back(name);
+                prepared.push_back(item);
+            }
+            return true;
         }
 
         String optionStorageName(const FieldOption& option)
@@ -184,6 +246,11 @@ namespace eokas::RoseAxion {
             {
                 return false;
             }
+            std::vector<FieldOption> prepared;
+            if (!prepareSchemaOptions(options, prepared))
+            {
+                return false;
+            }
             while (schema->getOptionCount() > 0)
             {
                 Schema::Option* existing = schema->getOption(0);
@@ -193,19 +260,10 @@ namespace eokas::RoseAxion {
                 }
                 schema->delOption(existing->name);
             }
-            for (const FieldOption& option : options)
+            for (const FieldOption& option : prepared)
             {
-                if (option.label.isEmpty() && option.name.isEmpty())
-                {
-                    continue;
-                }
-                String name = option.name;
-                if (name.isEmpty())
-                {
-                    name = uniqueSchemaOptionName(schema, "opt_");
-                }
-                String label = option.label.isEmpty() ? name : option.label;
-                if (!schema->addOption(name, label, schemaColorFromHex(option.color)))
+                String label = option.label.isEmpty() ? option.name : option.label;
+                if (!schema->addOption(option.name, label, schemaColorFromHex(option.color)))
                 {
                     return false;
                 }
@@ -1176,6 +1234,36 @@ namespace eokas::RoseAxion {
         return member->schema->name();
     }
 
+    String TableDocument::schemaMemberLabel(u32_t memberIndex) const
+    {
+        Schema* schema = this->activeSchema();
+        if (schema == nullptr || memberIndex >= schema->getMemberCount())
+        {
+            return String::empty;
+        }
+        Schema::Member* member = schema->getMember(memberIndex);
+        if (member == nullptr)
+        {
+            return String::empty;
+        }
+        return member->label;
+    }
+
+    String TableDocument::schemaMemberColor(u32_t memberIndex) const
+    {
+        Schema* schema = this->activeSchema();
+        if (schema == nullptr || memberIndex >= schema->getMemberCount())
+        {
+            return String::empty;
+        }
+        Schema::Member* member = schema->getMember(memberIndex);
+        if (member == nullptr || member->color == 0)
+        {
+            return String::empty;
+        }
+        return hexFromSchemaColor(member->color);
+    }
+
     bool TableDocument::addSchemaMember()
     {
         Schema* schema = this->activeSchema();
@@ -1247,6 +1335,80 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
+        mDirty = true;
+        mStatus = String::empty;
+        return true;
+    }
+
+    bool TableDocument::setSchemaMemberLabel(u32_t memberIndex, const String& label)
+    {
+        Schema* schema = this->activeSchema();
+        if (schema == nullptr || !schema->is(rose::SchemaType::Struct) || memberIndex >= schema->getMemberCount())
+        {
+            return false;
+        }
+        Schema::Member* member = schema->getMember(memberIndex);
+        if (member == nullptr)
+        {
+            return false;
+        }
+        if (member->label == label)
+        {
+            return true;
+        }
+        member->label = label;
+        mDirty = true;
+        mStatus = String::empty;
+        return true;
+    }
+
+    bool TableDocument::setSchemaMemberColor(u32_t memberIndex, const String& hex)
+    {
+        Schema* schema = this->activeSchema();
+        if (schema == nullptr || !schema->is(rose::SchemaType::Struct) || memberIndex >= schema->getMemberCount())
+        {
+            return false;
+        }
+        Schema::Member* member = schema->getMember(memberIndex);
+        if (member == nullptr)
+        {
+            return false;
+        }
+        u32_t next = schemaColorFromHex(hex);
+        if (member->color == next)
+        {
+            return true;
+        }
+        member->color = next;
+        mDirty = true;
+        mStatus = String::empty;
+        return true;
+    }
+
+    bool TableDocument::moveSchemaMember(u32_t memberIndex, int delta)
+    {
+        Schema* schema = this->activeSchema();
+        if (schema == nullptr || !schema->is(rose::SchemaType::Struct) || delta == 0)
+        {
+            return false;
+        }
+        u32_t count = schema->getMemberCount();
+        if (memberIndex >= count)
+        {
+            return false;
+        }
+        int next = static_cast<int>(memberIndex) + delta;
+        if (next < 0 || static_cast<u32_t>(next) >= count)
+        {
+            return false;
+        }
+        Schema::Member* a = schema->getMember(memberIndex);
+        Schema::Member* b = schema->getMember(static_cast<u32_t>(next));
+        if (a == nullptr || b == nullptr)
+        {
+            return false;
+        }
+        std::swap(*a, *b);
         mDirty = true;
         mStatus = String::empty;
         return true;
@@ -1362,103 +1524,30 @@ namespace eokas::RoseAxion {
         return this->isNestedColumnType(this->column(column).schemaName);
     }
 
-    u32_t TableDocument::schemaOptionCount() const
+    std::vector<FieldOption> TableDocument::schemaOptions() const
     {
-        Schema* schema = this->activeSchema();
-        if (schema == nullptr)
-        {
-            return 0;
-        }
-        if (!schema->is(rose::SchemaType::Options))
-        {
-            return 0;
-        }
-        return schema->getOptionCount();
+        return fieldOptionsFromSchema(this->activeSchema());
     }
 
-    String TableDocument::schemaOptionLabel(u32_t index) const
+    bool TableDocument::setSchemaOptions(const std::vector<FieldOption>& options)
     {
         Schema* schema = this->activeSchema();
-        if (schema == nullptr)
-        {
-            return String::empty;
-        }
-        if (!schema->is(rose::SchemaType::Options))
-        {
-            return String::empty;
-        }
-        Schema::Option* option = schema->getOption(index);
-        if (option == nullptr)
-        {
-            return String::empty;
-        }
-        return option->label.isEmpty() ? option->name : option->label;
-    }
-
-    bool TableDocument::setSchemaOptionLabel(u32_t index, const String& label)
-    {
-        Schema* schema = this->activeSchema();
-        if (schema == nullptr)
+        if (schema == nullptr || !schema->is(rose::SchemaType::Options))
         {
             return false;
         }
-        if (!schema->is(rose::SchemaType::Options))
+        if (const char* error = optionNameConflict(options))
         {
+            mStatus = error;
             return false;
         }
-        Schema::Option* option = schema->getOption(index);
-        if (option == nullptr)
+        if (!replaceSchemaOptions(schema, options))
         {
-            return false;
-        }
-        if (!schema->setOption(option->name, label, option->color))
-        {
+            mStatus = "无法更新选项";
             return false;
         }
         mDirty = true;
-        return true;
-    }
-
-    bool TableDocument::addSchemaOption()
-    {
-        Schema* schema = this->activeSchema();
-        if (schema == nullptr)
-        {
-            return false;
-        }
-        if (!schema->is(rose::SchemaType::Options))
-        {
-            return false;
-        }
-        u32_t number = schema->getOptionCount() + 1;
-        String name = uniqueSchemaOptionName(schema, "opt_");
-        String label = String::format("选项%u", number);
-        if (!schema->addOption(name, label, schemaColorFromHex(String("#6366f1"))))
-        {
-            return false;
-        }
-        mDirty = true;
-        return true;
-    }
-
-    bool TableDocument::deleteSchemaOption(u32_t index)
-    {
-        Schema* schema = this->activeSchema();
-        if (schema == nullptr)
-        {
-            return false;
-        }
-        if (!schema->is(rose::SchemaType::Options))
-        {
-            return false;
-        }
-        Schema::Option* option = schema->getOption(index);
-        if (option == nullptr)
-        {
-            return false;
-        }
-        schema->delOption(option->name);
-        mDirty = true;
+        mStatus = String::empty;
         return true;
     }
 
@@ -2309,11 +2398,18 @@ namespace eokas::RoseAxion {
         {
             return false;
         }
+        if (const char* error = optionNameConflict(options))
+        {
+            mStatus = error;
+            return false;
+        }
         if (!replaceSchemaOptions(schema, options))
         {
+            mStatus = "无法更新选项";
             return false;
         }
         mDirty = true;
+        mStatus = String::empty;
         return true;
     }
 

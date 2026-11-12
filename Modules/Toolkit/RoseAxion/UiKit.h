@@ -14,6 +14,7 @@ namespace eokas::RoseAxion {
 
     std::shared_ptr<UIText> makeText(const String& value, const String& font, float size, const Color& color, float width, float height);
     std::shared_ptr<UIButton> makeButton(const String& label, const String& font, float size, float minWidth, float minHeight, const Color& fill, const Color& ink);
+    std::shared_ptr<UIButton> makeDangerButton(const String& label, const String& font, float size, float minWidth, float minHeight);
     std::shared_ptr<UIButton> makeMoreButton(const String& font, float size, float width, float height, const Color& ink);
     std::shared_ptr<UITag> makeChip(const String& label, const String& font, float size, const Color& fill, const Color& ink);
     std::shared_ptr<UIWidget> makeRule(float width, const Color& color);

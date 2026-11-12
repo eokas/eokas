@@ -736,7 +736,7 @@ namespace eokas::RoseAxion {
             cancel->onKeyPress = escapeConfirm;
             if (unsaved)
             {
-                auto discard = makeButton("不保存", mFont, fontPx, 96.0f * s, 32.0f * s, quiet, ink);
+                auto discard = makeDangerButton("不保存", mFont, fontPx, 96.0f * s, 32.0f * s);
                 auto save = makeButton("保存", mFont, fontPx, 80.0f * s, 32.0f * s, accent, t.inkOnAccent);
                 discard->onKeyPress = escapeConfirm;
                 save->onKeyPress = escapeConfirm;
@@ -756,7 +756,7 @@ namespace eokas::RoseAxion {
             }
             else
             {
-                auto ok = makeButton("确定", mFont, fontPx, 80.0f * s, 32.0f * s, accent, t.inkOnAccent);
+                auto ok = makeDangerButton("确定", mFont, fontPx, 80.0f * s, 32.0f * s);
                 ok->onKeyPress = escapeConfirm;
                 ok->onClick = [this]()
                 {
