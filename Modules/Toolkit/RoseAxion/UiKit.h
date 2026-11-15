@@ -25,6 +25,12 @@ namespace eokas::RoseAxion {
     std::shared_ptr<UIWidget> makeSplit(float length, bool vertical);
     void styleDropdown(UIDropdown& drop, const String& font, float size);
     void styleMenuItem(UIMenuItem& item, const String& font, float size);
+    void styleMenuBarItem(UIMenuItem& item, const String& font, float size, const Color& barBg);
+
+    inline float menuFontPx(float scale)
+    {
+        return 13.0f * scale;
+    }
 
     class PaintPanel : public UIWidget
     {

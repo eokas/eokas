@@ -257,6 +257,18 @@ namespace eokas::RoseAxion {
         }
     }
 
+    void styleMenuBarItem(UIMenuItem& item, const String& font, float size, const Color& barBg)
+    {
+        const RoseTheme& t = theme();
+        item.background = barBg;
+        item.hoverFill = t.light ? t.quiet : hoverOf(barBg);
+        item.selectedFill = t.selected;
+        if (UIText* text = item.label())
+        {
+            styleText(*text, font, size, t.ink);
+        }
+    }
+
     PaintPanel::PaintPanel()
         : tl(0.0f, 0.0f, 0.0f, 0.0f)
         , tr(0.0f, 0.0f, 0.0f, 0.0f)

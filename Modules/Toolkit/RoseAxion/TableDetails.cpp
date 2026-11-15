@@ -598,8 +598,8 @@ namespace eokas::RoseAxion {
                 this->clearTypeMenu();
                 auto menu = std::make_shared<UIMenu>();
                 menu->direction = UIDirection::Vertical;
-                menu->padding = 4.0f * s;
-                menu->spacing = 2.0f * s;
+                menu->padding = 2.0f * s;
+                menu->spacing = 1.0f * s;
                 menu->color = theme().popup;
                 menu->overlay = true;
                 menu->shape.pivot = Vector2(0.0f, 0.0f);
@@ -611,10 +611,10 @@ namespace eokas::RoseAxion {
                 for (const String& typeName : typeNames)
                 {
                     auto item = std::make_shared<UIMenuItem>();
-                    item->paddingX = 12.0f * s;
-                    item->paddingY = 8.0f * s;
+                    item->paddingX = 10.0f * s;
+                    item->paddingY = 3.0f * s;
                     item->setText(schemaLabel(typeName));
-                    styleMenuItem(*item, fontPath, fontPx);
+                    styleMenuItem(*item, fontPath, menuFontPx(s));
                     UIWidget* itemRaw = item.get();
                     item->onClick = [this, settingsCol, typeName]()
                     {

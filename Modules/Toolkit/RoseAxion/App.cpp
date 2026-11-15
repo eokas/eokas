@@ -403,11 +403,10 @@ namespace eokas::RoseAxion {
         const float fontPx = 15.0f * s;
         const float smallPx = 13.0f * s;
         const float titlePx = 20.0f * s;
-        const float headerH = 42.0f * s;
+        const float menuPx = menuFontPx(s);
         const float statusH = 26.0f * s;
         const RoseTheme& t = theme();
         const Color bar = t.bar;
-        const Color selected = t.selected;
         const Color ink = t.ink;
         const Color mute = t.mute;
         const Color accent = t.accent;
@@ -416,12 +415,9 @@ namespace eokas::RoseAxion {
         const Color warn = t.warn;
         const Color quiet = t.quiet;
         const bool showStatus = mDoc.isOpen() || !mDoc.status().isEmpty();
-        float workY = headerH;
-        float workH = mHeight - headerH - (showStatus ? statusH : 0.0f);
-        if (workH < 40.0f)
-        {
-            workH = 40.0f;
-        }
+        float headerH = 0.0f;
+        float workY = 0.0f;
+        float workH = 0.0f;
 
         auto root = std::make_shared<UIWidget>();
         root->shape.pivot = Vector2(0.0f, 0.0f);
@@ -443,14 +439,13 @@ namespace eokas::RoseAxion {
         header->shape.pivot = Vector2(0.0f, 0.0f);
         header->pickable = false;
         fillSurface(*header, bar);
-        setBox(header, Rect(0.0f, 0.0f, mWidth, headerH));
 
         auto makePopupMenu = [&]()
         {
             auto menu = std::make_shared<UIMenu>();
             menu->direction = UIDirection::Vertical;
-            menu->padding = 4.0f * s;
-            menu->spacing = 2.0f * s;
+            menu->padding = 2.0f * s;
+            menu->spacing = 1.0f * s;
             menu->color = popup;
             menu->overlay = true;
             menu->visible = false;
@@ -476,10 +471,10 @@ namespace eokas::RoseAxion {
         auto addMenuItem = [&](UIMenu& menu, const char* label, const std::function<void()>& action)
         {
             auto item = std::make_shared<UIMenuItem>();
-            item->paddingX = 14.0f * s;
-            item->paddingY = 8.0f * s;
+            item->paddingX = 10.0f * s;
+            item->paddingY = 3.0f * s;
             item->setText(label);
-            styleMenuItem(*item, mFont, fontPx);
+            styleMenuItem(*item, mFont, menuPx);
             item->onClick = [action, gate]()
             {
                 gate->hide();
@@ -491,16 +486,10 @@ namespace eokas::RoseAxion {
         auto makeBarItem = [&](const char* label)
         {
             auto item = std::make_shared<UIMenuItem>();
-            item->paddingX = 14.0f * s;
-            item->paddingY = 6.0f * s;
-            item->background = bar;
-            item->hoverFill = selected;
-            item->selectedFill = selected;
+            item->paddingX = 10.0f * s;
+            item->paddingY = 2.0f * s;
             item->setText(label);
-            if (UIText* text = item->label())
-            {
-                styleText(*text, mFont, fontPx, ink);
-            }
+            styleMenuBarItem(*item, mFont, menuPx, bar);
             item->syncSize();
             return item;
         };
@@ -553,16 +542,26 @@ namespace eokas::RoseAxion {
 
         auto left = std::make_shared<UIList>();
         left->direction = UIDirection::Horizontal;
-        left->padding = 6.0f * s;
-        left->spacing = 8.0f * s;
+        left->padding = 2.0f * s;
+        left->spacing = 4.0f * s;
         left->centerCross = true;
         left->color = clear;
         left->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(left, Rect(0.0f, 0.0f, 0.0f, headerH));
+        setBox(left, Rect(0.0f, 0.0f, 0.0f, 0.0f));
         left->attachChild(fileItem);
         left->attachChild(helpItem);
         left->layout();
+        headerH = left->shape.size.y;
+        setBox(header, Rect(0.0f, 0.0f, mWidth, headerH));
+        setBox(left, Rect(0.0f, 0.0f, left->shape.size.x, headerH));
+        left->layout();
         header->attachChild(left);
+        workY = headerH;
+        workH = mHeight - headerH - (showStatus ? statusH : 0.0f);
+        if (workH < 40.0f)
+        {
+            workH = 40.0f;
+        }
 
         if (mDoc.isOpen())
         {

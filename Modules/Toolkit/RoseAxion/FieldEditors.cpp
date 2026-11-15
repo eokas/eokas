@@ -338,8 +338,8 @@ namespace eokas::RoseAxion {
         const RoseTheme& t = theme();
         auto menu = std::make_shared<UIMenu>();
         menu->direction = UIDirection::Vertical;
-        menu->padding = 4.0f * s;
-        menu->spacing = 2.0f * s;
+        menu->padding = 2.0f * s;
+        menu->spacing = 1.0f * s;
         menu->color = t.popup;
         menu->overlay = true;
         menu->shape.pivot = Vector2(0.0f, 0.0f);
@@ -348,7 +348,7 @@ namespace eokas::RoseAxion {
         {
             auto item = std::make_shared<UIMenuItem>();
             item->setText("无可选选项");
-            styleMenuItem(*item, font, fontPx);
+            styleMenuItem(*item, font, menuFontPx(s));
             if (UIText* text = item->label())
             {
                 styleText(*text, font, fontPx, t.mute);
@@ -359,10 +359,10 @@ namespace eokas::RoseAxion {
         {
             auto item = std::make_shared<UIMenuItem>();
             item->paddingX = 10.0f * s;
-            item->paddingY = 6.0f * s;
+            item->paddingY = 3.0f * s;
             bool on = selectedContains(selectedLabels, option.label);
             item->setText(option.label);
-            styleMenuItem(*item, font, fontPx);
+            styleMenuItem(*item, font, menuFontPx(s));
             item->selected = on;
             item->showChip = true;
             item->chip = optionChipColor(option.color);
