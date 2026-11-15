@@ -30,8 +30,9 @@ namespace eokas::RoseAxion {
             std::function<String(const String& suggested)> pickFolderPath;
             std::function<bool()> ctrlDown;
             std::function<bool(UIKeyCode, bool)> handleShortcut;
-            std::function<void(int)> openObject;
+            std::function<void(int, int)> openObject;
             std::function<void(int)> openField;
+            std::function<void(int)> selectField;
             std::function<void(int)> noteRowDeleted;
             std::function<void(int)> noteRowInserted;
         };
@@ -62,7 +63,7 @@ namespace eokas::RoseAxion {
         void finishEdit(const String& text, int rowDelta, int colDelta);
         void beginEdit(int row, int col, const String& seed);
         void selectCell(int row, int col);
-        void openObjectEditor(int row);
+        void openObjectEditor(int row, int col = -1);
         void setBoolCell(int row, int col, bool value);
         void toggleBoolCell(int row, int col);
         void selectAll();
@@ -77,6 +78,7 @@ namespace eokas::RoseAxion {
 
         TableDocument* mDoc = nullptr;
         Host mHost;
+        UIWidget* mBar = nullptr;
         UIView* mView = nullptr;
         UITable* mTable = nullptr;
         UIWidget* mGridHost = nullptr;

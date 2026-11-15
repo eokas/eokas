@@ -251,6 +251,7 @@ namespace eokas::RoseAxion {
     void RoseTableDetails::clearObject()
     {
         mObjectRow = -1;
+        mObjectCol = -1;
         mObjectTable = -1;
         mObjectScrollY = 0.0f;
         mObjectCollapsed.clear();
@@ -291,6 +292,10 @@ namespace eokas::RoseAxion {
             {
                 this->clearObject();
             }
+            else if (mObjectCol >= 0 && (mObjectCol >= cols || !mDoc->isNestedStructColumn(static_cast<u32_t>(mObjectCol))))
+            {
+                this->clearObject();
+            }
         }
     }
 
@@ -303,6 +308,7 @@ namespace eokas::RoseAxion {
         mSettingsPanel = nullptr;
         mObjectPanel = nullptr;
         mHint = nullptr;
+        mHeader = nullptr;
         mFocus = nullptr;
         this->detachChildren();
     }
@@ -315,19 +321,20 @@ namespace eokas::RoseAxion {
         this->clearObject();
     }
 
-    void RoseTableDetails::openObject(int row)
+    void RoseTableDetails::openObject(int row, int col)
     {
         if (mDoc == nullptr || !mDoc->isOpen() || row < 0)
         {
             return;
         }
-        if (mObjectRow != row)
+        if (mObjectRow != row || mObjectCol != col)
         {
             mObjectScrollY = 0.0f;
             mObjectCollapsed.clear();
             mObjectEdit = {};
         }
         mObjectRow = row;
+        mObjectCol = col;
         mObjectTable = static_cast<int>(mDoc->activeTableIndex());
         mSettingsCol = -1;
         mTypeOpen = false;
@@ -340,6 +347,15 @@ namespace eokas::RoseAxion {
         mTypeOpen = false;
         this->clearTypeMenu();
         this->clearObject();
+    }
+
+    void RoseTableDetails::selectField(int col)
+    {
+        if (mSettingsCol < 0 || mSettingsCol == col)
+        {
+            return;
+        }
+        this->openField(col);
     }
 
     void RoseTableDetails::noteRowDeleted(int row)
@@ -413,6 +429,11 @@ namespace eokas::RoseAxion {
         }
         const float width = shape.size.x;
         const float height = shape.size.y;
+        const float headerH = mHeader != nullptr ? 36.0f * this->scale() : 0.0f;
+        if (mHeader != nullptr)
+        {
+            setBox(*mHeader, Rect(0.0f, 0.0f, width, headerH));
+        }
         if (mObjectPanel != nullptr)
         {
             setBox(*mObjectPanel, Rect(0.0f, 0.0f, width, height));
@@ -430,7 +451,12 @@ namespace eokas::RoseAxion {
         if (mHint != nullptr)
         {
             mHint->layout();
-            setBox(*mHint, Rect((width - mHint->shape.size.x) * 0.5f, (height - mHint->shape.size.y) * 0.5f, mHint->shape.size.x, mHint->shape.size.y));
+            float bodyH = height - headerH;
+            if (bodyH < 1.0f)
+            {
+                bodyH = 1.0f;
+            }
+            setBox(*mHint, Rect((width - mHint->shape.size.x) * 0.5f, headerH + (bodyH - mHint->shape.size.y) * 0.5f, mHint->shape.size.x, mHint->shape.size.y));
         }
         UIWidget::layout();
     }
@@ -443,6 +469,7 @@ namespace eokas::RoseAxion {
         mSettingsPanel = nullptr;
         mObjectPanel = nullptr;
         mHint = nullptr;
+        mHeader = nullptr;
         mFocus = nullptr;
         mTypeAnchor = nullptr;
         this->clampState();
@@ -463,7 +490,7 @@ namespace eokas::RoseAxion {
         const String& fontPath = this->font();
         const float panelW = shape.size.x > 1.0f ? shape.size.x : 360.0f * s;
         const float panelH = shape.size.y > 1.0f ? shape.size.y : 400.0f * s;
-        this->color = t.canvas;
+        fillSurface(*this, t.canvas);
         this->pickable = true;
 
         if (mSettingsCol >= 0)
@@ -673,7 +700,6 @@ namespace eokas::RoseAxion {
             this->attachChild(panel);
             mSettingsPanel = panel.get();
             mFocus = nameRaw;
-            this->color = t.raised;
             return;
         }
 
@@ -685,6 +711,7 @@ namespace eokas::RoseAxion {
             setBox(panel, Rect(0.0f, 0.0f, panelW, panelH));
             panel->bind(*mDoc, this->objectHost());
             panel->setRow(mObjectRow);
+            panel->setColumn(mObjectCol);
             panel->setCollapsed(mObjectCollapsed);
             panel->setValueEdit(mObjectEdit);
             this->attachChild(panel);
@@ -692,13 +719,34 @@ namespace eokas::RoseAxion {
             panel->setScroll(mObjectScrollY);
             mObjectPanel = panel.get();
             mFocus = panel->focusWidget();
-            this->color = t.raised;
             return;
         }
 
+        const float headerH = 36.0f * s;
+        const float pad = 8.0f * s;
+        auto header = std::make_shared<UIWidget>();
+        header->shape.pivot = Vector2(0.0f, 0.0f);
+        header->pickable = false;
+        fillSurface(*header, t.header);
+        setBox(header, Rect(0.0f, 0.0f, panelW, headerH));
+        auto title = makeText("详情", fontPath, fontPx, ink, panelW - pad * 2.0f, 22.0f * s);
+        title->layout();
+        setBox(title, Rect(pad, (headerH - title->shape.size.y) * 0.5f, title->shape.size.x, title->shape.size.y));
+        header->attachChild(title);
+        auto headerRule = makeSplit(panelW, false);
+        setBox(headerRule, Rect(0.0f, headerH - 1.0f, panelW, 1.0f));
+        header->attachChild(headerRule);
+        this->attachChild(header);
+        mHeader = header.get();
+
         auto hint = makeText("选择一行或字段查看详情", fontPath, fontPx, mute, panelW - 32.0f * s, 28.0f * s);
         hint->layout();
-        setBox(hint, Rect((panelW - hint->shape.size.x) * 0.5f, (panelH - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
+        float bodyH = panelH - headerH;
+        if (bodyH < 1.0f)
+        {
+            bodyH = 1.0f;
+        }
+        setBox(hint, Rect((panelW - hint->shape.size.x) * 0.5f, headerH + (bodyH - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
         this->attachChild(hint);
         mHint = hint.get();
     }

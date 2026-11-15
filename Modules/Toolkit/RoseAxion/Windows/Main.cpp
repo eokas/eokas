@@ -195,26 +195,31 @@ namespace {
         return eokas::String::utf8ToUnicode(eokas::MBString(text.cstr(), text.length()), false);
     }
 
+    void releaseMouseCapture()
+    {
+        if (GetCapture() != nullptr)
+        {
+            ReleaseCapture();
+        }
+    }
+
     eokas::String pickOpen(HWND owner)
     {
-        wchar_t buffer[MAX_PATH] = {};
-        OPENFILENAMEW dialog = {};
-        dialog.lStructSize = sizeof(dialog);
-        dialog.hwndOwner = owner;
-        dialog.lpstrFilter = L"Rose Library (*.rose)\0*.rose\0";
-        dialog.lpstrFile = buffer;
-        dialog.nMaxFile = MAX_PATH;
-        dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_EXPLORER;
-        dialog.lpstrDefExt = L"rose";
-        if (!GetOpenFileNameW(&dialog))
+        releaseMouseCapture();
+        eokas::String path;
+        std::map<eokas::String, eokas::String> filters;
+        filters["Rose Library"] = "*.rose";
+        filters["所有文件"] = "*.*";
+        if (!eokas::NativeDialogs::openFileDialog(path, filters, owner))
         {
             return eokas::String::empty;
         }
-        return fromWide(buffer);
+        return path;
     }
 
     eokas::String pickSave(HWND owner, const eokas::String& suggested)
     {
+        releaseMouseCapture();
         wchar_t buffer[MAX_PATH] = {};
         eokas::WCString wide = toWide(suggested);
         if (!wide.empty())
@@ -227,7 +232,7 @@ namespace {
         dialog.lpstrFilter = L"Rose Library (*.rose)\0*.rose\0";
         dialog.lpstrFile = buffer;
         dialog.nMaxFile = MAX_PATH;
-        dialog.Flags = OFN_OVERWRITEPROMPT | OFN_EXPLORER;
+        dialog.Flags = OFN_OVERWRITEPROMPT | OFN_EXPLORER | OFN_NOCHANGEDIR;
         dialog.lpstrDefExt = L"rose";
         if (!GetSaveFileNameW(&dialog))
         {
@@ -292,6 +297,7 @@ namespace {
 
     eokas::String pickAnyFile(HWND owner)
     {
+        releaseMouseCapture();
         eokas::String path;
         std::map<eokas::String, eokas::String> filters;
         filters["所有文件"] = "*.*";
@@ -304,6 +310,7 @@ namespace {
 
     eokas::String pickAnyFolder(HWND owner, const eokas::String& suggested)
     {
+        releaseMouseCapture();
         eokas::String path;
         if (!eokas::NativeDialogs::openFolderDialog(path, suggested, owner))
         {
@@ -377,6 +384,8 @@ namespace {
             mFont->prepareSize(static_cast<uint32_t>(13.0f * mScale + 0.5f));
             mFont->prepareSize(static_cast<uint32_t>(17.0f * mScale + 0.5f));
             mFont->prepareSize(static_cast<uint32_t>(20.0f * mScale + 0.5f));
+            mFont->prepareSize(static_cast<uint32_t>(28.0f * mScale + 0.5f));
+            mFont->prepareSize(static_cast<uint32_t>(32.0f * mScale + 0.5f));
             eokas::UIFont::bind(mFontPath, mFont.get());
             this->uploadFont();
 
@@ -402,7 +411,7 @@ namespace {
             camera->viewport.front = 0.0f;
             camera->viewport.back = 1.0f;
             mCamera = camera;
-            mSpace.clearColor = eokas::RoseAxion::theme().canvas;
+            mSpace.clearColor = eokas::RoseAxion::theme().voidBg;
             mSpace.add(camera);
             mSpace.activeCamera = camera;
             mSpace.add(mWindow.primitive());
@@ -440,7 +449,7 @@ namespace {
                 return;
             }
             mApp.tick();
-            mSpace.clearColor = eokas::RoseAxion::theme().canvas;
+            mSpace.clearColor = eokas::RoseAxion::theme().voidBg;
             this->uploadFont();
             mWindow.tick(delta);
             this->uploadFont();

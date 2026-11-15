@@ -31,8 +31,9 @@ namespace eokas::RoseAxion {
         void setOverlay(UIWidget* overlay);
         void reset();
         void rebuild();
-        void openObject(int row);
+        void openObject(int row, int col = -1);
         void openField(int col);
+        void selectField(int col);
         void close();
         void noteRowDeleted(int row);
         void noteRowInserted(int index);
@@ -62,11 +63,13 @@ namespace eokas::RoseAxion {
         UIWidget* mSettingsPanel = nullptr;
         RoseObjectEditor* mObjectPanel = nullptr;
         UIWidget* mHint = nullptr;
+        UIWidget* mHeader = nullptr;
         UIWidget* mFocus = nullptr;
         UIWidget* mTypeAnchor = nullptr;
         UIWidget* mTypeMenu = nullptr;
         int mSettingsCol = -1;
         int mObjectRow = -1;
+        int mObjectCol = -1;
         int mObjectTable = -1;
         bool mTypeOpen = false;
         float mObjectScrollY = 0.0f;

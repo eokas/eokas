@@ -196,6 +196,28 @@ namespace eokas::RoseAxion {
         return rule;
     }
 
+    void fillSurface(UIWidget& widget, const Color& color)
+    {
+        widget.color = color;
+    }
+
+    std::shared_ptr<UIWidget> makeSplit(float length, bool vertical)
+    {
+        auto split = std::make_shared<UIWidget>();
+        split->pickable = false;
+        split->color = theme().line;
+        split->shape.pivot = Vector2(0.0f, 0.0f);
+        if (vertical)
+        {
+            setBox(split, Rect(0.0f, 0.0f, 1.0f, length));
+        }
+        else
+        {
+            setBox(split, Rect(0.0f, 0.0f, length, 1.0f));
+        }
+        return split;
+    }
+
     void styleDropdown(UIDropdown& drop, const String& font, float size)
     {
         const RoseTheme& t = theme();

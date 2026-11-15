@@ -51,11 +51,11 @@ namespace eokas::RoseAxion {
         host.pickFolderPath = mHost.pickFolderPath;
         host.ctrlDown = mHost.ctrlDown;
         host.handleShortcut = mHost.handleShortcut;
-        host.openObject = [this](int row)
+        host.openObject = [this](int row, int col)
         {
             if (mDetails)
             {
-                mDetails->openObject(row);
+                mDetails->openObject(row, col);
             }
         };
         host.openField = [this](int col)
@@ -63,6 +63,13 @@ namespace eokas::RoseAxion {
             if (mDetails)
             {
                 mDetails->openField(col);
+            }
+        };
+        host.selectField = [this](int col)
+        {
+            if (mDetails)
+            {
+                mDetails->selectField(col);
             }
         };
         host.noteRowDeleted = [this](int row)
@@ -283,8 +290,13 @@ namespace eokas::RoseAxion {
         }
         if (mHint != nullptr)
         {
-            mHint->layout();
-            setBox(*mHint, Rect(tableX + (tableW - mHint->shape.size.x) * 0.5f, (height - mHint->shape.size.y) * 0.5f, mHint->shape.size.x, mHint->shape.size.y));
+            setBox(*mHint, Rect(tableX, 0.0f, tableW, height));
+            if (!mHint->children().empty() && mHint->children()[0])
+            {
+                UIWidget& text = *mHint->children()[0];
+                text.layout();
+                setBox(text, Rect((tableW - text.shape.size.x) * 0.5f, (height - text.shape.size.y) * 0.5f, text.shape.size.x, text.shape.size.y));
+            }
         }
         if (mDetailsSplit != nullptr)
         {
@@ -578,11 +590,9 @@ namespace eokas::RoseAxion {
         const float s = this->scale();
         const float fontPx = 15.0f * s;
         const RoseTheme& t = theme();
-        const Color canvas = t.canvas;
         const Color mute = t.mute;
-        const Color line = t.line;
         const String& fontPath = this->font();
-        this->color = canvas;
+        fillSurface(*this, t.voidBg);
         const float height = shape.size.y;
         float outlinerW = 0.0f;
         float tableX = 0.0f;
@@ -603,21 +613,24 @@ namespace eokas::RoseAxion {
         mOutliner->rebuild();
         this->attachChild(mOutliner);
 
-        auto outlinerSplit = std::make_shared<UIWidget>();
-        outlinerSplit->pickable = false;
-        outlinerSplit->color = line;
-        outlinerSplit->shape.pivot = Vector2(0.0f, 0.0f);
+        auto outlinerSplit = makeSplit(height, true);
         setBox(outlinerSplit, Rect(outlinerW, 0.0f, 1.0f, height));
         this->attachChild(outlinerSplit);
         mOutlinerSplit = outlinerSplit.get();
 
         if (!mDoc->hasActiveTable())
         {
+            auto stage = std::make_shared<UIWidget>();
+            stage->shape.pivot = Vector2(0.0f, 0.0f);
+            stage->pickable = false;
+            fillSurface(*stage, t.paper);
+            setBox(stage, Rect(tableX, 0.0f, tableW, height));
             auto hint = makeText("选择或新建表格", fontPath, fontPx, mute, tableW - 32.0f * s, 28.0f * s);
             hint->layout();
-            setBox(hint, Rect(tableX + (tableW - hint->shape.size.x) * 0.5f, (height - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
-            this->attachChild(hint);
-            mHint = hint.get();
+            setBox(hint, Rect((tableW - hint->shape.size.x) * 0.5f, (height - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
+            stage->attachChild(hint);
+            this->attachChild(stage);
+            mHint = stage.get();
         }
         else
         {
@@ -633,10 +646,7 @@ namespace eokas::RoseAxion {
             this->attachChild(mTableEditor);
         }
 
-        auto detailsSplit = std::make_shared<UIWidget>();
-        detailsSplit->pickable = false;
-        detailsSplit->color = line;
-        detailsSplit->shape.pivot = Vector2(0.0f, 0.0f);
+        auto detailsSplit = makeSplit(height, true);
         setBox(detailsSplit, Rect(detailsX - 1.0f, 0.0f, 1.0f, height));
         this->attachChild(detailsSplit);
         mDetailsSplit = detailsSplit.get();

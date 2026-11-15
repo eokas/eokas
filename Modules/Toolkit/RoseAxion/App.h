@@ -59,6 +59,7 @@ namespace eokas::RoseAxion {
         void openDocument();
         bool saveDocument();
         bool saveDocumentAs();
+        void showAbout();
         String fileTitle() const;
         bool handleEscape();
         RoseEditor::Host editorHost();
@@ -75,6 +76,7 @@ namespace eokas::RoseAxion {
 
         ConfirmKind mConfirm = ConfirmKind::None;
         PendingAction mPending = PendingAction::None;
+        bool mAboutOpen = false;
         bool mCloseAllowed = false;
         int mConfirmCol = -1;
         int mConfirmTable = -1;

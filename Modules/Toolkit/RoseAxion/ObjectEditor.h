@@ -44,6 +44,8 @@ namespace eokas::RoseAxion {
         void bind(TableDocument& doc, const Host& host);
         void setRow(int row);
         int row() const { return mRow; }
+        void setColumn(int col);
+        int column() const { return mColumn; }
         void rebuild();
         float scrollY() const;
         void setScroll(float y);
@@ -84,6 +86,7 @@ namespace eokas::RoseAxion {
         UIWidget* mColorPanel = nullptr;
         UIColorPicker* mColorPicker = nullptr;
         int mRow = -1;
+        int mColumn = -1;
         float mKeepY = 0.0f;
         std::set<String> mCollapsed;
         ValueEditState mEdit;

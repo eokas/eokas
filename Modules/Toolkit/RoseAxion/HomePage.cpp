@@ -175,7 +175,7 @@ namespace eokas::RoseAxion {
         }
 
         auto backdrop = std::make_shared<PaintPanel>();
-        backdrop->fill(t.voidBg, t.canvas);
+        backdrop->fill(t.voidBg);
         if (t.glow)
         {
             backdrop->orbs = {
@@ -199,10 +199,7 @@ namespace eokas::RoseAxion {
         content->color = clear;
 
         auto hero = std::make_shared<PaintPanel>();
-        hero->tl = t.heroTl;
-        hero->tr = t.heroTr;
-        hero->br = t.heroBr;
-        hero->bl = t.heroBl;
+        hero->fill(t.paper);
         hero->hair = t.hair;
         hero->framed = true;
         hero->underline = withAlpha(t.accentBright, 0.85f);
@@ -323,7 +320,7 @@ namespace eokas::RoseAxion {
             auto box = std::make_shared<PaintPanel>();
             box->pickable = true;
             box->hoverLift = true;
-            box->fill(t.cardTop, t.cardBottom);
+            box->fill(t.paper);
             box->accent = accent;
             box->accentW = 4.0f * s;
             box->hair = t.hair;
@@ -371,7 +368,7 @@ namespace eokas::RoseAxion {
             const std::function<Color(u32_t)>& extraColorOf, const std::function<void(u32_t)>& openOf, const char* emptyHint)
         {
             auto section = std::make_shared<PaintPanel>();
-            section->fill(t.sectionTop, t.sectionBottom);
+            section->fill(t.paper);
             section->hair = t.hair;
             section->framed = true;
 
@@ -438,7 +435,7 @@ namespace eokas::RoseAxion {
                     }
                     else
                     {
-                        item->fill(t.sectionTop);
+                        item->fill(t.paper);
                     }
                     setBox(item, Rect(0.0f, 0.0f, rowW, itemH));
                     item->onClick = [openOf, index]() { openOf(index); };

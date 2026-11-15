@@ -87,8 +87,7 @@ namespace eokas::RoseAxion {
         const Color selected = t.navActive;
         const Color quiet = t.navIdle;
         const Color ink = t.ink;
-        const Color line = t.line;
-        this->color = bar;
+        fillSurface(*this, bar);
         this->shape.pivot = Vector2(0.0f, 0.0f);
 
         auto add = [this, fontPx, selected, quiet, ink, s, &t](const char* label, EditorPage page, UIWidget*& slot)
@@ -127,10 +126,7 @@ namespace eokas::RoseAxion {
         add("Search", EditorPage::Search, mSearch);
         add("Settings", EditorPage::Settings, mSettings);
 
-        auto rule = std::make_shared<UIWidget>();
-        rule->pickable = false;
-        rule->color = line;
-        rule->shape.pivot = Vector2(0.0f, 0.0f);
+        auto rule = makeSplit(shape.size.y, true);
         setBox(rule, Rect(shape.size.x - 1.0f, 0.0f, 1.0f, shape.size.y));
         this->attachChild(rule);
         this->layout();

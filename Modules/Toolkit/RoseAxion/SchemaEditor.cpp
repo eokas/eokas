@@ -421,7 +421,7 @@ namespace eokas::RoseAxion {
         const float rowH = 36.0f * s;
         const float typeColW = 180.0f * s;
         const RoseTheme& t = theme();
-        const Color canvas = t.canvas;
+        const Color paper = t.paper;
         const Color ink = t.ink;
         const Color mute = t.mute;
         const Color accent = t.accent;
@@ -432,7 +432,7 @@ namespace eokas::RoseAxion {
         const String& fontPath = this->font();
         const float width = shape.size.x;
         const float height = shape.size.y;
-        this->color = canvas;
+        fillSurface(*this, paper);
         this->shape.pivot = Vector2(0.0f, 0.0f);
 
         float cardW = width - pagePad * 2.0f;
@@ -566,7 +566,7 @@ namespace eokas::RoseAxion {
         {
             auto card = std::make_shared<PaintPanel>();
             card->pickable = false;
-            card->fill(t.cardTop, t.cardBottom);
+            card->fill(t.raised);
             card->hair = t.hair;
             card->framed = true;
             return card;
@@ -574,7 +574,7 @@ namespace eokas::RoseAxion {
 
         auto view = std::make_shared<UIView>();
         view->shape.pivot = Vector2(0.0f, 0.0f);
-        view->color = canvas;
+        fillSurface(*view, paper);
         setBox(view, Rect(0.0f, 0.0f, width, height));
 
         auto stack = std::make_shared<UIList>();

@@ -90,6 +90,11 @@ namespace eokas::RoseAxion {
         mRow = row;
     }
 
+    void RoseObjectEditor::setColumn(int col)
+    {
+        mColumn = col;
+    }
+
     const String& RoseObjectEditor::font() const
     {
         return mHost.font;
@@ -368,6 +373,11 @@ namespace eokas::RoseAxion {
         head->attachChild(title);
         String tableName = mDoc->tableName(mDoc->activeTableIndex());
         String sub = String::format("%s · 第 %d 行", tableName.cstr(), mRow + 1);
+        if (mColumn >= 0 && static_cast<u32_t>(mColumn) < mDoc->columnCount())
+        {
+            sub += " · ";
+            sub += mDoc->column(static_cast<u32_t>(mColumn)).name;
+        }
         auto subtitle = makeText(sub, fontPath, smallPx, mute, titleW, 16.0f * s);
         subtitle->shape.pivot = Vector2(0.0f, 0.0f);
         setBox(subtitle, Rect(headPad, 24.0f * s, titleW, 16.0f * s));
@@ -377,6 +387,7 @@ namespace eokas::RoseAxion {
         close->onClick = [this]()
         {
             mRow = -1;
+            mColumn = -1;
             mEdit = {};
             this->notifyRebuild();
         };
@@ -775,9 +786,31 @@ namespace eokas::RoseAxion {
             line->setContent(1, wrapDelete(editor, col, path, valueInnerW));
         };
 
-        for (u32_t col = 0; col < cols; ++col)
+        if (mColumn >= 0)
         {
-            attachField(nullptr, col, {}, mDoc->objectField(col));
+            if (static_cast<u32_t>(mColumn) < cols && mDoc->isNestedStructColumn(static_cast<u32_t>(mColumn)))
+            {
+                u32_t col = static_cast<u32_t>(mColumn);
+                u32_t members = mDoc->nestedFieldCount(col, {});
+                if (members == 0)
+                {
+                    UITableRow* empty = tree->addRow(treeRowH);
+                    paintLine(empty, false);
+                    bindName(empty, "没有成员", true);
+                }
+                for (u32_t index = 0; index < members; ++index)
+                {
+                    NestedField child = mDoc->nestedField(col, {}, index);
+                    attachField(nullptr, col, { NestedHop::field(child.id) }, child);
+                }
+            }
+        }
+        else
+        {
+            for (u32_t col = 0; col < cols; ++col)
+            {
+                attachField(nullptr, col, {}, mDoc->objectField(col));
+            }
         }
 
         setBox(tree, Rect(0.0f, 0.0f, panelW, 0.0f));

@@ -222,7 +222,7 @@ namespace eokas::RoseAxion {
         const String& fontPath = this->font();
         const float width = shape.size.x;
         const float height = shape.size.y;
-        this->color = canvas;
+        fillSurface(*this, canvas);
         this->shape.pivot = Vector2(0.0f, 0.0f);
 
         auto header = std::make_shared<UIWidget>();
@@ -308,7 +308,7 @@ namespace eokas::RoseAxion {
         }
         auto view = std::make_shared<UIView>();
         view->shape.pivot = Vector2(0.0f, 0.0f);
-        view->color = canvas;
+        fillSurface(*view, canvas);
         setBox(view, Rect(0.0f, listY, width, listH));
 
         auto list = std::make_shared<UIList>();

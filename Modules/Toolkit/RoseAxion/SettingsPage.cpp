@@ -15,7 +15,7 @@ namespace eokas::RoseAxion {
     {
         this->detachChildren();
         const RoseTheme& t = theme();
-        this->color = t.canvas;
+        fillSurface(*this, t.voidBg);
         this->shape.pivot = Vector2(0.0f, 0.0f);
         const float s = hostScale(mHost.scale);
         const float pad = 28.0f * s;
@@ -54,10 +54,7 @@ namespace eokas::RoseAxion {
             card->attachChild(bar);
 
             auto hero = std::make_shared<PaintPanel>();
-            hero->tl = preview.heroTl;
-            hero->tr = preview.heroTr;
-            hero->br = preview.heroBr;
-            hero->bl = preview.heroBl;
+            hero->fill(preview.paper);
             hero->hair = preview.hair;
             setBox(hero, Rect(12.0f * s, 22.0f * s, cardW - 24.0f * s, 28.0f * s));
             card->attachChild(hero);

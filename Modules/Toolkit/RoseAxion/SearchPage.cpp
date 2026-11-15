@@ -15,7 +15,7 @@ namespace eokas::RoseAxion {
     {
         this->detachChildren();
         const RoseTheme& t = theme();
-        this->color = t.canvas;
+        fillSurface(*this, t.voidBg);
         this->shape.pivot = Vector2(0.0f, 0.0f);
         const float s = hostScale(mHost.scale);
         auto hint = makeText("搜索即将推出", mHost.font, 15.0f * s, t.mute, 280.0f * s, 24.0f * s);

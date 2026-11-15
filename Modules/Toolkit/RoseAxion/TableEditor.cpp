@@ -144,6 +144,7 @@ namespace eokas::RoseAxion {
         mKeepY = 0.0f;
         mResizeCol = -1;
         this->setOverlay(nullptr);
+        mBar = nullptr;
         mView = nullptr;
         mTable = nullptr;
         mGridHost = nullptr;
@@ -182,9 +183,19 @@ namespace eokas::RoseAxion {
         {
             return;
         }
+        const float barH = mBar != nullptr ? 36.0f * this->scale() : 0.0f;
+        if (mBar != nullptr)
+        {
+            setBox(*mBar, Rect(0.0f, 0.0f, shape.size.x, barH));
+        }
         if (mView != nullptr)
         {
-            setBox(*mView, Rect(0.0f, 0.0f, shape.size.x, shape.size.y));
+            float viewH = shape.size.y - barH;
+            if (viewH < 1.0f)
+            {
+                viewH = 1.0f;
+            }
+            setBox(*mView, Rect(0.0f, barH, shape.size.x, viewH));
             mView->layout();
         }
         this->placeOverlayEditors();
@@ -412,6 +423,11 @@ namespace eokas::RoseAxion {
         mSelectCol = col;
         if (repeat)
         {
+            if (mDoc->isNestedStructColumn(static_cast<u32_t>(col)))
+            {
+                this->openObjectEditor(row, col);
+                return;
+            }
             this->beginEdit(row, col, mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col)));
             return;
         }
@@ -420,14 +436,23 @@ namespace eokas::RoseAxion {
         this->notifyRebuild();
     }
 
-    void RoseTableEditor::openObjectEditor(int row)
+    void RoseTableEditor::openObjectEditor(int row, int col)
     {
         if (mDoc == nullptr || !mDoc->isOpen() || row < 0)
         {
             return;
         }
-        mSelect = SelectKind::Row;
-        mSelectRow = row;
+        if (col >= 0)
+        {
+            mSelect = SelectKind::Cell;
+            mSelectRow = row;
+            mSelectCol = col;
+        }
+        else
+        {
+            mSelect = SelectKind::Row;
+            mSelectRow = row;
+        }
         mEdit = EditKind::None;
         mDateRow = -1;
         mDateCol = -1;
@@ -437,7 +462,7 @@ namespace eokas::RoseAxion {
         mColorCol = -1;
         if (mHost.openObject)
         {
-            mHost.openObject(row);
+            mHost.openObject(row, col);
         }
         this->notifyRebuild();
     }
@@ -659,6 +684,7 @@ namespace eokas::RoseAxion {
     void RoseTableEditor::rebuild()
     {
         this->detachChildren();
+        mBar = nullptr;
         mView = nullptr;
         mTable = nullptr;
         mGridHost = nullptr;
@@ -684,7 +710,6 @@ namespace eokas::RoseAxion {
         const float smallPx = 13.0f * s;
         const float rowH = 36.0f * s;
         const RoseTheme& t = theme();
-        const Color canvas = t.canvas;
         const Color paper = t.paper;
         const Color headerBg = t.header;
         const Color selected = t.selected;
@@ -695,9 +720,45 @@ namespace eokas::RoseAxion {
         const Color url = t.url;
         const Color clear(0.0f, 0.0f, 0.0f, 0.0f);
         const String& fontPath = this->font();
-        this->color = canvas;
+        fillSurface(*this, paper);
         const float height = shape.size.y;
+        const float barH = 36.0f * s;
+        const float pad = 8.0f * s;
+        float viewH = height - barH;
+        if (viewH < 1.0f)
+        {
+            viewH = 1.0f;
+        }
         UIWidget* overlay = mOverlay;
+
+        auto bar = std::make_shared<UIWidget>();
+        bar->shape.pivot = Vector2(0.0f, 0.0f);
+        bar->pickable = false;
+        fillSurface(*bar, headerBg);
+        setBox(bar, Rect(0.0f, 0.0f, shape.size.x, barH));
+        auto tableName = makeText(mDoc->tableName(mDoc->activeTableIndex()), fontPath, fontPx, ink, shape.size.x - pad * 2.0f, 22.0f * s);
+        tableName->layout();
+        float nameW = tableName->shape.size.x;
+        float nameH = tableName->shape.size.y;
+        if (nameW > shape.size.x - pad * 2.0f)
+        {
+            nameW = shape.size.x - pad * 2.0f;
+        }
+        if (nameW < 1.0f)
+        {
+            nameW = 1.0f;
+        }
+        if (nameH < 1.0f)
+        {
+            nameH = 22.0f * s;
+        }
+        setBox(tableName, Rect(pad, (barH - nameH) * 0.5f, nameW, nameH));
+        bar->attachChild(tableName);
+        auto barRule = makeSplit(shape.size.x, false);
+        setBox(barRule, Rect(0.0f, barH - 1.0f, shape.size.x, 1.0f));
+        bar->attachChild(barRule);
+        this->attachChild(bar);
+        mBar = bar.get();
 
         int rows = static_cast<int>(mDoc->rowCount());
         int cols = static_cast<int>(mDoc->columnCount());
@@ -710,8 +771,8 @@ namespace eokas::RoseAxion {
 
         auto view = std::make_shared<UIView>();
         view->shape.pivot = Vector2(0.0f, 0.0f);
-        view->color = canvas;
-        setBox(view, Rect(0.0f, 0.0f, shape.size.x, height));
+        fillSurface(*view, paper);
+        setBox(view, Rect(0.0f, barH, shape.size.x, viewH));
 
         auto table = std::make_shared<UITable>();
         table->shape.pivot = Vector2(0.0f, 0.0f);
@@ -829,23 +890,11 @@ namespace eokas::RoseAxion {
         setBox(corner, Rect(0.0f, 0.0f, cornerSize.x, cornerSize.y));
         corner->onClick = [this]() { this->selectAll(); };
         const bool emptyTable = rows == 0 || cols == 0;
-        const float moreW = 28.0f * s;
-        const float moreH = 24.0f * s;
-        const float moreGap = 4.0f * s;
-        float nameW = cornerSize.x - textPadX * 2.0f;
         if (emptyTable)
         {
-            nameW = cornerSize.x - moreW - moreGap * 2.0f - textPadX;
-            if (nameW < 0.0f)
-            {
-                nameW = 0.0f;
-            }
-        }
-        auto tableName = makeText(mDoc->tableName(mDoc->activeTableIndex()), fontPath, fontPx, ink, nameW, 22.0f * s);
-        centerText(tableName, textPadX, nameW, cornerSize.y);
-        corner->attachChild(tableName);
-        if (emptyTable)
-        {
+            const float moreW = 28.0f * s;
+            const float moreH = 24.0f * s;
+            const float moreGap = 4.0f * s;
             auto more = makeMoreButton(fontPath, fontPx, moreW, moreH, ink);
             setBox(more, Rect(cornerSize.x - moreW - moreGap, (cornerSize.y - moreH) * 0.5f, moreW, moreH));
             UIButton* moreRaw = more.get();
@@ -913,6 +962,10 @@ namespace eokas::RoseAxion {
                 mClickRow = -1;
                 mSelect = SelectKind::Column;
                 mSelectCol = col;
+                if (mHost.selectField)
+                {
+                    mHost.selectField(col);
+                }
                 if (repeat)
                 {
                     mEdit = EditKind::Header;
@@ -1150,6 +1203,11 @@ namespace eokas::RoseAxion {
                     }
                     if (key == UIKeyCode::Enter || key == UIKeyCode::F2)
                     {
+                        if (mDoc->isNestedStructColumn(static_cast<u32_t>(col)))
+                        {
+                            this->openObjectEditor(row, col);
+                            return;
+                        }
                         this->beginEdit(row, col, mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col)));
                         return;
                     }

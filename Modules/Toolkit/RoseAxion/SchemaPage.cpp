@@ -158,8 +158,13 @@ namespace eokas::RoseAxion {
         }
         if (mHint != nullptr)
         {
-            mHint->layout();
-            setBox(*mHint, Rect(editorX + (editorW - mHint->shape.size.x) * 0.5f, (height - mHint->shape.size.y) * 0.5f, mHint->shape.size.x, mHint->shape.size.y));
+            setBox(*mHint, Rect(editorX, 0.0f, editorW, height));
+            if (!mHint->children().empty() && mHint->children()[0])
+            {
+                UIWidget& card = *mHint->children()[0];
+                card.layout();
+                setBox(card, Rect((editorW - card.shape.size.x) * 0.5f, (height - card.shape.size.y) * 0.5f, card.shape.size.x, card.shape.size.y));
+            }
         }
         if (mOutliner != nullptr)
         {
@@ -329,11 +334,9 @@ namespace eokas::RoseAxion {
         const float s = this->scale();
         const float fontPx = 15.0f * s;
         const RoseTheme& t = theme();
-        const Color canvas = t.canvas;
         const Color mute = t.mute;
-        const Color line = t.line;
         const String& fontPath = this->font();
-        this->color = canvas;
+        fillSurface(*this, t.voidBg);
         const float height = shape.size.y;
         float outlinerW = 0.0f;
         float paneX = 0.0f;
@@ -352,10 +355,7 @@ namespace eokas::RoseAxion {
         mOutliner->rebuild();
         this->attachChild(mOutliner);
 
-        auto split = std::make_shared<UIWidget>();
-        split->pickable = false;
-        split->color = line;
-        split->shape.pivot = Vector2(0.0f, 0.0f);
+        auto split = makeSplit(height, true);
         setBox(split, Rect(outlinerW, 0.0f, 1.0f, height));
         this->attachChild(split);
         mSplit = split.get();
@@ -363,9 +363,14 @@ namespace eokas::RoseAxion {
 
         if (!mDoc->hasActiveSchema())
         {
+            auto stage = std::make_shared<UIWidget>();
+            stage->shape.pivot = Vector2(0.0f, 0.0f);
+            stage->pickable = false;
+            fillSurface(*stage, t.paper);
+            setBox(stage, Rect(paneX, 0.0f, paneW, height));
             auto card = std::make_shared<PaintPanel>();
             card->pickable = false;
-            card->fill(t.cardTop, t.cardBottom);
+            card->fill(t.paper);
             card->hair = t.hair;
             card->framed = true;
             float cardW = paneW - 32.0f * s;
@@ -380,11 +385,12 @@ namespace eokas::RoseAxion {
             auto hint = makeText("选择或新建模式", fontPath, fontPx, mute, cardW - 32.0f * s, 28.0f * s);
             hint->layout();
             float cardH = 48.0f * s + hint->shape.size.y;
-            setBox(card, Rect(paneX + (paneW - cardW) * 0.5f, (height - cardH) * 0.5f, cardW, cardH));
+            setBox(card, Rect((paneW - cardW) * 0.5f, (height - cardH) * 0.5f, cardW, cardH));
             setBox(hint, Rect((cardW - hint->shape.size.x) * 0.5f, (cardH - hint->shape.size.y) * 0.5f, hint->shape.size.x, hint->shape.size.y));
             card->attachChild(hint);
-            this->attachChild(card);
-            mHint = card.get();
+            stage->attachChild(card);
+            this->attachChild(stage);
+            mHint = stage.get();
             return;
         }
 

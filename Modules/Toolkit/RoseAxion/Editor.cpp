@@ -336,6 +336,8 @@ namespace eokas::RoseAxion {
             return;
         }
         this->ensurePages();
+        fillSurface(*this, theme().voidBg);
+        this->shape.pivot = Vector2(0.0f, 0.0f);
 
         auto overlay = std::make_shared<UIWidget>();
         overlay->overlay = true;

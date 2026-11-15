@@ -21,6 +21,8 @@ namespace eokas::RoseAxion {
     std::shared_ptr<UIButton> makeMoreButton(const String& font, float size, float width, float height, const Color& ink);
     std::shared_ptr<UITag> makeChip(const String& label, const String& font, float size, const Color& fill, const Color& ink);
     std::shared_ptr<UIWidget> makeRule(float width, const Color& color);
+    void fillSurface(UIWidget& widget, const Color& color);
+    std::shared_ptr<UIWidget> makeSplit(float length, bool vertical);
     void styleDropdown(UIDropdown& drop, const String& font, float size);
     void styleMenuItem(UIMenuItem& item, const String& font, float size);
 

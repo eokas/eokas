@@ -1,4 +1,5 @@
 #include "./App.h"
+#include "./AboutDialog.h"
 #include "./Prefs.h"
 #include "./Theme.h"
 #include "./UiKit.h"
@@ -17,12 +18,12 @@ namespace eokas::RoseAxion {
         struct MenuGate
         {
             UIMenu* file = nullptr;
-            UIWidget* extra = nullptr;
+            UIMenu* help = nullptr;
             UIWidget* dismiss = nullptr;
             void hide()
             {
                 if (file != nullptr) file->visible = false;
-                if (extra != nullptr) extra->visible = false;
+                if (help != nullptr) help->visible = false;
                 if (dismiss != nullptr) dismiss->visible = false;
             }
         };
@@ -227,7 +228,15 @@ namespace eokas::RoseAxion {
             this->requestRebuild();
             return;
         }
+        if (mWindow != nullptr)
+        {
+            mWindow->clearPressed();
+        }
         String path = mHost.pickOpenPath();
+        if (mWindow != nullptr)
+        {
+            mWindow->clearPressed();
+        }
         if (path.isEmpty())
         {
             this->requestRebuild();
@@ -297,8 +306,16 @@ namespace eokas::RoseAxion {
             this->requestRebuild();
             return false;
         }
+        if (mWindow != nullptr)
+        {
+            mWindow->clearPressed();
+        }
         String suggested = mDoc.path().isEmpty() ? String("table.rose") : mDoc.path();
         String path = mHost.pickSavePath(suggested);
+        if (mWindow != nullptr)
+        {
+            mWindow->clearPressed();
+        }
         if (path.isEmpty())
         {
             return false;
@@ -308,8 +325,20 @@ namespace eokas::RoseAxion {
         return ok;
     }
 
+    void AxionApp::showAbout()
+    {
+        mAboutOpen = true;
+        this->requestRebuild();
+    }
+
     bool AxionApp::handleEscape()
     {
+        if (mAboutOpen)
+        {
+            mAboutOpen = false;
+            this->requestRebuild();
+            return true;
+        }
         if (mConfirm != ConfirmKind::None)
         {
             mConfirm = ConfirmKind::None;
@@ -377,7 +406,6 @@ namespace eokas::RoseAxion {
         const float headerH = 42.0f * s;
         const float statusH = 26.0f * s;
         const RoseTheme& t = theme();
-        const Color canvas = t.canvas;
         const Color bar = t.bar;
         const Color selected = t.selected;
         const Color ink = t.ink;
@@ -387,7 +415,6 @@ namespace eokas::RoseAxion {
         const Color clear(0.0f, 0.0f, 0.0f, 0.0f);
         const Color warn = t.warn;
         const Color quiet = t.quiet;
-        const Color line = t.line;
         const bool showStatus = mDoc.isOpen() || !mDoc.status().isEmpty();
         float workY = headerH;
         float workH = mHeight - headerH - (showStatus ? statusH : 0.0f);
@@ -400,7 +427,7 @@ namespace eokas::RoseAxion {
         root->shape.pivot = Vector2(0.0f, 0.0f);
         root->pickable = false;
         setBox(root, Rect(0.0f, 0.0f, mWidth, mHeight));
-        root->color = canvas;
+        fillSurface(*root, t.voidBg);
         root->focusable = true;
         root->onKeyPress = [this](const UIKeyEvent& event)
         {
@@ -415,17 +442,23 @@ namespace eokas::RoseAxion {
         auto header = std::make_shared<UIWidget>();
         header->shape.pivot = Vector2(0.0f, 0.0f);
         header->pickable = false;
-        header->color = bar;
+        fillSurface(*header, bar);
         setBox(header, Rect(0.0f, 0.0f, mWidth, headerH));
 
-        auto fileMenu = std::make_shared<UIMenu>();
-        fileMenu->direction = UIDirection::Vertical;
-        fileMenu->padding = 4.0f * s;
-        fileMenu->spacing = 2.0f * s;
-        fileMenu->color = popup;
-        fileMenu->overlay = true;
-        fileMenu->visible = false;
-        fileMenu->shape.pivot = Vector2(0.0f, 0.0f);
+        auto makePopupMenu = [&]()
+        {
+            auto menu = std::make_shared<UIMenu>();
+            menu->direction = UIDirection::Vertical;
+            menu->padding = 4.0f * s;
+            menu->spacing = 2.0f * s;
+            menu->color = popup;
+            menu->overlay = true;
+            menu->visible = false;
+            menu->shape.pivot = Vector2(0.0f, 0.0f);
+            return menu;
+        };
+        auto fileMenu = makePopupMenu();
+        auto helpMenu = makePopupMenu();
 
         auto dismiss = std::make_shared<UIWidget>();
         dismiss->overlay = true;
@@ -436,6 +469,7 @@ namespace eokas::RoseAxion {
         setBox(dismiss, Rect(0.0f, 0.0f, mWidth, mHeight));
         auto gate = std::make_shared<MenuGate>();
         gate->file = fileMenu.get();
+        gate->help = helpMenu.get();
         gate->dismiss = dismiss.get();
         dismiss->onClick = [gate]() { gate->hide(); };
 
@@ -454,40 +488,68 @@ namespace eokas::RoseAxion {
             menu.addItem(item);
             return item;
         };
-        auto fileItem = std::make_shared<UIMenuItem>();
-        fileItem->paddingX = 14.0f * s;
-        fileItem->paddingY = 6.0f * s;
-        fileItem->background = bar;
-        fileItem->hoverFill = selected;
-        fileItem->selectedFill = selected;
-        fileItem->setText("文件");
-        if (UIText* text = fileItem->label())
+        auto makeBarItem = [&](const char* label)
         {
-            styleText(*text, mFont, fontPx, ink);
-        }
-        fileItem->syncSize();
-        fileMenu->host = fileItem.get();
-        UIMenuItem* fileRaw = fileItem.get();
-        UIMenu* fileMenuRaw = fileMenu.get();
-        UIWidget* rootRawForMenu = root.get();
-        fileItem->onClick = [fileRaw, fileMenuRaw, rootRawForMenu, gate, s]()
-        {
-            bool open = !fileMenuRaw->visible;
-            gate->hide();
-            if (open)
+            auto item = std::make_shared<UIMenuItem>();
+            item->paddingX = 14.0f * s;
+            item->paddingY = 6.0f * s;
+            item->background = bar;
+            item->hoverFill = selected;
+            item->selectedFill = selected;
+            item->setText(label);
+            if (UIText* text = item->label())
             {
-                fileMenuRaw->visible = true;
-                if (gate->dismiss != nullptr) gate->dismiss->visible = true;
-                Rect bounds = fileRaw->screenBounds();
-                Vector2 local = rootRawForMenu->screenToLocal(Vector2(bounds.origin.x, bounds.origin.y + bounds.size.y));
-                fileMenuRaw->shape.pivot = Vector2(0.0f, 0.0f);
-                fileMenuRaw->shape.setBox(local, Vector2(160.0f * s, 36.0f * s * 4.0f + 12.0f * s));
+                styleText(*text, mFont, fontPx, ink);
             }
+            item->syncSize();
+            return item;
+        };
+        auto fileItem = makeBarItem("文件");
+        auto helpItem = makeBarItem("帮助");
+        fileMenu->host = fileItem.get();
+        helpMenu->host = helpItem.get();
+        UIMenuItem* fileRaw = fileItem.get();
+        UIMenuItem* helpRaw = helpItem.get();
+        UIMenu* fileMenuRaw = fileMenu.get();
+        UIMenu* helpMenuRaw = helpMenu.get();
+        UIWidget* rootRawForMenu = root.get();
+        auto openBarMenu = [rootRawForMenu, gate](UIMenuItem* host, UIMenu* menu, float minWidth)
+        {
+            bool open = !menu->visible;
+            gate->hide();
+            if (!open)
+            {
+                return;
+            }
+            menu->visible = true;
+            if (gate->dismiss != nullptr)
+            {
+                gate->dismiss->visible = true;
+            }
+            menu->layout();
+            Vector2 size = menu->shape.size;
+            if (size.x < minWidth)
+            {
+                size.x = minWidth;
+            }
+            Rect bounds = host->screenBounds();
+            Vector2 local = rootRawForMenu->screenToLocal(Vector2(bounds.origin.x, bounds.origin.y + bounds.size.y));
+            menu->shape.pivot = Vector2(0.0f, 0.0f);
+            menu->shape.setBox(local, size);
+        };
+        fileItem->onClick = [fileRaw, fileMenuRaw, openBarMenu, s]()
+        {
+            openBarMenu(fileRaw, fileMenuRaw, 160.0f * s);
+        };
+        helpItem->onClick = [helpRaw, helpMenuRaw, openBarMenu, s]()
+        {
+            openBarMenu(helpRaw, helpMenuRaw, 200.0f * s);
         };
         addMenuItem(*fileMenu, "新建", [this]() { this->newDocument(); });
         addMenuItem(*fileMenu, "打开...", [this]() { this->openDocument(); });
         addMenuItem(*fileMenu, "保存", [this]() { this->saveDocument(); });
         addMenuItem(*fileMenu, "另存为...", [this]() { this->saveDocumentAs(); });
+        addMenuItem(*helpMenu, "关于 RoseAxion", [this]() { this->showAbout(); });
 
         auto left = std::make_shared<UIList>();
         left->direction = UIDirection::Horizontal;
@@ -498,6 +560,7 @@ namespace eokas::RoseAxion {
         left->shape.pivot = Vector2(0.0f, 0.0f);
         setBox(left, Rect(0.0f, 0.0f, 0.0f, headerH));
         left->attachChild(fileItem);
+        left->attachChild(helpItem);
         left->layout();
         header->attachChild(left);
 
@@ -526,7 +589,7 @@ namespace eokas::RoseAxion {
             header->attachChild(nameText);
         }
 
-        auto headerRule = makeRule(mWidth, line);
+        auto headerRule = makeSplit(mWidth, false);
         setBox(headerRule, Rect(0.0f, headerH - 1.0f, mWidth, 1.0f));
         header->attachChild(headerRule);
         root->attachChild(header);
@@ -534,7 +597,7 @@ namespace eokas::RoseAxion {
         if (!mDoc.isOpen())
         {
             auto splash = std::make_shared<PaintPanel>();
-            splash->fill(t.voidBg, t.canvas);
+            splash->fill(t.voidBg);
             splash->hair = t.hair;
             if (t.glow)
             {
@@ -619,9 +682,9 @@ namespace eokas::RoseAxion {
             auto statusBar = std::make_shared<UIWidget>();
             statusBar->shape.pivot = Vector2(0.0f, 0.0f);
             statusBar->pickable = false;
-            statusBar->color = bar;
+            fillSurface(*statusBar, bar);
             setBox(statusBar, Rect(0.0f, mHeight - statusH, mWidth, statusH));
-            auto statusRule = makeRule(mWidth, line);
+            auto statusRule = makeSplit(mWidth, false);
             setBox(statusRule, Rect(0.0f, 0.0f, mWidth, 1.0f));
             statusBar->attachChild(statusRule);
             String statusText = mDoc.status();
@@ -644,6 +707,28 @@ namespace eokas::RoseAxion {
 
         root->attachChild(dismiss);
         root->attachChild(fileMenu);
+        root->attachChild(helpMenu);
+
+        if (mAboutOpen)
+        {
+            auto about = std::make_shared<RoseAboutDialog>();
+            RoseAboutDialog::Host aboutHost;
+            aboutHost.font = mFont;
+            aboutHost.scale = mScale;
+            aboutHost.openExternal = mHost.openExternal;
+            aboutHost.onClose = [this]()
+            {
+                mAboutOpen = false;
+                this->requestRebuild();
+            };
+            about->bind(aboutHost);
+            about->rebuild(mWidth, mHeight);
+            root->attachChild(about);
+            if (UIWidget* aboutFocus = about->focusWidget())
+            {
+                focus = aboutFocus;
+            }
+        }
 
         if (mConfirm != ConfirmKind::None)
         {
