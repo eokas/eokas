@@ -32,6 +32,7 @@ namespace eokas
         void setFocus(UIWidget* widget);
         UIWidget* focus() const;
         UIWidget* pressed() const;
+        void clearPressed();
 
     private:
         void dispatchPointerPressAnywhere(float x, float y, UIPointerCode button);

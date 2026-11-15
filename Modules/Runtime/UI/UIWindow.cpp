@@ -433,6 +433,17 @@ namespace eokas
         return mPressed;
     }
 
+    void UIWindow::clearPressed()
+    {
+        if (mPressed != nullptr)
+        {
+            mPressed->handlePointerRelease(UIPointerEvent{});
+        }
+        mPressed = nullptr;
+        mPressedButton = UIPointerCode::Unknown;
+        mRawInputEvents.clear();
+    }
+
     void UIWindow::resetPointerState(UIWidget* widget)
     {
         if (widget == nullptr)
