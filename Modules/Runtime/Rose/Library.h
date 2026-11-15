@@ -9,6 +9,8 @@ namespace eokas::rose
     class Library
     {
     public:
+        static constexpr i32_t version = 4;
+
         Library(const String& name);
         virtual ~Library();
         

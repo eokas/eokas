@@ -42,7 +42,6 @@ namespace eokas::rose
     bool Library::load(BinaryStream &stream)
     {
         static const String MAGIC = "ROSE";
-        static const i32_t VERSION = 4;
 
         if (!stream.isOpen())
         {
@@ -52,10 +51,10 @@ namespace eokas::rose
         String magic{};
         if (!stream.read(magic))
             return false;
-        i32_t version = 0;
-        if (!stream.read(version))
+        i32_t fileVersion = 0;
+        if (!stream.read(fileVersion))
             return false;
-        if (magic != MAGIC || version != VERSION)
+        if (magic != MAGIC || fileVersion != Library::version)
             return false;
 
         u32_t schemaCount = 0;
@@ -206,7 +205,6 @@ namespace eokas::rose
     bool Library::save(BinaryStream &stream)
     {
         static const String MAGIC_TOKEN = "ROSE";
-        static const i32_t VERSION = 4;
 
         if (!stream.isOpen())
         {
@@ -214,7 +212,7 @@ namespace eokas::rose
         }
 
         stream.write(MAGIC_TOKEN);
-        stream.write(VERSION);
+        stream.write(Library::version);
 
         stream.write(mSchemas.count());
         for (u32_t index = 0; index < mSchemas.count(); index++)
