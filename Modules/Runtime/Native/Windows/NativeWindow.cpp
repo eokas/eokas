@@ -261,12 +261,12 @@ namespace eokas
             case WM_RBUTTONUP:
             case WM_MBUTTONUP:
             case WM_XBUTTONUP:
+                if (GetCapture() == hwnd) {
+                    ReleaseCapture();
+                }
                 if (window->onMouseUp) {
                     NativeMouseButton button = transferMouseButton(platformMouseButton(message, wParam));
                     window->onMouseUp((float)GET_X_LPARAM(lParam), (float)GET_Y_LPARAM(lParam), button);
-                }
-                if (GetCapture() == hwnd) {
-                    ReleaseCapture();
                 }
                 return message == WM_XBUTTONUP ? TRUE : 0;
             case WM_SETCURSOR:
