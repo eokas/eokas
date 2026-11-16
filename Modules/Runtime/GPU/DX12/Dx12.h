@@ -91,6 +91,7 @@ namespace eokas
     {
         Texture2D::Ref color;
         Texture2D::Ref depth;
+        RenderPass::Ref pass;
     };
 
     struct DX12Surface : public Surface
@@ -114,8 +115,7 @@ namespace eokas
         virtual void* getWindowHandle() const override;
         virtual uint32_t getWidth() const override;
         virtual uint32_t getHeight() const override;
-        virtual Texture2D::Ref getActiveColorBuffer() override;
-        virtual Texture2D::Ref getActiveDepthStencilBuffer() override;
+        virtual RenderPass::Ref getActiveRenderPass() override;
         virtual void present() override;
         virtual void resize(uint32_t width, uint32_t height) override;
     };
@@ -156,6 +156,22 @@ namespace eokas
 
         virtual void* getNativeResource() const override;
         virtual const TextureOptions& getOptions() const override;
+    };
+
+    struct DX12RenderPass : public RenderPass
+    {
+        RenderPassOptions mOptions;
+        std::vector<Texture2D::Ref> mColorBuffers;
+        Texture2D::Ref mDepthStencil;
+
+        DX12RenderPass(RenderPassOptions resolvedOptions,
+            const std::vector<Texture2D::Ref>& colorBuffers,
+            Texture2D::Ref depthStencil);
+
+        virtual RenderPassOptions getOptions() const override;
+        virtual void setOptions(const RenderPassOptions& options) override;
+        virtual const std::vector<Texture2D::Ref>& getColorBuffers() const override;
+        virtual Texture2D::Ref getDepthStencilBuffer() const override;
     };
     
     struct DX12ShaderProgram : public ShaderProgram
@@ -245,6 +261,10 @@ namespace eokas
         std::vector<DX12Upload> mUploads;
         PipelineObject::Ref mCurrentPipeline;
         bool mClosed = false;
+        bool mInsideRenderPass = false;
+        RenderPass::Ref mActiveRenderPass;
+
+        void transitionTexture(DX12Texture2D* texture, D3D12_RESOURCE_STATES after);
 
         DX12CommandBuffer(DX12Device& device);
         ~DX12CommandBuffer();
@@ -256,9 +276,8 @@ namespace eokas
         virtual void open() override;
         virtual void setPipelineObject(PipelineObject::Ref pipeline) override;
         virtual void setPipelineBindings(PipelineBindings::Ref bindings) override;
-        virtual void setRenderTarget(const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencil) override;
-        virtual void clearRenderTargetColorBuffer(Texture2D::Ref colorBuffer, float(& clearColor)[4]) override;
-        virtual void clearRenderTargetDepthStencilBuffer(Texture2D::Ref depthStencil, float depth, uint32_t stencil) override;
+        virtual void beginRenderPass(RenderPass::Ref pass) override;
+        virtual void endRenderPass() override;
         virtual void setViewport(const Viewport& viewport) override;
         virtual void setTopology(Topology topology) override;
         virtual void setVertexBuffer(Buffer::Ref buffer, uint32_t length, uint32_t stride) override;
@@ -331,6 +350,10 @@ namespace eokas
         virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) override;
         virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) override;
         virtual CommandBuffer::Ref createCommandBuffer() override;
+        virtual RenderPass::Ref createRenderPass(
+            const RenderPassOptions& options,
+            const std::vector<Texture2D::Ref>& colorBuffers,
+            Texture2D::Ref depthStencil) override;
         virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) override;
         virtual void waitForGPU() override;
         virtual void waitForNextFrame() override;

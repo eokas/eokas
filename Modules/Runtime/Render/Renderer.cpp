@@ -62,7 +62,7 @@ namespace eokas
         mShadowMaterial.reset();
         mShadowColor.reset();
         mShadowDepth.reset();
-        mShadowAsShaderResource = false;
+        mShadowPass.reset();
         mCommandBuffer.reset();
         mDevice.reset();
     }
@@ -105,8 +105,28 @@ namespace eokas
             depth.format = Format::D32_FLOAT;
             depth.usage = TextureUsage::DepthStencilAttachment;
             mShadowDepth = mDevice->createTexture2D(depth);
+        }
 
-            mShadowAsShaderResource = false;
+        if (!mShadowPass && mShadowColor && mShadowDepth)
+        {
+            RenderPassAttachment shadowColorAtt;
+            shadowColorAtt.loadOp = RenderPassLoadOp::Clear;
+            shadowColorAtt.storeOp = RenderPassStoreOp::Store;
+            shadowColorAtt.storeState = ResourceState::ShaderResource;
+            shadowColorAtt.clearColor[0] = 1.0f;
+            shadowColorAtt.clearColor[1] = 1.0f;
+            shadowColorAtt.clearColor[2] = 1.0f;
+            shadowColorAtt.clearColor[3] = 1.0f;
+
+            RenderPassOptions shadowOptions;
+            shadowOptions.colors.push_back(shadowColorAtt);
+
+            RenderPassAttachment shadowDepthAtt;
+            shadowDepthAtt.loadOp = RenderPassLoadOp::Clear;
+            shadowDepthAtt.storeOp = RenderPassStoreOp::DontCare;
+            shadowOptions.depthStencil = shadowDepthAtt;
+
+            mShadowPass = mDevice->createRenderPass(shadowOptions, { mShadowColor }, mShadowDepth);
         }
 
         if (!mShadowMaterial)
@@ -252,14 +272,6 @@ namespace eokas
 
     void Renderer::renderShadowPass(CommandBuffer::Ref cmd, Space& space)
     {
-        Texture2D::Ref shadowColor = mShadowColor;
-        if (mShadowAsShaderResource)
-        {
-            Barrier toTarget{shadowColor, ResourceState::ShaderResource, ResourceState::RenderTarget};
-            cmd->barrier({toTarget});
-            mShadowAsShaderResource = false;
-        }
-
         Viewport viewport;
         viewport.left = 0.0f;
         viewport.top = 0.0f;
@@ -268,10 +280,7 @@ namespace eokas
         viewport.front = 0.0f;
         viewport.back = 1.0f;
         cmd->setViewport(viewport);
-        cmd->setRenderTarget({ mShadowColor }, mShadowDepth);
-        float clearColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-        cmd->clearRenderTargetColorBuffer(mShadowColor, clearColor);
-        cmd->clearRenderTargetDepthStencilBuffer(mShadowDepth);
+        cmd->beginRenderPass(mShadowPass);
 
         for (auto& p : space.primitives)
         {
@@ -282,9 +291,7 @@ namespace eokas
             p->encode(cmd);
         }
 
-        Barrier toSample{shadowColor, ResourceState::RenderTarget, ResourceState::ShaderResource};
-        cmd->barrier({toSample});
-        mShadowAsShaderResource = true;
+        cmd->endRenderPass();
     }
 
     void Renderer::render(const Surface::Ref& surface, Space& space)
@@ -335,14 +342,15 @@ namespace eokas
             renderShadowPass(mCommandBuffer, space);
 
         mCommandBuffer->setViewport(cam->viewport);
-        Texture2D::Ref color = surface->getActiveColorBuffer();
-        Texture2D::Ref depth = surface->getActiveDepthStencilBuffer();
-        Barrier begin{color, ResourceState::Present, ResourceState::RenderTarget};
-        mCommandBuffer->barrier({begin});
-        mCommandBuffer->setRenderTarget({ color }, depth);
-        float c[4] = {space.clearColor.r, space.clearColor.g, space.clearColor.b, space.clearColor.a};
-        mCommandBuffer->clearRenderTargetColorBuffer(color, c);
-        mCommandBuffer->clearRenderTargetDepthStencilBuffer(depth);
+
+        RenderPass::Ref mainPass = surface->getActiveRenderPass();
+        RenderPassOptions mainOpts = mainPass->getOptions();
+        mainOpts.colors[0].clearColor[0] = space.clearColor.r;
+        mainOpts.colors[0].clearColor[1] = space.clearColor.g;
+        mainOpts.colors[0].clearColor[2] = space.clearColor.b;
+        mainOpts.colors[0].clearColor[3] = space.clearColor.a;
+        mainPass->setOptions(mainOpts);
+        mCommandBuffer->beginRenderPass(mainPass);
 
         for (auto& p : space.primitives)
         {
@@ -354,8 +362,7 @@ namespace eokas
             p->encode(mCommandBuffer);
         }
 
-        Barrier end{color, ResourceState::RenderTarget, ResourceState::Present};
-        mCommandBuffer->barrier({end});
+        mCommandBuffer->endRenderPass();
         mCommandBuffer->close();
         mDevice->commitCommandBuffer(mCommandBuffer);
         surface->present();

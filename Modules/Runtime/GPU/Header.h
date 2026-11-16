@@ -3,6 +3,8 @@
 
 #include "Base/Main.h"
 
+#include <optional>
+
 namespace eokas
 {
     enum class Format
@@ -334,6 +336,38 @@ namespace eokas
         ResourceState before = ResourceState::Common;
         ResourceState after = ResourceState::Common;
     };
+
+    enum class RenderPassLoadOp { DontCare, Load, Clear };
+    enum class RenderPassStoreOp { DontCare, Store };
+
+    struct RenderPassAttachment
+    {
+        RenderPassLoadOp loadOp = RenderPassLoadOp::Clear;
+        RenderPassStoreOp storeOp = RenderPassStoreOp::Store;
+        ResourceState storeState = ResourceState::ShaderResource;
+
+        float clearColor[4] = {0.f, 0.f, 0.f, 1.f};
+        float clearDepth = 1.f;
+        uint32_t clearStencil = 0;
+    };
+
+    struct RenderPassOptions
+    {
+        std::vector<RenderPassAttachment> colors;
+        std::optional<RenderPassAttachment> depthStencil;
+    };
+
+    struct RenderPass
+    {
+        using Ref = std::shared_ptr<RenderPass>;
+        virtual ~RenderPass() = default;
+
+        virtual RenderPassOptions getOptions() const = 0;
+        virtual void setOptions(const RenderPassOptions& options) = 0;
+
+        virtual const std::vector<Texture2D::Ref>& getColorBuffers() const = 0;
+        virtual Texture2D::Ref getDepthStencilBuffer() const = 0;
+    };
     
     struct CommandBuffer
     {
@@ -344,9 +378,8 @@ namespace eokas
         virtual void open() = 0;
         virtual void setPipelineObject(PipelineObject::Ref pipeline) = 0;
         virtual void setPipelineBindings(PipelineBindings::Ref bindings) = 0;
-        virtual void setRenderTarget(const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencil = nullptr) = 0;
-        virtual void clearRenderTargetColorBuffer(Texture2D::Ref colorBuffer, float(& clearColor)[4]) = 0;
-        virtual void clearRenderTargetDepthStencilBuffer(Texture2D::Ref depthStencil, float depth = 1.0f, uint32_t stencil = 0) = 0;
+        virtual void beginRenderPass(RenderPass::Ref pass) = 0;
+        virtual void endRenderPass() = 0;
         virtual void setViewport(const Viewport& viewport) = 0;
         virtual void setTopology(Topology topology) = 0;
         virtual void setVertexBuffer(Buffer::Ref buffer, uint32_t length, uint32_t stride) = 0;
@@ -368,8 +401,7 @@ namespace eokas
         virtual void* getWindowHandle() const = 0;
         virtual uint32_t getWidth() const = 0;
         virtual uint32_t getHeight() const = 0;
-        virtual Texture2D::Ref getActiveColorBuffer() = 0;
-        virtual Texture2D::Ref getActiveDepthStencilBuffer() = 0;
+        virtual RenderPass::Ref getActiveRenderPass() = 0;
         virtual void present() = 0;
         virtual void resize(uint32_t width, uint32_t height) = 0;
     };
@@ -389,6 +421,10 @@ namespace eokas
         virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) = 0;
         virtual PipelineBindings::Ref createPipelineBindings(PipelineObject::Ref pipeline) = 0;
         virtual CommandBuffer::Ref createCommandBuffer() = 0;
+        virtual RenderPass::Ref createRenderPass(
+            const RenderPassOptions& options,
+            const std::vector<Texture2D::Ref>& colorBuffers,
+            Texture2D::Ref depthStencil = nullptr) = 0;
         virtual void commitCommandBuffer(CommandBuffer::Ref commandBuffer) = 0;
         virtual void waitForGPU() = 0;
         virtual void waitForNextFrame() = 0;

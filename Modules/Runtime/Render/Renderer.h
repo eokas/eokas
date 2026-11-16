@@ -39,8 +39,8 @@ namespace eokas
         CommandBuffer::Ref mCommandBuffer;
         Texture2D::Ref mShadowColor;
         Texture2D::Ref mShadowDepth;
+        RenderPass::Ref mShadowPass;
         Material::Ref mShadowMaterial;
-        bool mShadowAsShaderResource = false;
         static constexpr uint32_t kShadowMapSize = 2048;
     };
 }

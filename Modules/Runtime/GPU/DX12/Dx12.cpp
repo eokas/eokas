@@ -639,6 +639,91 @@ namespace eokas
         if (createRTV)
             this->createRTV(device);
     }
+
+    namespace
+    {
+        void validateDepthOptionsMatch(bool hasDepthTexture, const std::optional<RenderPassAttachment>& depthStencil)
+        {
+            if (hasDepthTexture != depthStencil.has_value())
+            {
+                throw std::runtime_error("RenderPass: depthStencil texture and options.depthStencil must both be set or both be absent.");
+            }
+        }
+
+        RenderPassOptions resolveOptions(const RenderPassOptions& options, uint32_t colorAttachmentCount)
+        {
+            if (colorAttachmentCount == 0)
+                throw std::runtime_error("RenderPass: colorBuffers must not be empty.");
+            if (options.colors.empty())
+                throw std::runtime_error("RenderPass: options.colors must not be empty.");
+
+            RenderPassOptions resolved = options;
+            if (resolved.colors.size() == 1 && colorAttachmentCount > 1)
+            {
+                RenderPassAttachment broadcast = resolved.colors[0];
+                resolved.colors.assign(colorAttachmentCount, broadcast);
+            }
+            else if (resolved.colors.size() != colorAttachmentCount)
+            {
+                throw std::runtime_error("RenderPass: options.colors size must match colorBuffers size or be 1 for broadcast.");
+            }
+            return resolved;
+        }
+
+        void validateColorBuffers(const std::vector<Texture2D::Ref>& colorBuffers)
+        {
+            for (const Texture2D::Ref& colorBuffer : colorBuffers)
+            {
+                auto* dxColor = dynamic_cast<DX12Texture2D*>(colorBuffer.get());
+                if (!dxColor || dxColor->mRtv.ptr == 0)
+                    throw std::runtime_error("RenderPass: color buffer missing RTV.");
+            }
+        }
+
+        void validateDepthStencilBuffer(Texture2D::Ref depthStencil)
+        {
+            if (!depthStencil)
+                return;
+            auto* dxDepth = dynamic_cast<DX12Texture2D*>(depthStencil.get());
+            if (!dxDepth || dxDepth->mDsv.ptr == 0)
+                throw std::runtime_error("RenderPass: depthStencil buffer missing DSV.");
+        }
+    }
+
+    DX12RenderPass::DX12RenderPass(RenderPassOptions resolvedOptions,
+        const std::vector<Texture2D::Ref>& colorBuffers,
+        Texture2D::Ref depthStencil)
+        : mOptions(std::move(resolvedOptions))
+        , mColorBuffers(colorBuffers)
+        , mDepthStencil(std::move(depthStencil))
+    {
+    }
+
+    RenderPassOptions DX12RenderPass::getOptions() const
+    {
+        return mOptions;
+    }
+
+    void DX12RenderPass::setOptions(const RenderPassOptions& options)
+    {
+        validateDepthOptionsMatch(mDepthStencil != nullptr, options.depthStencil);
+        if (options.colors.size() != mColorBuffers.size())
+            throw std::runtime_error("RenderPass::setOptions: options.colors must be resolved (size matches color attachments).");
+
+        mOptions = options;
+        mOptions = resolveOptions(mOptions, (uint32_t)mColorBuffers.size());
+        validateDepthOptionsMatch(mDepthStencil != nullptr, mOptions.depthStencil);
+    }
+
+    const std::vector<Texture2D::Ref>& DX12RenderPass::getColorBuffers() const
+    {
+        return mColorBuffers;
+    }
+
+    Texture2D::Ref DX12RenderPass::getDepthStencilBuffer() const
+    {
+        return mDepthStencil;
+    }
     
     DX12ShaderProgram::DX12ShaderProgram(const DX12Device& device, const ShaderOptions& options)
         : mOptions(options)
@@ -1206,6 +1291,8 @@ namespace eokas
         }
         _ThrowIfFailed(mCommandList->Reset(mCommandAllocator.Get(), pso));
         mClosed = false;
+        mInsideRenderPass = false;
+        mActiveRenderPass.reset();
         if (mCurrentPipeline)
         {
             setPipelineObject(mCurrentPipeline);
@@ -1273,23 +1360,51 @@ namespace eokas
         }
     }
     
-    void DX12CommandBuffer::setRenderTarget(const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencil)
+    void DX12CommandBuffer::transitionTexture(DX12Texture2D* texture, D3D12_RESOURCE_STATES after)
     {
-        if (colorBuffers.empty())
-        {
-            throw std::runtime_error("CommandBuffer: setRenderTarget requires at least one color buffer.");
-        }
+        if (!texture || !texture->mResource)
+            return;
+        if (texture->mState == after)
+            return;
+
+        D3D12_RESOURCE_BARRIER barrier = {};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = texture->mResource.Get();
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        barrier.Transition.StateBefore = texture->mState;
+        barrier.Transition.StateAfter = after;
+        mCommandList->ResourceBarrier(1, &barrier);
+        texture->mState = after;
+    }
+
+    void DX12CommandBuffer::beginRenderPass(RenderPass::Ref pass)
+    {
+        if (mInsideRenderPass)
+            throw std::runtime_error("CommandBuffer: nested render passes are not supported.");
+        auto* dxPass = dynamic_cast<DX12RenderPass*>(pass.get());
+        if (!dxPass)
+            throw std::runtime_error("CommandBuffer: invalid render pass.");
+
+        const RenderPassOptions& options = dxPass->mOptions;
+        const std::vector<Texture2D::Ref>& colorBuffers = dxPass->getColorBuffers();
+        Texture2D::Ref depthStencil = dxPass->getDepthStencilBuffer();
+
+        if (options.colors.size() != colorBuffers.size())
+            throw std::runtime_error("CommandBuffer: render pass options are not resolved.");
 
         std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
         rtvs.reserve(colorBuffers.size());
-        for (const Texture2D::Ref& colorBuffer : colorBuffers)
+        for (size_t i = 0; i < colorBuffers.size(); ++i)
         {
-            auto* dxColor = dynamic_cast<DX12Texture2D*>(colorBuffer.get());
+            auto* dxColor = dynamic_cast<DX12Texture2D*>(colorBuffers[i].get());
             if (!dxColor || dxColor->mRtv.ptr == 0)
-            {
-                throw std::runtime_error("CommandBuffer: setRenderTarget color buffer missing RTV.");
-            }
+                throw std::runtime_error("CommandBuffer: color buffer missing RTV.");
+            transitionTexture(dxColor, D3D12_RESOURCE_STATE_RENDER_TARGET);
             rtvs.push_back(dxColor->mRtv);
+
+            const RenderPassAttachment& att = options.colors[i];
+            if (att.loadOp == RenderPassLoadOp::Clear)
+                mCommandList->ClearRenderTargetView(dxColor->mRtv, att.clearColor, 0, nullptr);
         }
 
         const D3D12_CPU_DESCRIPTOR_HANDLE* dsv = nullptr;
@@ -1297,38 +1412,62 @@ namespace eokas
         if (depthStencil)
         {
             auto* dxDepth = dynamic_cast<DX12Texture2D*>(depthStencil.get());
-            if (dxDepth && dxDepth->mDsv.ptr != 0)
+            if (!dxDepth || dxDepth->mDsv.ptr == 0)
+                throw std::runtime_error("CommandBuffer: depthStencil buffer missing DSV.");
+            transitionTexture(dxDepth, D3D12_RESOURCE_STATE_DEPTH_WRITE);
+            depthHandle = dxDepth->mDsv;
+            dsv = &depthHandle;
+
+            if (options.depthStencil && options.depthStencil->loadOp == RenderPassLoadOp::Clear)
             {
-                depthHandle = dxDepth->mDsv;
-                dsv = &depthHandle;
+                const RenderPassAttachment& depthAtt = *options.depthStencil;
+                D3D12_CLEAR_FLAGS flags = D3D12_CLEAR_FLAG_DEPTH;
+                if (dxDepth->getOptions().format == Format::D24_UNORM_S8_UINT)
+                    flags |= D3D12_CLEAR_FLAG_STENCIL;
+                mCommandList->ClearDepthStencilView(dxDepth->mDsv, flags, depthAtt.clearDepth, (UINT8)depthAtt.clearStencil, 0, nullptr);
             }
         }
+
         mCommandList->OMSetRenderTargets((UINT)rtvs.size(), rtvs.data(), FALSE, dsv);
-    }
-    
-    void DX12CommandBuffer::clearRenderTargetColorBuffer(Texture2D::Ref colorBuffer, float(& clearColor)[4])
-    {
-        auto* dxColor = dynamic_cast<DX12Texture2D*>(colorBuffer.get());
-        if (!dxColor || dxColor->mRtv.ptr == 0)
-        {
-            throw std::runtime_error("CommandBuffer: clearRenderTargetColorBuffer requires a color attachment.");
-        }
-        mCommandList->ClearRenderTargetView(dxColor->mRtv, clearColor, 0, nullptr);
+
+        mActiveRenderPass = std::move(pass);
+        mInsideRenderPass = true;
     }
 
-    void DX12CommandBuffer::clearRenderTargetDepthStencilBuffer(Texture2D::Ref depthStencil, float depth, uint32_t stencil)
+    void DX12CommandBuffer::endRenderPass()
     {
-        auto* dxDepth = dynamic_cast<DX12Texture2D*>(depthStencil.get());
-        if (!dxDepth || dxDepth->mDsv.ptr == 0)
+        if (!mInsideRenderPass || !mActiveRenderPass)
+            throw std::runtime_error("CommandBuffer: endRenderPass without beginRenderPass.");
+
+        auto* dxPass = dynamic_cast<DX12RenderPass*>(mActiveRenderPass.get());
+        const RenderPassOptions& options = dxPass->mOptions;
+        const std::vector<Texture2D::Ref>& colorBuffers = dxPass->getColorBuffers();
+        Texture2D::Ref depthStencil = dxPass->getDepthStencilBuffer();
+
+        for (size_t i = 0; i < colorBuffers.size(); ++i)
         {
-            return;
+            const RenderPassAttachment& att = options.colors[i];
+            if (att.storeOp != RenderPassStoreOp::Store)
+                continue;
+            auto* dxColor = dynamic_cast<DX12Texture2D*>(colorBuffers[i].get());
+            if (!dxColor)
+                continue;
+            D3D12_RESOURCE_STATES after = DX12Utils::transferResourceState(att.storeState);
+            transitionTexture(dxColor, after);
         }
-        D3D12_CLEAR_FLAGS flags = D3D12_CLEAR_FLAG_DEPTH;
-        if (dxDepth->getOptions().format == Format::D24_UNORM_S8_UINT)
+
+        if (depthStencil && options.depthStencil && options.depthStencil->storeOp == RenderPassStoreOp::Store)
         {
-            flags |= D3D12_CLEAR_FLAG_STENCIL;
+            auto* dxDepth = dynamic_cast<DX12Texture2D*>(depthStencil.get());
+            if (dxDepth)
+            {
+                D3D12_RESOURCE_STATES after = DX12Utils::transferResourceState(options.depthStencil->storeState);
+                transitionTexture(dxDepth, after);
+            }
         }
-        mCommandList->ClearDepthStencilView(dxDepth->mDsv, flags, depth, (UINT8)stencil, 0, nullptr);
+
+        mInsideRenderPass = false;
+        mActiveRenderPass.reset();
     }
     
     void DX12CommandBuffer::setViewport(const Viewport& viewport)
@@ -1736,6 +1875,7 @@ namespace eokas
         mDevice.releaseSurfaceResources();
         for (uint32_t i = 0; i < kFrameCount; i++)
         {
+            mFrames[i].pass.reset();
             mFrames[i].color.reset();
             mFrames[i].depth.reset();
         }
@@ -1745,6 +1885,19 @@ namespace eokas
 
     void DX12Surface::createTargets()
     {
+        RenderPassAttachment swapColor;
+        swapColor.loadOp = RenderPassLoadOp::Clear;
+        swapColor.storeOp = RenderPassStoreOp::Store;
+        swapColor.storeState = ResourceState::Present;
+
+        RenderPassOptions swapOptions;
+        swapOptions.colors.push_back(swapColor);
+
+        RenderPassAttachment swapDepth;
+        swapDepth.loadOp = RenderPassLoadOp::Clear;
+        swapDepth.storeOp = RenderPassStoreOp::DontCare;
+        swapOptions.depthStencil = swapDepth;
+
         for (UINT i = 0; i < kFrameCount; i++)
         {
             ComPtr<ID3D12Resource> backBuffer;
@@ -1767,6 +1920,7 @@ namespace eokas
             depthOptions.mipCount = 1;
             depthOptions.usage = TextureUsage::DepthStencilAttachment;
             mFrames[i].depth = std::make_shared<DX12Texture2D>(mDevice, depthOptions);
+            mFrames[i].pass = mDevice.createRenderPass(swapOptions, { mFrames[i].color }, mFrames[i].depth);
         }
 
         mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
@@ -1799,14 +1953,9 @@ namespace eokas
         return mHeight;
     }
 
-    Texture2D::Ref DX12Surface::getActiveColorBuffer()
+    RenderPass::Ref DX12Surface::getActiveRenderPass()
     {
-        return mFrames[mFrameBufferIndex].color;
-    }
-
-    Texture2D::Ref DX12Surface::getActiveDepthStencilBuffer()
-    {
-        return mFrames[mFrameBufferIndex].depth;
+        return mFrames[mFrameBufferIndex].pass;
     }
 
     void DX12Surface::present()
@@ -1824,6 +1973,7 @@ namespace eokas
         mDevice.releaseSurfaceResources();
         for (uint32_t i = 0; i < kFrameCount; i++)
         {
+            mFrames[i].pass.reset();
             mFrames[i].color.reset();
             mFrames[i].depth.reset();
         }
@@ -1888,6 +2038,20 @@ namespace eokas
         auto commandBuffer = std::make_shared<DX12CommandBuffer>(*this);
         mCommandBuffers.push_back(commandBuffer);
         return commandBuffer;
+    }
+
+    RenderPass::Ref DX12Device::createRenderPass(
+        const RenderPassOptions& options,
+        const std::vector<Texture2D::Ref>& colorBuffers,
+        Texture2D::Ref depthStencil)
+    {
+        validateDepthOptionsMatch(depthStencil != nullptr, options.depthStencil);
+        validateColorBuffers(colorBuffers);
+        validateDepthStencilBuffer(depthStencil);
+
+        RenderPassOptions resolved = resolveOptions(options, (uint32_t)colorBuffers.size());
+        validateDepthOptionsMatch(depthStencil != nullptr, resolved.depthStencil);
+        return std::make_shared<DX12RenderPass>(std::move(resolved), colorBuffers, depthStencil);
     }
     
     void DX12Device::commitCommandBuffer(const CommandBuffer::Ref commandBuffer)

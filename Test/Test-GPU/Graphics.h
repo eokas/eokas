@@ -181,30 +181,20 @@ namespace eokas::gpu {
                 mCommandBuffer->setPipelineBindings(mPipelineBindings);
                 mCommandBuffer->setViewport(mViewport);
                 
-                Texture2D::Ref color = mSurface->getActiveColorBuffer();
-                Texture2D::Ref depth = mSurface->getActiveDepthStencilBuffer();
-                
-                Barrier begin;
-                begin.resource = color;
-                begin.before = ResourceState::Present;
-                begin.after = ResourceState::RenderTarget;
-                mCommandBuffer->barrier({begin});
-                
-                mCommandBuffer->setRenderTarget({ color }, depth);
-                float clearColor[4] = {0.0f, 0.2f, 0.4f, 1.0f};
-                mCommandBuffer->clearRenderTargetColorBuffer(color, clearColor);
-                mCommandBuffer->clearRenderTargetDepthStencilBuffer(depth);
+                RenderPass::Ref mainPass = mSurface->getActiveRenderPass();
+                RenderPassOptions mainOpts = mainPass->getOptions();
+                mainOpts.colors[0].clearColor[0] = 0.0f;
+                mainOpts.colors[0].clearColor[1] = 0.2f;
+                mainOpts.colors[0].clearColor[2] = 0.4f;
+                mainOpts.colors[0].clearColor[3] = 1.0f;
+                mainPass->setOptions(mainOpts);
+                mCommandBuffer->beginRenderPass(mainPass);
                 mCommandBuffer->setTopology(Topology::TriangleList);
                 mCommandBuffer->setVertexBuffer(mVertexBuffer, vDataLength, vDataStride);
                 mCommandBuffer->setIndexBuffer(mIndexBuffer, iDataLength, iDataFormat);
                 mCommandBuffer->drawIndexedInstanced(mIndexCount, 1, 0, 0, 0);
                 
-                Barrier end;
-                end.resource = color;
-                end.before = ResourceState::RenderTarget;
-                end.after = ResourceState::Present;
-                mCommandBuffer->barrier({end});
-                
+                mCommandBuffer->endRenderPass();
                 mCommandBuffer->close();
             }
             
