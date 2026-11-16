@@ -65,13 +65,29 @@ EOKAS_TEST_CASE(device) {
 EOKAS_TEST_CASE(mrt_pso) {
     try {
         Device::Ref device = GPUFactory::createDevice();
-        RenderTargetOptions rtOptions;
-        rtOptions.width = 4;
-        rtOptions.height = 4;
-        rtOptions.colorFormats = { Format::R8G8B8A8_UNORM, Format::R8G8B8A8_UNORM };
-        rtOptions.depthStencilFormat = Format::D32_FLOAT;
-        RenderTarget::Ref renderTarget = device->createRenderTarget(rtOptions);
-        EOKAS_EXPECT(renderTarget->getColorBufferCount() == 2);
+        TextureOptions color0;
+        color0.width = 4;
+        color0.height = 4;
+        color0.format = Format::R8G8B8A8_UNORM;
+        color0.usage = TextureUsage::ColorAttachment;
+        TextureOptions color1 = color0;
+        TextureOptions depth;
+        depth.width = 4;
+        depth.height = 4;
+        depth.format = Format::D32_FLOAT;
+        depth.usage = TextureUsage::DepthStencilAttachment;
+
+        Texture2D::Ref rtColor0 = device->createTexture2D(color0);
+        Texture2D::Ref rtColor1 = device->createTexture2D(color1);
+        Texture2D::Ref rtDepth = device->createTexture2D(depth);
+
+        EOKAS_EXPECT(rtColor0->getOptions().width == 4);
+        EOKAS_EXPECT(rtColor0->getOptions().height == 4);
+        EOKAS_EXPECT(rtColor1->getOptions().format == Format::R8G8B8A8_UNORM);
+        EOKAS_EXPECT(rtDepth->getOptions().format == Format::D32_FLOAT);
+        EOKAS_EXPECT(rtColor0->getOptions().usage == TextureUsage::ColorAttachment);
+        EOKAS_EXPECT(rtDepth->getOptions().usage == TextureUsage::DepthStencilAttachment);
+        (void)rtColor1;
 
         static const char* vsSource = R"(
             struct VSOut { float4 pos : SV_POSITION; };

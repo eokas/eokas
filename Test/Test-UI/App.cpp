@@ -3,6 +3,7 @@
 #define WIN32_LEAN_AND_MEAN
 
 #include "./Graphics.h"
+#include "Base/Main.h"
 #include <dbghelp.h>
 #include <cstdio>
 #include <cstring>
@@ -16,6 +17,26 @@ const int windowHeight = 720;
 
 namespace
 {
+    void setWorkingDirectoryToContentRoot()
+    {
+        eokas::String cursor = eokas::File::basePath(eokas::Process::executingPath());
+        for (int i = 0; i < 8; ++i)
+        {
+            if (cursor.isEmpty())
+                break;
+            eokas::String contentDir = eokas::File::combinePath(cursor, "Content");
+            if (eokas::File::isFolder(contentDir))
+            {
+                SetCurrentDirectoryA(cursor.cstr());
+                return;
+            }
+            eokas::String parent = eokas::File::basePath(cursor);
+            if (parent == cursor)
+                break;
+            cursor = parent;
+        }
+    }
+
     constexpr DWORD kCppExceptionCode = 0xE06D7363;
 
     thread_local char g_exceptionStack[12288];
@@ -190,6 +211,7 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
 
     try {
         [[maybe_unused]] VectoredExceptionGuard exceptionStack;
+        setWorkingDirectoryToContentRoot();
 
         eokas::ui::Graphics graphics;
         if (!graphics.init((float)windowWidth, (float)windowHeight))

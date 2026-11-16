@@ -9,11 +9,11 @@ namespace eokas
     class UIMenuItem : public UIWidget
     {
     public:
-        float paddingX = 12.0f;
-        float paddingY = 2.0f;
-        Color background { Color(0.16f, 0.16f, 0.20f, 1.0f) };
-        Color hoverFill { Color(0.28f, 0.38f, 0.58f, 1.0f) };
-        Color selectedFill { Color(0.32f, 0.44f, 0.68f, 1.0f) };
+        float padding = 8.0f;
+        float hoverInset = 4.0f;
+        Color background { Color(0.0f, 0.0f, 0.0f, 0.0f) };
+        Color hoverFill { Color(0.902f, 0.910f, 0.925f, 1.0f) };
+        Color selectedFill { Color(0.890f, 0.918f, 0.953f, 1.0f) };
         bool selected = false;
         bool showChip = false;
         Color chip { Color(0.39f, 0.40f, 0.95f, 1.0f) };
@@ -34,8 +34,9 @@ namespace eokas
     {
     public:
         UIDirection direction = UIDirection::Horizontal;
-        float padding = 2.0f;
+        float padding = 4.0f;
         float spacing = 0.0f;
+        UIStrokeStyle border { Color(0.0f, 0.0f, 0.0f, 0.14f) };
         UIWidget* host = nullptr;
         std::shared_ptr<UIList> list;
 

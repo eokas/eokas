@@ -77,6 +77,13 @@ namespace eokas
         virtual void unmap() = 0;
     };
     
+    enum class TextureUsage
+    {
+        Sampled,
+        ColorAttachment,
+        DepthStencilAttachment,
+    };
+
     struct TextureOptions
     {
         uint32_t width = 0;
@@ -84,6 +91,7 @@ namespace eokas
         uint32_t depth = 0;
         Format format = Format::Unknown;
         uint32_t mipCount = 1;
+        TextureUsage usage = TextureUsage::Sampled;
     };
 
     enum class SamplerFilterMode { Point, Linear, Anisotropic };
@@ -126,26 +134,6 @@ namespace eokas
         using Ref = std::shared_ptr<Texture2D>;
     };
 
-    struct RenderTargetOptions
-    {
-        uint32_t width = 0;
-        uint32_t height = 0;
-        std::vector<Format> colorFormats; // 至少一项；空 vector 对 createRenderTarget 非法
-        Format depthStencilFormat = Format::Unknown;
-    };
-
-    struct RenderTarget
-    {
-        using Ref = std::shared_ptr<RenderTarget>;
-
-        virtual ~RenderTarget() = default;
-        virtual uint32_t getWidth() const = 0;
-        virtual uint32_t getHeight() const = 0;
-        virtual uint32_t getColorBufferCount() const = 0;
-        virtual Texture2D::Ref getColorBuffer(uint32_t index) const = 0;
-        virtual Texture2D::Ref getDepthStencilBuffer() const = 0;
-    };
-    
     struct VertexElement
     {
         std::string semanticName = {};
@@ -356,9 +344,9 @@ namespace eokas
         virtual void open() = 0;
         virtual void setPipelineObject(PipelineObject::Ref pipeline) = 0;
         virtual void setPipelineBindings(PipelineBindings::Ref bindings) = 0;
-        virtual void setRenderTarget(RenderTarget::Ref renderTarget) = 0;
-        virtual void clearRenderTargetColorBuffer(RenderTarget::Ref renderTarget, uint32_t colorIndex, float(& color)[4]) = 0;
-        virtual void clearRenderTargetDepthStencilBuffer(RenderTarget::Ref renderTarget, float depth = 1.0f, uint32_t stencil = 0) = 0;
+        virtual void setRenderTarget(const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencil = nullptr) = 0;
+        virtual void clearRenderTargetColorBuffer(Texture2D::Ref colorBuffer, float(& clearColor)[4]) = 0;
+        virtual void clearRenderTargetDepthStencilBuffer(Texture2D::Ref depthStencil, float depth = 1.0f, uint32_t stencil = 0) = 0;
         virtual void setViewport(const Viewport& viewport) = 0;
         virtual void setTopology(Topology topology) = 0;
         virtual void setVertexBuffer(Buffer::Ref buffer, uint32_t length, uint32_t stride) = 0;
@@ -380,7 +368,8 @@ namespace eokas
         virtual void* getWindowHandle() const = 0;
         virtual uint32_t getWidth() const = 0;
         virtual uint32_t getHeight() const = 0;
-        virtual RenderTarget::Ref getActiveRenderTarget() = 0;
+        virtual Texture2D::Ref getActiveColorBuffer() = 0;
+        virtual Texture2D::Ref getActiveDepthStencilBuffer() = 0;
         virtual void present() = 0;
         virtual void resize(uint32_t width, uint32_t height) = 0;
     };
@@ -395,7 +384,6 @@ namespace eokas
         virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) = 0;
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length) = 0;
         virtual Texture2D::Ref createTexture2D(const TextureOptions& options) = 0;
-        virtual RenderTarget::Ref createRenderTarget(const RenderTargetOptions& options) = 0;
         virtual ShaderProgram::Ref createShaderProgram(const ShaderOptions& options) = 0;
         virtual PipelineObject::Ref createPipelineObject() = 0;
         virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) = 0;

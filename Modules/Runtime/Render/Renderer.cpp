@@ -60,7 +60,8 @@ namespace eokas
     void Renderer::destroy()
     {
         mShadowMaterial.reset();
-        mShadowTarget.reset();
+        mShadowColor.reset();
+        mShadowDepth.reset();
         mShadowAsShaderResource = false;
         mCommandBuffer.reset();
         mDevice.reset();
@@ -89,14 +90,22 @@ namespace eokas
 
     void Renderer::ensureShadowPass()
     {
-        if (!mShadowTarget)
+        if (!mShadowColor)
         {
-            RenderTargetOptions options;
-            options.width = kShadowMapSize;
-            options.height = kShadowMapSize;
-            options.colorFormats.push_back(Format::R32_FLOAT);
-            options.depthStencilFormat = Format::D32_FLOAT;
-            mShadowTarget = mDevice->createRenderTarget(options);
+            TextureOptions color;
+            color.width = kShadowMapSize;
+            color.height = kShadowMapSize;
+            color.format = Format::R32_FLOAT;
+            color.usage = TextureUsage::ColorAttachment;
+            mShadowColor = mDevice->createTexture2D(color);
+
+            TextureOptions depth;
+            depth.width = kShadowMapSize;
+            depth.height = kShadowMapSize;
+            depth.format = Format::D32_FLOAT;
+            depth.usage = TextureUsage::DepthStencilAttachment;
+            mShadowDepth = mDevice->createTexture2D(depth);
+
             mShadowAsShaderResource = false;
         }
 
@@ -181,9 +190,7 @@ namespace eokas
         shadowSampler.addressV = SamplerAddressMode::Clamp;
         shadowSampler.addressW = SamplerAddressMode::Clamp;
 
-        Texture::Ref shadowTex;
-        if (mShadowTarget)
-            shadowTex = mShadowTarget->getColorBuffer(0);
+        Texture::Ref shadowTex = mShadowColor;
 
         for (auto& p : space.primitives)
         {
@@ -245,7 +252,7 @@ namespace eokas
 
     void Renderer::renderShadowPass(CommandBuffer::Ref cmd, Space& space)
     {
-        Texture2D::Ref shadowColor = mShadowTarget->getColorBuffer(0);
+        Texture2D::Ref shadowColor = mShadowColor;
         if (mShadowAsShaderResource)
         {
             Barrier toTarget{shadowColor, ResourceState::ShaderResource, ResourceState::RenderTarget};
@@ -261,10 +268,10 @@ namespace eokas
         viewport.front = 0.0f;
         viewport.back = 1.0f;
         cmd->setViewport(viewport);
-        cmd->setRenderTarget(mShadowTarget);
+        cmd->setRenderTarget({ mShadowColor }, mShadowDepth);
         float clearColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
-        cmd->clearRenderTargetColorBuffer(mShadowTarget, 0, clearColor);
-        cmd->clearRenderTargetDepthStencilBuffer(mShadowTarget);
+        cmd->clearRenderTargetColorBuffer(mShadowColor, clearColor);
+        cmd->clearRenderTargetDepthStencilBuffer(mShadowDepth);
 
         for (auto& p : space.primitives)
         {
@@ -293,7 +300,7 @@ namespace eokas
 
         Light::Ref sun;
         int sunIndex = -1;
-        bool doShadow = mShadowTarget && mShadowMaterial && mShadowMaterial->isReady()
+        bool doShadow = mShadowColor && mShadowDepth && mShadowMaterial && mShadowMaterial->isReady()
             && findSunLight(space, sun, sunIndex);
         if (doShadow)
         {
@@ -328,14 +335,14 @@ namespace eokas
             renderShadowPass(mCommandBuffer, space);
 
         mCommandBuffer->setViewport(cam->viewport);
-        RenderTarget::Ref fb = surface->getActiveRenderTarget();
-        Texture2D::Ref color = fb->getColorBuffer(0);
+        Texture2D::Ref color = surface->getActiveColorBuffer();
+        Texture2D::Ref depth = surface->getActiveDepthStencilBuffer();
         Barrier begin{color, ResourceState::Present, ResourceState::RenderTarget};
         mCommandBuffer->barrier({begin});
-        mCommandBuffer->setRenderTarget(fb);
+        mCommandBuffer->setRenderTarget({ color }, depth);
         float c[4] = {space.clearColor.r, space.clearColor.g, space.clearColor.b, space.clearColor.a};
-        mCommandBuffer->clearRenderTargetColorBuffer(fb, 0, c);
-        mCommandBuffer->clearRenderTargetDepthStencilBuffer(fb);
+        mCommandBuffer->clearRenderTargetColorBuffer(color, c);
+        mCommandBuffer->clearRenderTargetDepthStencilBuffer(depth);
 
         for (auto& p : space.primitives)
         {

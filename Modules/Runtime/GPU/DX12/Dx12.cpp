@@ -322,157 +322,6 @@ namespace eokas
         return handle;
     }
     
-    DX12RenderTarget::DX12RenderTarget(DX12Device& device, const RenderTargetOptions& options)
-        : DX12RenderTarget(
-            device,
-            createColorBuffers(device, options),
-            options.depthStencilFormat == Format::Unknown
-                ? nullptr
-                : createDepthBuffer(device, options.width, options.height, options.depthStencilFormat))
-    {
-    }
-
-    DX12RenderTarget::DX12RenderTarget(DX12Device& device, const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencilBuffer)
-        : mDevice(device)
-        , mColorBuffers(colorBuffers)
-        , mDepthStencilBuffer(depthStencilBuffer)
-    {
-        if (mColorBuffers.empty())
-        {
-            throw std::runtime_error("DX12RenderTarget requires at least one color buffer.");
-        }
-        const TextureOptions& size = mColorBuffers[0]->getOptions();
-        mWidth = size.width;
-        mHeight = size.height;
-        createViews();
-    }
-
-    std::vector<Texture2D::Ref> DX12RenderTarget::createColorBuffers(DX12Device& device, const RenderTargetOptions& options)
-    {
-        if (options.colorFormats.empty())
-        {
-            throw std::runtime_error("RenderTargetOptions requires at least one color format.");
-        }
-        std::vector<Texture2D::Ref> colors;
-        colors.reserve(options.colorFormats.size());
-        for (Format format : options.colorFormats)
-        {
-            colors.push_back(createColorBuffer(device, options.width, options.height, format));
-        }
-        return colors;
-    }
-
-    void DX12RenderTarget::createViews()
-    {
-        const u32_t colorCount = (u32_t)mColorBuffers.size();
-        mRTVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::RTV, colorCount);
-        for (const Texture2D::Ref& color : mColorBuffers)
-        {
-            createColorView(color);
-        }
-        if (mDepthStencilBuffer)
-        {
-            mDSVHeap = std::make_shared<DX12DescriptorHeap>(mDevice, DX12DescriptorHeap::Usage::DSV, 1);
-            createDepthView();
-        }
-    }
-
-    uint32_t DX12RenderTarget::getWidth() const { return mWidth; }
-    uint32_t DX12RenderTarget::getHeight() const { return mHeight; }
-    uint32_t DX12RenderTarget::getColorBufferCount() const { return (uint32_t)mColorBuffers.size(); }
-
-    Texture2D::Ref DX12RenderTarget::getColorBuffer(uint32_t index) const
-    {
-        return mColorBuffers.at(index);
-    }
-
-    Texture2D::Ref DX12RenderTarget::getDepthStencilBuffer() const
-    {
-        return mDepthStencilBuffer;
-    }
-
-    Texture2D::Ref DX12RenderTarget::createColorBuffer(DX12Device& device, uint32_t width, uint32_t height, Format format)
-    {
-        TextureOptions tex;
-        tex.width = width;
-        tex.height = height;
-        tex.format = format;
-        tex.mipCount = 1;
-
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width = width;
-        desc.Height = height;
-        desc.DepthOrArraySize = 1;
-        desc.MipLevels = 1;
-        desc.Format = DX12Utils::transferFormat(format);
-        desc.SampleDesc.Count = 1;
-        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-
-        D3D12_CLEAR_VALUE clearValue = {};
-        clearValue.Format = desc.Format;
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-        ComPtr<ID3D12Resource> resource;
-        _ThrowIfFailed(device.mDevice->CreateCommittedResource(
-            &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-            D3D12_RESOURCE_STATE_RENDER_TARGET, &clearValue, IID_PPV_ARGS(&resource)));
-        return std::make_shared<DX12Texture2D>(tex, resource, D3D12_RESOURCE_STATE_RENDER_TARGET);
-    }
-
-    void DX12RenderTarget::createColorView(Texture2D::Ref color)
-    {
-        auto* dxColor = dynamic_cast<DX12Texture2D*>(color.get());
-        D3D12_CPU_DESCRIPTOR_HANDLE view = mRTVHeap->acquire();
-        mDevice.mDevice->CreateRenderTargetView(dxColor->mResource.Get(), nullptr, view);
-        mColorViews.push_back(view);
-    }
-
-    Texture2D::Ref DX12RenderTarget::createDepthBuffer(DX12Device& device, uint32_t width, uint32_t height, Format format)
-    {
-        TextureOptions tex;
-        tex.width = width;
-        tex.height = height;
-        tex.format = format;
-        tex.mipCount = 1;
-
-        D3D12_RESOURCE_DESC desc = {};
-        desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        desc.Width = width;
-        desc.Height = height;
-        desc.DepthOrArraySize = 1;
-        desc.MipLevels = 1;
-        desc.Format = DX12Utils::transferFormat(format);
-        desc.SampleDesc.Count = 1;
-        desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-        D3D12_CLEAR_VALUE clearValue = {};
-        clearValue.Format = desc.Format;
-        clearValue.DepthStencil.Depth = 1.0f;
-        clearValue.DepthStencil.Stencil = 0;
-        D3D12_HEAP_PROPERTIES heapProps = {};
-        heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-
-        ComPtr<ID3D12Resource> resource;
-        _ThrowIfFailed(device.mDevice->CreateCommittedResource(
-            &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
-            D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue, IID_PPV_ARGS(&resource)));
-        return std::make_shared<DX12Texture2D>(tex, resource, D3D12_RESOURCE_STATE_DEPTH_WRITE);
-    }
-
-    void DX12RenderTarget::createDepthView()
-    {
-        auto* dxDepth = dynamic_cast<DX12Texture2D*>(mDepthStencilBuffer.get());
-        mDepthView = mDSVHeap->acquire();
-        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
-        dsvDesc.Format = DX12Utils::transferFormat(dxDepth->getOptions().format);
-        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-        mDevice.mDevice->CreateDepthStencilView(dxDepth->mResource.Get(), &dsvDesc, mDepthView);
-    }
-
     DX12StaticBuffer::DX12StaticBuffer(const DX12Device& device, uint32_t length)
     {
         auto& dxDevice = device.mDevice;
@@ -674,25 +523,85 @@ namespace eokas
         : mOptions(options)
     {
         auto& dxDevice = device.mDevice;
-        
-        // 1. 准备纹理数据和描述符
-        D3D12_RESOURCE_DESC textureDesc = {};
-        textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-        textureDesc.Alignment = 0;
-        textureDesc.Width = options.width;
-        textureDesc.Height = options.height;
-        textureDesc.DepthOrArraySize = 1;
-        textureDesc.MipLevels = options.mipCount;
-        textureDesc.Format = DX12Utils::transferFormat(options.format);
-        textureDesc.SampleDesc.Count = 1;
-        textureDesc.SampleDesc.Quality = 0;
-        textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-        textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-        
-        // 2. 创建纹理资源
-        D3D12_HEAP_PROPERTIES textureHeapProps = {};
-        textureHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
-        _ThrowIfFailed(dxDevice->CreateCommittedResource(&textureHeapProps, D3D12_HEAP_FLAG_NONE, &textureDesc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mResource)));
+
+        switch (options.usage)
+        {
+        case TextureUsage::Sampled:
+        {
+            D3D12_RESOURCE_DESC textureDesc = {};
+            textureDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            textureDesc.Alignment = 0;
+            textureDesc.Width = options.width;
+            textureDesc.Height = options.height;
+            textureDesc.DepthOrArraySize = 1;
+            textureDesc.MipLevels = options.mipCount;
+            textureDesc.Format = DX12Utils::transferFormat(options.format);
+            textureDesc.SampleDesc.Count = 1;
+            textureDesc.SampleDesc.Quality = 0;
+            textureDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+            textureDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+            D3D12_HEAP_PROPERTIES textureHeapProps = {};
+            textureHeapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+            _ThrowIfFailed(dxDevice->CreateCommittedResource(
+                &textureHeapProps, D3D12_HEAP_FLAG_NONE, &textureDesc,
+                D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&mResource)));
+            mState = D3D12_RESOURCE_STATE_COPY_DEST;
+            break;
+        }
+        case TextureUsage::ColorAttachment:
+        {
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            desc.Width = options.width;
+            desc.Height = options.height;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = options.mipCount;
+            desc.Format = DX12Utils::transferFormat(options.format);
+            desc.SampleDesc.Count = 1;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+            desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+
+            D3D12_CLEAR_VALUE clearValue = {};
+            clearValue.Format = desc.Format;
+            D3D12_HEAP_PROPERTIES heapProps = {};
+            heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+            _ThrowIfFailed(dxDevice->CreateCommittedResource(
+                &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+                D3D12_RESOURCE_STATE_RENDER_TARGET, &clearValue, IID_PPV_ARGS(&mResource)));
+            mState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+            createRTV(device);
+            break;
+        }
+        case TextureUsage::DepthStencilAttachment:
+        {
+            D3D12_RESOURCE_DESC desc = {};
+            desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+            desc.Width = options.width;
+            desc.Height = options.height;
+            desc.DepthOrArraySize = 1;
+            desc.MipLevels = options.mipCount;
+            desc.Format = DX12Utils::transferFormat(options.format);
+            desc.SampleDesc.Count = 1;
+            desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+            desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+            D3D12_CLEAR_VALUE clearValue = {};
+            clearValue.Format = desc.Format;
+            clearValue.DepthStencil.Depth = 1.0f;
+            clearValue.DepthStencil.Stencil = 0;
+            D3D12_HEAP_PROPERTIES heapProps = {};
+            heapProps.Type = D3D12_HEAP_TYPE_DEFAULT;
+
+            _ThrowIfFailed(dxDevice->CreateCommittedResource(
+                &heapProps, D3D12_HEAP_FLAG_NONE, &desc,
+                D3D12_RESOURCE_STATE_DEPTH_WRITE, &clearValue, IID_PPV_ARGS(&mResource)));
+            mState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+            createDSV(device);
+            break;
+        }
+        }
     }
     
     void* DX12Texture2D::getNativeResource() const
@@ -705,11 +614,30 @@ namespace eokas
         return this->mOptions;
     }
 
-    DX12Texture2D::DX12Texture2D(const TextureOptions& options, ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES state)
+    void DX12Texture2D::createRTV(const DX12Device& device)
+    {
+        mRtvHeap = std::make_shared<DX12DescriptorHeap>(device, DX12DescriptorHeap::Usage::RTV, 1);
+        mRtv = mRtvHeap->acquire();
+        device.mDevice->CreateRenderTargetView(mResource.Get(), nullptr, mRtv);
+    }
+
+    void DX12Texture2D::createDSV(const DX12Device& device)
+    {
+        mDsvHeap = std::make_shared<DX12DescriptorHeap>(device, DX12DescriptorHeap::Usage::DSV, 1);
+        mDsv = mDsvHeap->acquire();
+        D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+        dsvDesc.Format = DX12Utils::transferFormat(mOptions.format);
+        dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+        device.mDevice->CreateDepthStencilView(mResource.Get(), &dsvDesc, mDsv);
+    }
+
+    DX12Texture2D::DX12Texture2D(const DX12Device& device, const TextureOptions& options, ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES state, bool createRTV)
         : mOptions(options)
         , mResource(std::move(resource))
         , mState(state)
     {
+        if (createRTV)
+            this->createRTV(device);
     }
     
     DX12ShaderProgram::DX12ShaderProgram(const DX12Device& device, const ShaderOptions& options)
@@ -1345,41 +1273,62 @@ namespace eokas
         }
     }
     
-    void DX12CommandBuffer::setRenderTarget(RenderTarget::Ref renderTarget)
+    void DX12CommandBuffer::setRenderTarget(const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencil)
     {
-        auto* dxRT = dynamic_cast<DX12RenderTarget*>(renderTarget.get());
-        if (!dxRT)
+        if (colorBuffers.empty())
         {
-            throw std::runtime_error("CommandBuffer: setRenderTarget requires a DX12RenderTarget.");
+            throw std::runtime_error("CommandBuffer: setRenderTarget requires at least one color buffer.");
         }
-        const D3D12_CPU_DESCRIPTOR_HANDLE* dsv = dxRT->mDepthStencilBuffer ? &dxRT->mDepthView : nullptr;
-        mCommandList->OMSetRenderTargets((UINT)dxRT->mColorViews.size(), dxRT->mColorViews.data(), FALSE, dsv);
+
+        std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> rtvs;
+        rtvs.reserve(colorBuffers.size());
+        for (const Texture2D::Ref& colorBuffer : colorBuffers)
+        {
+            auto* dxColor = dynamic_cast<DX12Texture2D*>(colorBuffer.get());
+            if (!dxColor || dxColor->mRtv.ptr == 0)
+            {
+                throw std::runtime_error("CommandBuffer: setRenderTarget color buffer missing RTV.");
+            }
+            rtvs.push_back(dxColor->mRtv);
+        }
+
+        const D3D12_CPU_DESCRIPTOR_HANDLE* dsv = nullptr;
+        D3D12_CPU_DESCRIPTOR_HANDLE depthHandle = {};
+        if (depthStencil)
+        {
+            auto* dxDepth = dynamic_cast<DX12Texture2D*>(depthStencil.get());
+            if (dxDepth && dxDepth->mDsv.ptr != 0)
+            {
+                depthHandle = dxDepth->mDsv;
+                dsv = &depthHandle;
+            }
+        }
+        mCommandList->OMSetRenderTargets((UINT)rtvs.size(), rtvs.data(), FALSE, dsv);
     }
     
-    void DX12CommandBuffer::clearRenderTargetColorBuffer(RenderTarget::Ref renderTarget, uint32_t colorIndex, float(& color)[4])
+    void DX12CommandBuffer::clearRenderTargetColorBuffer(Texture2D::Ref colorBuffer, float(& clearColor)[4])
     {
-        auto* dxRT = dynamic_cast<DX12RenderTarget*>(renderTarget.get());
-        if (!dxRT)
+        auto* dxColor = dynamic_cast<DX12Texture2D*>(colorBuffer.get());
+        if (!dxColor || dxColor->mRtv.ptr == 0)
         {
-            throw std::runtime_error("CommandBuffer: clearRenderTargetColorBuffer requires a DX12RenderTarget.");
+            throw std::runtime_error("CommandBuffer: clearRenderTargetColorBuffer requires a color attachment.");
         }
-        mCommandList->ClearRenderTargetView(dxRT->mColorViews.at(colorIndex), color, 0, nullptr);
+        mCommandList->ClearRenderTargetView(dxColor->mRtv, clearColor, 0, nullptr);
     }
 
-    void DX12CommandBuffer::clearRenderTargetDepthStencilBuffer(RenderTarget::Ref renderTarget, float depth, uint32_t stencil)
+    void DX12CommandBuffer::clearRenderTargetDepthStencilBuffer(Texture2D::Ref depthStencil, float depth, uint32_t stencil)
     {
-        auto* dxRT = dynamic_cast<DX12RenderTarget*>(renderTarget.get());
-        if (!dxRT || !dxRT->mDepthStencilBuffer)
+        auto* dxDepth = dynamic_cast<DX12Texture2D*>(depthStencil.get());
+        if (!dxDepth || dxDepth->mDsv.ptr == 0)
         {
             return;
         }
         D3D12_CLEAR_FLAGS flags = D3D12_CLEAR_FLAG_DEPTH;
-        auto* dxDepth = dynamic_cast<DX12Texture2D*>(dxRT->mDepthStencilBuffer.get());
         if (dxDepth->getOptions().format == Format::D24_UNORM_S8_UINT)
         {
             flags |= D3D12_CLEAR_FLAG_STENCIL;
         }
-        mCommandList->ClearDepthStencilView(dxRT->mDepthView, flags, depth, (UINT8)stencil, 0, nullptr);
+        mCommandList->ClearDepthStencilView(dxDepth->mDsv, flags, depth, (UINT8)stencil, 0, nullptr);
     }
     
     void DX12CommandBuffer::setViewport(const Viewport& viewport)
@@ -1787,7 +1736,8 @@ namespace eokas
         mDevice.releaseSurfaceResources();
         for (uint32_t i = 0; i < kFrameCount; i++)
         {
-            mFrameBuffers[i].reset();
+            mFrames[i].color.reset();
+            mFrames[i].depth.reset();
         }
         mSwapChain.Reset();
         detach();
@@ -1805,13 +1755,18 @@ namespace eokas
             colorOptions.height = mHeight;
             colorOptions.format = Format::R8G8B8A8_UNORM;
             colorOptions.mipCount = 1;
-            Texture2D::Ref color = std::make_shared<DX12Texture2D>(
-                colorOptions, backBuffer, D3D12_RESOURCE_STATE_PRESENT);
-            Texture2D::Ref depth = DX12RenderTarget::createDepthBuffer(
-                mDevice, mWidth, mHeight, Format::D32_FLOAT);
+            colorOptions.usage = TextureUsage::ColorAttachment;
 
-            mFrameBuffers[i] = std::make_shared<DX12RenderTarget>(
-                mDevice, std::vector<Texture2D::Ref>{color}, depth);
+            mFrames[i].color = std::make_shared<DX12Texture2D>(
+                mDevice, colorOptions, backBuffer, D3D12_RESOURCE_STATE_PRESENT, true);
+
+            TextureOptions depthOptions;
+            depthOptions.width = mWidth;
+            depthOptions.height = mHeight;
+            depthOptions.format = Format::D32_FLOAT;
+            depthOptions.mipCount = 1;
+            depthOptions.usage = TextureUsage::DepthStencilAttachment;
+            mFrames[i].depth = std::make_shared<DX12Texture2D>(mDevice, depthOptions);
         }
 
         mFrameBufferIndex = mSwapChain->GetCurrentBackBufferIndex();
@@ -1844,9 +1799,14 @@ namespace eokas
         return mHeight;
     }
 
-    RenderTarget::Ref DX12Surface::getActiveRenderTarget()
+    Texture2D::Ref DX12Surface::getActiveColorBuffer()
     {
-        return mFrameBuffers[mFrameBufferIndex];
+        return mFrames[mFrameBufferIndex].color;
+    }
+
+    Texture2D::Ref DX12Surface::getActiveDepthStencilBuffer()
+    {
+        return mFrames[mFrameBufferIndex].depth;
     }
 
     void DX12Surface::present()
@@ -1864,7 +1824,8 @@ namespace eokas
         mDevice.releaseSurfaceResources();
         for (uint32_t i = 0; i < kFrameCount; i++)
         {
-            mFrameBuffers[i].reset();
+            mFrames[i].color.reset();
+            mFrames[i].depth.reset();
         }
 
         _ThrowIfFailed(mSwapChain->ResizeBuffers(kFrameCount, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 0));
@@ -1898,15 +1859,6 @@ namespace eokas
         return std::make_shared<DX12Texture2D>(*this, options);
     }
 
-    RenderTarget::Ref DX12Device::createRenderTarget(const RenderTargetOptions& options)
-    {
-        if (options.colorFormats.empty())
-        {
-            throw std::runtime_error("RenderTargetOptions requires at least one color format.");
-        }
-        return std::make_shared<DX12RenderTarget>(*this, options);
-    }
-    
     ShaderProgram::Ref DX12Device::createShaderProgram(const ShaderOptions& options)
     {
         return std::make_shared<DX12ShaderProgram>(*this, options);

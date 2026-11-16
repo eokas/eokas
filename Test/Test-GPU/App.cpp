@@ -7,12 +7,36 @@
 #define WIN32_LEAN_AND_MEAN             
 
 #include "./Graphics.h"
+#include "Base/Main.h"
 
 // 全局变量:
 const char* windowTitle = "001-HelloWorld";
 const char* windowClass = "001-HelloWorld";
 const int windowWidth = 600;
 const int windowHeight = 600;
+
+namespace
+{
+    void setWorkingDirectoryToContentRoot()
+    {
+        eokas::String cursor = eokas::File::basePath(eokas::Process::executingPath());
+        for (int i = 0; i < 8; ++i)
+        {
+            if (cursor.isEmpty())
+                break;
+            eokas::String contentDir = eokas::File::combinePath(cursor, "Content");
+            if (eokas::File::isFolder(contentDir))
+            {
+                SetCurrentDirectoryA(cursor.cstr());
+                return;
+            }
+            eokas::String parent = eokas::File::basePath(cursor);
+            if (parent == cursor)
+                break;
+            cursor = parent;
+        }
+    }
+}
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -40,6 +64,8 @@ int WinMain( _In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LP
 #endif
     
     try {
+        setWorkingDirectoryToContentRoot();
+
         WNDCLASSEXA wcex;
         wcex.cbSize = sizeof(WNDCLASSEXA);
         wcex.style = CS_GLOBALCLASS;

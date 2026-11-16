@@ -37,7 +37,8 @@ namespace eokas
 
         Device::Ref mDevice;
         CommandBuffer::Ref mCommandBuffer;
-        RenderTarget::Ref mShadowTarget;
+        Texture2D::Ref mShadowColor;
+        Texture2D::Ref mShadowDepth;
         Material::Ref mShadowMaterial;
         bool mShadowAsShaderResource = false;
         static constexpr uint32_t kShadowMapSize = 2048;

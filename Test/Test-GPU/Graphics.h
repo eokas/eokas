@@ -63,7 +63,7 @@ namespace eokas::gpu {
             mSpeedZ = Random::range(-0.6f, 0.6f);
             
             // const char* hlsl = "../Content/Shaders/002-Texture.hlsl";
-            const char* hlsl = "../Content/Shaders/003-Diffuse.hlsl";
+            const char* hlsl = "Content/Shaders/003-Diffuse.hlsl";
             auto vs = this->compileShader(hlsl, ShaderType::Vertex, ShaderTarget::SM_5_0, "VSMain");
             auto ps = this->compileShader(hlsl, ShaderType::Fragment, ShaderTarget::SM_5_0, "PSMain");
             
@@ -181,8 +181,8 @@ namespace eokas::gpu {
                 mCommandBuffer->setPipelineBindings(mPipelineBindings);
                 mCommandBuffer->setViewport(mViewport);
                 
-                RenderTarget::Ref frameBuffer = mSurface->getActiveRenderTarget();
-                Texture2D::Ref color = frameBuffer->getColorBuffer(0);
+                Texture2D::Ref color = mSurface->getActiveColorBuffer();
+                Texture2D::Ref depth = mSurface->getActiveDepthStencilBuffer();
                 
                 Barrier begin;
                 begin.resource = color;
@@ -190,10 +190,10 @@ namespace eokas::gpu {
                 begin.after = ResourceState::RenderTarget;
                 mCommandBuffer->barrier({begin});
                 
-                mCommandBuffer->setRenderTarget(frameBuffer);
+                mCommandBuffer->setRenderTarget({ color }, depth);
                 float clearColor[4] = {0.0f, 0.2f, 0.4f, 1.0f};
-                mCommandBuffer->clearRenderTargetColorBuffer(frameBuffer, 0, clearColor);
-                mCommandBuffer->clearRenderTargetDepthStencilBuffer(frameBuffer);
+                mCommandBuffer->clearRenderTargetColorBuffer(color, clearColor);
+                mCommandBuffer->clearRenderTargetDepthStencilBuffer(depth);
                 mCommandBuffer->setTopology(Topology::TriangleList);
                 mCommandBuffer->setVertexBuffer(mVertexBuffer, vDataLength, vDataStride);
                 mCommandBuffer->setIndexBuffer(mIndexBuffer, iDataLength, iDataFormat);

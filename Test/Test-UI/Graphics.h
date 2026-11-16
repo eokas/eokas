@@ -253,8 +253,7 @@ namespace eokas::ui {
             auto addItem = [&](UIMenu& target, const char* title, const Color& background) -> std::shared_ptr<UIMenuItem>
             {
                 auto item = std::make_shared<UIMenuItem>();
-                item->paddingX = 14.0f * s;
-                item->paddingY = 8.0f * s;
+                item->padding = 8.0f * s;
                 item->background = background;
                 item->hoverFill = menuHover;
                 item->setText(title);

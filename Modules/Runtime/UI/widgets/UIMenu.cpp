@@ -1,5 +1,6 @@
 #include "UIMenu.h"
 #include "../UIFont.h"
+#include "../UIStroke.h"
 #include <cmath>
 
 namespace eokas
@@ -50,6 +51,10 @@ namespace eokas
     UIMenuItem::UIMenuItem()
     {
         this->setContent(std::make_shared<UIText>());
+        if (UIText* t = this->label())
+        {
+            t->style.color = Color(0.110f, 0.110f, 0.118f, 1.0f);
+        }
     }
 
     void UIMenuItem::setContent(const UIWidget::Ref& widget)
@@ -92,7 +97,7 @@ namespace eokas
         {
             height = chipSize;
         }
-        this->resize(Vector2(content->shape.size.x + paddingX * 2.0f + lead, height + paddingY * 2.0f));
+        this->resize(Vector2(content->shape.size.x + padding * 2.0f + lead, height + padding * 2.0f));
     }
 
     void UIMenuItem::layout()
@@ -103,17 +108,17 @@ namespace eokas
         }
         if (content)
         {
-            float innerH = shape.size.y - paddingY * 2.0f;
+            float innerH = shape.size.y - padding * 2.0f;
             if (innerH < 0.0f)
             {
                 innerH = 0.0f;
             }
-            float y = paddingY;
+            float y = padding;
             if (content->shape.size.y < innerH)
             {
-                y = paddingY + (innerH - content->shape.size.y) * 0.5f;
+                y = padding + (innerH - content->shape.size.y) * 0.5f;
             }
-            Vector2 pos(floorf(paddingX + chipLeading(*this) + 0.5f), floorf(y + 0.5f));
+            Vector2 pos(floorf(padding + chipLeading(*this) + 0.5f), floorf(y + 0.5f));
             this->placeChild(*content, pos);
         }
     }
@@ -134,7 +139,25 @@ namespace eokas
             bg = selectedFill;
         }
         Matrix3 localToScreen = matrixLocalToScreen();
-        primitive.addQuad(localToScreen, Rect(0.0f, 0.0f, shape.size.x, shape.size.y), UIFont::solidUV(), bg);
+        if (bg.a > 0.001f)
+        {
+            float inset = hoverInset;
+            if (inset < 0.0f)
+            {
+                inset = 0.0f;
+            }
+            float w = shape.size.x - inset * 2.0f;
+            float h = shape.size.y - inset * 2.0f;
+            if (w < 0.0f)
+            {
+                w = 0.0f;
+            }
+            if (h < 0.0f)
+            {
+                h = 0.0f;
+            }
+            primitive.addQuad(localToScreen, Rect(inset, inset, w, h), UIFont::solidUV(), bg);
+        }
         if (showChip)
         {
             float size = chipSize;
@@ -142,7 +165,7 @@ namespace eokas
             {
                 size = 1.0f;
             }
-            float x = floorf(paddingX + 0.5f);
+            float x = floorf(padding + 0.5f);
             float y = floorf((shape.size.y - size) * 0.5f + 0.5f);
             float radius = size * 0.5f;
             float cx = x + radius;
@@ -166,6 +189,7 @@ namespace eokas
     UIMenu::UIMenu()
     {
         color = Color(1.0f, 1.0f, 1.0f, 1.0f);
+        border.thickness = 1.0f;
         list = std::make_shared<UIList>();
         list->direction = direction;
         list->padding = padding;
@@ -275,5 +299,13 @@ namespace eokas
             return;
         }
         UIWidget::render(primitive);
+        if (border.thickness > 0.0f && border.color.a > 0.001f)
+        {
+            UIStroke::border(
+                primitive,
+                matrixLocalToScreen(),
+                Rect(0.0f, 0.0f, shape.size.x, shape.size.y),
+                border);
+        }
     }
 }

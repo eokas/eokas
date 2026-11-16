@@ -1,30 +1,51 @@
 #include "./Utilities.h"
-#include <cstdio>
-#include <cstring>
+
+#include "Base/Main.h"
+
 #include <exception>
+#include <stdexcept>
+#include <string>
+
+using namespace eokas;
+
+static String resolveContentPath(const String& relativePath)
+{
+    if (File::exists(relativePath))
+        return relativePath;
+
+    String cursor = File::basePath(Process::executingPath());
+    for (int i = 0; i < 8; ++i)
+    {
+        if (cursor.isEmpty())
+            break;
+        String candidate = File::combinePath(cursor, relativePath);
+        if (File::exists(candidate))
+            return candidate;
+        String parent = File::basePath(cursor);
+        if (parent == cursor)
+            break;
+        cursor = parent;
+    }
+    return relativePath;
+}
 
 std::string Utilities::readTextFile(const std::string& fileName)
 {
-    const size_t maxFileSize = 4096;
+    const size_t maxFileSize = 1024 * 256;
 
-    char buffer[maxFileSize] = { 0 };
-    memset(buffer, 0, maxFileSize);
+    String resolved = resolveContentPath(fileName.c_str());
 
-    FILE* fd = NULL;
-    fopen_s(&fd, fileName.c_str(), "rb");
-    if (fd == NULL) {
-        throw std::exception("Open shader file failed.");
-    }
+    FileStream stream(resolved, "rb");
+    if (!stream.open())
+        throw std::runtime_error("Open shader file failed.");
 
-    fseek(fd, 0, SEEK_END);
-    size_t size = ftell(fd);
-    if (size > maxFileSize) {
-        throw std::exception("The shader file is too large.");
-    }
+    size_t size = stream.size();
+    if (size > maxFileSize)
+        throw std::runtime_error("The shader file is too large.");
 
-    fseek(fd, 0, SEEK_SET);
-    fread(buffer, size, 1, fd);
-    fclose(fd);
-
+    std::string buffer(size, '\0');
+    if (size > 0)
+        stream.read(&buffer[0], size);
+    stream.close();
     return buffer;
 }

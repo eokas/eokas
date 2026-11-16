@@ -62,37 +62,6 @@ namespace eokas
         D3D12_CPU_DESCRIPTOR_HANDLE acquire();
     };
     
-    struct DX12RenderTarget : public RenderTarget
-    {
-        DX12Device& mDevice;
-        uint32_t mWidth = 0;
-        uint32_t mHeight = 0;
-        std::vector<Texture2D::Ref> mColorBuffers;
-        Texture2D::Ref mDepthStencilBuffer;
-        std::shared_ptr<DX12DescriptorHeap> mRTVHeap;
-        std::shared_ptr<DX12DescriptorHeap> mDSVHeap;
-        std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> mColorViews;
-        D3D12_CPU_DESCRIPTOR_HANDLE mDepthView = {};
-
-        static Texture2D::Ref createColorBuffer(DX12Device& device, uint32_t width, uint32_t height, Format format);
-        static Texture2D::Ref createDepthBuffer(DX12Device& device, uint32_t width, uint32_t height, Format format);
-
-        DX12RenderTarget(DX12Device& device, const RenderTargetOptions& options);
-        DX12RenderTarget(DX12Device& device, const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencilBuffer);
-
-        virtual uint32_t getWidth() const override;
-        virtual uint32_t getHeight() const override;
-        virtual uint32_t getColorBufferCount() const override;
-        virtual Texture2D::Ref getColorBuffer(uint32_t index) const override;
-        virtual Texture2D::Ref getDepthStencilBuffer() const override;
-
-    private:
-        static std::vector<Texture2D::Ref> createColorBuffers(DX12Device& device, const RenderTargetOptions& options);
-        void createViews();
-        void createColorView(Texture2D::Ref color);
-        void createDepthView();
-    };
-
     struct DX12StaticBuffer : public StaticBuffer
     {
         ComPtr <ID3D12Resource> mResource;
@@ -118,6 +87,12 @@ namespace eokas
         virtual void unmap() override;
     };
 
+    struct DX12SurfaceFrame
+    {
+        Texture2D::Ref color;
+        Texture2D::Ref depth;
+    };
+
     struct DX12Surface : public Surface
     {
         DX12Device& mDevice;
@@ -128,7 +103,7 @@ namespace eokas
         ComPtr <IDXGISwapChain3> mSwapChain;
         uint32_t mFrameBufferIndex = 0;
 
-        DX12RenderTarget::Ref mFrameBuffers[kFrameCount];
+        DX12SurfaceFrame mFrames[kFrameCount];
 
         DX12Surface(DX12Device& device, void* windowHandle, uint32_t windowWidth, uint32_t windowHeight);
         virtual ~DX12Surface();
@@ -139,7 +114,8 @@ namespace eokas
         virtual void* getWindowHandle() const override;
         virtual uint32_t getWidth() const override;
         virtual uint32_t getHeight() const override;
-        virtual RenderTarget::Ref getActiveRenderTarget() override;
+        virtual Texture2D::Ref getActiveColorBuffer() override;
+        virtual Texture2D::Ref getActiveDepthStencilBuffer() override;
         virtual void present() override;
         virtual void resize(uint32_t width, uint32_t height) override;
     };
@@ -167,8 +143,16 @@ namespace eokas
         ComPtr <ID3D12Resource> mResource;
         D3D12_RESOURCE_STATES mState = D3D12_RESOURCE_STATE_COPY_DEST;
 
+        std::shared_ptr<DX12DescriptorHeap> mRtvHeap;
+        D3D12_CPU_DESCRIPTOR_HANDLE mRtv = {};
+        std::shared_ptr<DX12DescriptorHeap> mDsvHeap;
+        D3D12_CPU_DESCRIPTOR_HANDLE mDsv = {};
+
         DX12Texture2D(const DX12Device& device, const TextureOptions& options);
-        DX12Texture2D(const TextureOptions& options, ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES state);
+        DX12Texture2D(const DX12Device& device, const TextureOptions& options, ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES state, bool createRTV);
+
+        void createRTV(const DX12Device& device);
+        void createDSV(const DX12Device& device);
 
         virtual void* getNativeResource() const override;
         virtual const TextureOptions& getOptions() const override;
@@ -272,9 +256,9 @@ namespace eokas
         virtual void open() override;
         virtual void setPipelineObject(PipelineObject::Ref pipeline) override;
         virtual void setPipelineBindings(PipelineBindings::Ref bindings) override;
-        virtual void setRenderTarget(RenderTarget::Ref renderTarget) override;
-        virtual void clearRenderTargetColorBuffer(RenderTarget::Ref renderTarget, uint32_t colorIndex, float(& color)[4]) override;
-        virtual void clearRenderTargetDepthStencilBuffer(RenderTarget::Ref renderTarget, float depth, uint32_t stencil) override;
+        virtual void setRenderTarget(const std::vector<Texture2D::Ref>& colorBuffers, Texture2D::Ref depthStencil) override;
+        virtual void clearRenderTargetColorBuffer(Texture2D::Ref colorBuffer, float(& clearColor)[4]) override;
+        virtual void clearRenderTargetDepthStencilBuffer(Texture2D::Ref depthStencil, float depth, uint32_t stencil) override;
         virtual void setViewport(const Viewport& viewport) override;
         virtual void setTopology(Topology topology) override;
         virtual void setVertexBuffer(Buffer::Ref buffer, uint32_t length, uint32_t stride) override;
@@ -342,7 +326,6 @@ namespace eokas
         virtual MutableBuffer::Ref createMutableBuffer(uint32_t length) override;
         virtual DynamicBuffer::Ref createDynamicBuffer(uint32_t length) override;
         virtual Texture2D::Ref createTexture2D(const TextureOptions& options) override;
-        virtual RenderTarget::Ref createRenderTarget(const RenderTargetOptions& options) override;
         virtual ShaderProgram::Ref createShaderProgram(const ShaderOptions& options) override;
         virtual PipelineObject::Ref createPipelineObject() override;
         virtual PipelineBindings::Ref createPipelineBindings(const PipelineLayout& layout) override;
