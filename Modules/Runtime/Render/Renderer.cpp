@@ -343,6 +343,13 @@ namespace eokas
 
         mCommandBuffer->setViewport(cam->viewport);
 
+        for (auto& p : space.primitives)
+        {
+            if (!p || !p->visible || !p->ready())
+                continue;
+            p->upload(mCommandBuffer);
+        }
+
         RenderPass::Ref mainPass = surface->getActiveRenderPass();
         RenderPassOptions mainOpts = mainPass->getOptions();
         mainOpts.colors[0].clearColor[0] = space.clearColor.r;
@@ -357,7 +364,6 @@ namespace eokas
             if (!p || !p->visible || !p->ready())
                 continue;
             p->material->setUniformBuffer("Transform", p->objectUniforms);
-            p->upload(mCommandBuffer);
             p->material->bind(mCommandBuffer);
             p->encode(mCommandBuffer);
         }
