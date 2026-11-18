@@ -822,7 +822,7 @@ namespace eokas {
         String result(*this);
         char* ptr = result.mData;
         while (*ptr != '\0') {
-            *ptr = (char) toupper(*ptr);
+            *ptr = (char)toupper(static_cast<unsigned char>(*ptr));
             ptr++;
         }
         return result;
@@ -832,7 +832,7 @@ namespace eokas {
         String result(*this);
         char* ptr = result.mData;
         while (*ptr != '\0') {
-            *ptr = (char) tolower(*ptr);
+            *ptr = (char)tolower(static_cast<unsigned char>(*ptr));
             ptr++;
         }
         return result;
@@ -892,10 +892,16 @@ namespace eokas {
         const char* beg = mData;
         const char* end = mData + this->length();
         if (left) {
-            while (isspace(*beg))beg++;
+            while (beg < end && isspace(static_cast<unsigned char>(*beg)))
+            {
+                ++beg;
+            }
         }
         if (right) {
-            while (isspace(*(end-1))) end--;
+            while (end > beg && isspace(static_cast<unsigned char>(*(end - 1))))
+            {
+                --end;
+            }
         }
         return this->substr(beg - mData, end - beg);
     }
