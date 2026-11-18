@@ -217,20 +217,20 @@ namespace eokas::RoseAxion {
         };
 
         const FieldKindMeta kFieldKinds[] = {
-            { FieldKind::Text, "text", "文本", "String" },
-            { FieldKind::Integer, "integer", "整数", "Int" },
-            { FieldKind::Float, "float", "浮点数", "Float" },
-            { FieldKind::Boolean, "boolean", "布尔值", "Bool" },
-            { FieldKind::Date, "date", "日期", "Date" },
-            { FieldKind::Time, "time", "时间", "Time" },
-            { FieldKind::DateTime, "datetime", "日期时间", "DateTime" },
-            { FieldKind::Url, "url", "网址", "URL" },
-            { FieldKind::Email, "email", "邮箱地址", "Email" },
-            { FieldKind::SingleOption, "singleOption", "单选", "String" },
-            { FieldKind::MultiOption, "multiOption", "多选", "String" },
-            { FieldKind::Color, "color", "颜色", "Color" },
-            { FieldKind::FilePath, "filePath", "文件路径", "FilePath" },
-            { FieldKind::FolderPath, "folderPath", "目录路径", "FolderPath" },
+            { FieldKind::Text, "text", "Text", "String" },
+            { FieldKind::Integer, "integer", "Integer", "Int" },
+            { FieldKind::Float, "float", "Float", "Float" },
+            { FieldKind::Boolean, "boolean", "Boolean", "Bool" },
+            { FieldKind::Date, "date", "Date", "Date" },
+            { FieldKind::Time, "time", "Time", "Time" },
+            { FieldKind::DateTime, "datetime", "DateTime", "DateTime" },
+            { FieldKind::Url, "url", "URL", "URL" },
+            { FieldKind::Email, "email", "Email", "Email" },
+            { FieldKind::SingleOption, "singleOption", "Single choice", "String" },
+            { FieldKind::MultiOption, "multiOption", "Multiple choice", "String" },
+            { FieldKind::Color, "color", "Color", "Color" },
+            { FieldKind::FilePath, "filePath", "FilePath", "FilePath" },
+            { FieldKind::FolderPath, "folderPath", "FolderPath", "FolderPath" },
         };
 
         const FieldKindMeta& fieldKindMeta(FieldKind kind)
@@ -255,6 +255,18 @@ namespace eokas::RoseAxion {
     const char* fieldKindLabel(FieldKind kind)
     {
         return fieldKindMeta(kind).label;
+    }
+
+    String fontWarmupText()
+    {
+        String text = String::empty;
+        for (const FieldKindMeta& meta : kFieldKinds)
+        {
+            text = text + String(meta.label);
+        }
+        text = text + String("StructListOptions");
+        text = text + String("FileHelpNewTableSchemaFieldSettingsCloseDeleteDetailsSelect");
+        return text;
     }
 
     FieldKind fieldKindFromKey(const String& key)
@@ -326,15 +338,15 @@ namespace eokas::RoseAxion {
     {
         if (type == rose::SchemaType::Struct)
         {
-            return "结构";
+            return "Struct";
         }
         if (type == rose::SchemaType::List)
         {
-            return "列表";
+            return "List";
         }
         if (type == rose::SchemaType::Options)
         {
-            return "单选";
+            return "Options";
         }
         return "";
     }

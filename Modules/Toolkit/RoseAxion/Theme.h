@@ -17,7 +17,7 @@ namespace eokas::RoseAxion {
     {
         RoseThemeId id = RoseThemeId::Light;
         const char* key = "light";
-        const char* name = "浅色";
+        const char* name = "Light";
         const char* blurb = "";
         bool light = false;
 

@@ -1,5 +1,5 @@
-#ifndef _EOKAS_ROSE_AXION_OBJECT_EDITOR_H_
-#define _EOKAS_ROSE_AXION_OBJECT_EDITOR_H_
+#ifndef _EOKAS_ROSE_AXION_INSTANCE_EDITOR_STRUCT_H_
+#define _EOKAS_ROSE_AXION_INSTANCE_EDITOR_STRUCT_H_
 
 #include "./Document.h"
 #include "./Host.h"
@@ -18,7 +18,7 @@ namespace eokas {
 
 namespace eokas::RoseAxion {
 
-    class RoseObjectEditor : public UIWidget
+    class RoseInstanceEditor_Struct : public UIWidget
     {
     public:
         struct Host : RoseUiHost
@@ -34,7 +34,6 @@ namespace eokas::RoseAxion {
         {
             enum class Kind { None, Option, Date, Color };
             Kind kind = Kind::None;
-            u32_t column = 0;
             std::vector<NestedHop> path;
             FieldKind fieldKind = FieldKind::Text;
             std::vector<FieldOption> options;
@@ -42,19 +41,14 @@ namespace eokas::RoseAxion {
         };
 
         void bind(TableDocument& doc, const Host& host);
-        void setRow(int row);
-        int row() const { return mRow; }
-        void setColumn(int col);
-        int column() const { return mColumn; }
+        void setOverlay(UIWidget* overlay);
+        void reset();
         void rebuild();
         float scrollY() const;
         void setScroll(float y);
         const std::set<String>& collapsed() const { return mCollapsed; }
         void setCollapsed(const std::set<String>& keys) { mCollapsed = keys; }
-        const ValueEditState& valueEdit() const { return mEdit; }
-        void setValueEdit(const ValueEditState& state) { mEdit = state; }
         UIWidget* focusWidget() const { return mFocus; }
-        bool hasPopupEdit() const { return mEdit.kind != ValueEditState::Kind::None; }
         bool handleEscape();
         bool colorDropping() const;
         void sampleColorDropper(float x, float y, bool commit);
@@ -65,14 +59,15 @@ namespace eokas::RoseAxion {
 
     private:
         void notifyRebuild();
+        void refreshUi();
         const String& font() const;
         float scale() const;
-        void commitText(u32_t column, const std::vector<NestedHop>& path, const String& text);
-        void commitBool(u32_t column, const std::vector<NestedHop>& path, bool value);
-        void commitLabels(u32_t column, const std::vector<NestedHop>& path, const std::vector<String>& labels);
+        void commitText(const std::vector<NestedHop>& path, const String& text);
+        void commitBool(const std::vector<NestedHop>& path, bool value);
+        void commitLabels(const std::vector<NestedHop>& path, const std::vector<String>& labels);
         void closeValueEdit();
-        void beginValueEdit(ValueEditState::Kind kind, u32_t column, const std::vector<NestedHop>& path, const NestedField& info, const String& shown);
-        bool editingField(ValueEditState::Kind kind, u32_t column, const std::vector<NestedHop>& path) const;
+        void beginValueEdit(ValueEditState::Kind kind, const std::vector<NestedHop>& path, const NestedField& info, const String& shown);
+        bool editingField(ValueEditState::Kind kind, const std::vector<NestedHop>& path) const;
 
         TableDocument* mDoc = nullptr;
         Host mHost;
@@ -85,11 +80,13 @@ namespace eokas::RoseAxion {
         UIWidget* mDatePanel = nullptr;
         UIWidget* mColorPanel = nullptr;
         UIColorPicker* mColorPicker = nullptr;
-        int mRow = -1;
-        int mColumn = -1;
         float mKeepY = 0.0f;
         std::set<String> mCollapsed;
         ValueEditState mEdit;
+        UIWidget* mOverlay = nullptr;
+        std::vector<NestedHop> mFocusPath;
+        u32_t mFocusCol = 0;
+        bool mHasFocusTarget = false;
     };
 
 }

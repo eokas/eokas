@@ -1,5 +1,6 @@
 #include "../App.h"
 #include "../Theme.h"
+#include "../UiKit.h"
 
 #include "Base/IO.h"
 #include "Base/Time.h"
@@ -209,7 +210,7 @@ namespace {
         eokas::String path;
         std::map<eokas::String, eokas::String> filters;
         filters["Rose Library"] = "*.rose";
-        filters["所有文件"] = "*.*";
+        filters["All Files"] = "*.*";
         if (!eokas::NativeDialogs::openFileDialog(path, filters, owner))
         {
             return eokas::String::empty;
@@ -300,7 +301,7 @@ namespace {
         releaseMouseCapture();
         eokas::String path;
         std::map<eokas::String, eokas::String> filters;
-        filters["所有文件"] = "*.*";
+        filters["All Files"] = "*.*";
         if (!eokas::NativeDialogs::openFileDialog(path, filters, owner))
         {
             return eokas::String::empty;
@@ -324,16 +325,43 @@ namespace {
         return (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     }
 
+    eokas::String pickFirstExistingPath(const char* const* paths, size_t count)
+    {
+        for (size_t i = 0; i < count; ++i)
+        {
+            if (eokas::File::exists(paths[i]))
+            {
+                return paths[i];
+            }
+        }
+        return eokas::String::empty;
+    }
+
     eokas::String findFont()
     {
-        const char* paths[] = {
+        static const char* paths[] = {
             "C:/Windows/Fonts/msyh.ttc",
             "C:/Windows/Fonts/msyh.ttf",
             "C:/Windows/Fonts/simhei.ttf",
             "C:/Windows/Fonts/segoeui.ttf",
         };
+        return pickFirstExistingPath(paths, sizeof(paths) / sizeof(paths[0]));
+    }
+
+    eokas::String findCjkFallback(const eokas::String& primary)
+    {
+        static const char* paths[] = {
+            "C:/Windows/Fonts/msyh.ttc",
+            "C:/Windows/Fonts/msyh.ttf",
+            "C:/Windows/Fonts/simsun.ttc",
+            "C:/Windows/Fonts/simhei.ttf",
+        };
         for (const char* path : paths)
         {
+            if (primary == path)
+            {
+                continue;
+            }
             if (eokas::File::exists(path))
             {
                 return path;
@@ -376,16 +404,17 @@ namespace {
                 return false;
             }
             mFont = std::make_unique<eokas::UIFont>();
-            if (!mFont->open(mFontPath.cstr(), 16))
+            const uint32_t bodyPx = static_cast<uint32_t>(eokas::RoseAxion::kBodyPx * mScale + 0.5f);
+            if (!mFont->open(mFontPath.cstr(), bodyPx))
             {
                 return false;
             }
-            mFont->prepareSize(static_cast<uint32_t>(15.0f * mScale + 0.5f));
-            mFont->prepareSize(static_cast<uint32_t>(13.0f * mScale + 0.5f));
-            mFont->prepareSize(static_cast<uint32_t>(17.0f * mScale + 0.5f));
-            mFont->prepareSize(static_cast<uint32_t>(20.0f * mScale + 0.5f));
-            mFont->prepareSize(static_cast<uint32_t>(28.0f * mScale + 0.5f));
-            mFont->prepareSize(static_cast<uint32_t>(32.0f * mScale + 0.5f));
+            eokas::String cjkFallback = findCjkFallback(mFontPath);
+            if (!cjkFallback.isEmpty())
+            {
+                mFont->attachFallback(cjkFallback.cstr());
+            }
+            eokas::RoseAxion::warmupRoseAxionFont(*mFont, mScale);
             eokas::UIFont::bind(mFontPath, mFont.get());
             this->uploadFont();
 
@@ -596,7 +625,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
         Host host;
         if (!host.init())
         {
-            MessageBoxW(nullptr, L"RoseAxion 启动失败。", L"RoseAxion", MB_OK | MB_ICONERROR);
+            MessageBoxW(nullptr, L"RoseAxion failed to start.", L"RoseAxion", MB_OK | MB_ICONERROR);
             return 1;
         }
         eokas::Timer timer;
@@ -621,7 +650,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     }
     catch (...)
     {
-        MessageBoxW(nullptr, L"RoseAxion 发生未知错误。", L"RoseAxion", MB_OK | MB_ICONERROR);
+        MessageBoxW(nullptr, L"RoseAxion encountered an unknown error.", L"RoseAxion", MB_OK | MB_ICONERROR);
         return 1;
     }
 }

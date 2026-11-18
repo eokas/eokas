@@ -3,7 +3,8 @@
 
 #include "./Document.h"
 #include "./Host.h"
-#include "./SchemaEditor.h"
+#include "./UiKit.h"
+#include "./SchemaDesigner.h"
 #include "./SchemaOutliner.h"
 
 #include "UI/UIEvent.h"
@@ -20,6 +21,7 @@ namespace eokas::RoseAxion {
         struct Host : RoseUiHost
         {
             std::function<void(int)> confirmDeleteSchema;
+            float* sharedOutlinerW = nullptr;
         };
 
         void bind(TableDocument& doc, const Host& host);
@@ -44,20 +46,20 @@ namespace eokas::RoseAxion {
         void commitPaneResize();
         bool hitResizePane(float screenX, float screenY) const;
         void cancelResize();
-        RoseSchemaEditor::Host editorHost() const;
+        RoseSchemaDesigner::Host designerHost() const;
         RoseSchemaOutliner::Host outlinerHost() const;
 
         TableDocument* mDoc = nullptr;
         Host mHost;
         std::shared_ptr<RoseSchemaOutliner> mOutliner;
-        std::shared_ptr<RoseSchemaEditor> mSchemaEditor;
+        std::shared_ptr<RoseSchemaDesigner> mDesigner;
         UIWidget* mSplit = nullptr;
         UIWidget* mSplitHandle = nullptr;
         UIWidget* mHint = nullptr;
         UIWidget* mOverlay = nullptr;
         float mKeepOutlinerY = 0.0f;
         float mKeepEditorY = 0.0f;
-        float mOutlinerW = 240.0f;
+        float mOutlinerW = kRoseOutlinerDefaultW;
         bool mResizePane = false;
         float mResizeOriginPaneW = 0.0f;
     };

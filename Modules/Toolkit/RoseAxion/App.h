@@ -43,7 +43,7 @@ namespace eokas::RoseAxion {
         bool requestClose();
 
     private:
-        enum class ConfirmKind { None, ChangeType, DeleteColumn, DeleteTable, DeleteSchema, Unsaved };
+        enum class ConfirmKind { None, DeleteSchema, DeleteInstance, Unsaved };
         enum class PendingAction { None, New, Open, Close };
 
         void requestRebuild();
@@ -71,6 +71,7 @@ namespace eokas::RoseAxion {
         float mHeight = 800.0f;
         float mScale = 1.0f;
         bool mRebuild = true;
+        bool mRebuildingUi = false;
         TableDocument mDoc;
         std::shared_ptr<RoseEditor> mEditor;
 
@@ -78,12 +79,9 @@ namespace eokas::RoseAxion {
         PendingAction mPending = PendingAction::None;
         bool mAboutOpen = false;
         bool mCloseAllowed = false;
-        int mConfirmCol = -1;
-        int mConfirmTable = -1;
         int mConfirmSchema = -1;
-        int mBoundTable = -1;
-        String mPendingType;
-        bool mResetScroll = false;
+        int mConfirmInstance = -1;
+        int mBoundInstance = -1;
     };
 
 }

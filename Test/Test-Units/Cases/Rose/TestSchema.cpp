@@ -19,14 +19,13 @@ EOKAS_TEST_CASE(schema_del_member_option) {
     EOKAS_EXPECT(row->getMember("qty") != nullptr);
     EOKAS_EXPECT(row->getMemberIndex("qty") == 0);
 
-    EOKAS_EXPECT(row->setMember("note", text, "Note", 0xFF112233u));
+    EOKAS_EXPECT(row->setMember("note", text));
     EOKAS_EXPECT(row->getMemberCount() == 2);
-    EOKAS_EXPECT(row->getMember("note")->label == "Note");
-    EOKAS_EXPECT(row->getMember("note")->color == 0xFF112233u);
+    EOKAS_EXPECT(row->getMember("note")->schema == text);
 
     Schema* status = heap.add(SchemaType::Options, "Status");
-    EOKAS_EXPECT(status->addOption("a", "A"));
-    EOKAS_EXPECT(status->addOption("b", "B"));
+    EOKAS_EXPECT(status->addOption("a"));
+    EOKAS_EXPECT(status->addOption("b"));
     status->delOption("a");
     EOKAS_EXPECT(status->getOptionCount() == 1);
     EOKAS_EXPECT(status->getOption(0)->name == "b");

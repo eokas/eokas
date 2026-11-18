@@ -4,6 +4,7 @@
 #include "./Theme.h"
 #include "UI/Main.h"
 
+#include <functional>
 #include <vector>
 
 namespace eokas::RoseAxion {
@@ -24,13 +25,34 @@ namespace eokas::RoseAxion {
     void fillSurface(UIWidget& widget, const Color& color);
     std::shared_ptr<UIWidget> makeSplit(float length, bool vertical);
     void styleDropdown(UIDropdown& drop, const String& font, float size);
-    void styleMenuItem(UIMenuItem& item, const String& font, float size);
+    void stylePopupMenu(UIMenu& menu, float scale = 1.0f);
+    void styleMenuItem(UIMenuItem& item, const String& font, float size, float scale = 1.0f);
     void styleMenuBarItem(UIMenuItem& item, const String& font, float size, const Color& barBg);
 
-    inline float menuFontPx(float scale)
-    {
-        return 13.0f * scale;
-    }
+    void bindCommitOnFocusLoss(
+        UIWidget& widget,
+        const std::function<bool()>& isRebuilding,
+        const std::function<void()>& commit);
+
+    constexpr float kTitleLgPx = 24.0f;
+    constexpr float kTitleMdPx = 18.0f;
+    constexpr float kBodyPx = 12.0f;
+
+    constexpr float kRoseNavSidePad = 6.0f;
+    constexpr float kRoseNavMarkW = 3.0f;
+    constexpr float kRoseOutlinerHeaderH = 36.0f;
+    constexpr float kRoseOutlinerMinW = 160.0f;
+    constexpr float kRoseOutlinerDefaultW = 240.0f;
+    constexpr float kRoseOutlinerEditorMinW = 80.0f;
+    constexpr float kRosePaneGrip = 6.0f;
+    constexpr float kRoseContentInset = 14.0f;
+
+    inline float titleLgPx(float scale) { return kTitleLgPx * scale; }
+    inline float titleMdPx(float scale) { return kTitleMdPx * scale; }
+    inline float bodyPx(float scale) { return kBodyPx * scale; }
+    inline float menuFontPx(float scale) { return bodyPx(scale); }
+
+    void warmupRoseAxionFont(eokas::UIFont& font, float scale);
 
     class PaintPanel : public UIWidget
     {

@@ -1,4 +1,4 @@
-#include "./ObjectEditor.h"
+#include "./InstanceEditor_Struct.h"
 #include "./FieldEditors.h"
 #include "./Theme.h"
 #include "./UiKit.h"
@@ -14,9 +14,9 @@ namespace eokas::RoseAxion {
 
     namespace {
 
-        String foldKey(u32_t column, const std::vector<NestedHop>& path)
+        String foldKey(const std::vector<NestedHop>& path)
         {
-            String key = String::format("%u", column);
+            String key;
             for (const NestedHop& hop : path)
             {
                 if (hop.list)
@@ -79,33 +79,42 @@ namespace eokas::RoseAxion {
 
     }
 
-    void RoseObjectEditor::bind(TableDocument& doc, const Host& host)
+    void RoseInstanceEditor_Struct::bind(TableDocument& doc, const Host& host)
     {
         mDoc = &doc;
         mHost = host;
     }
 
-    void RoseObjectEditor::setRow(int row)
+    void RoseInstanceEditor_Struct::setOverlay(UIWidget* overlay)
     {
-        mRow = row;
+        mOverlay = overlay;
+        mHost.overlay = overlay;
     }
 
-    void RoseObjectEditor::setColumn(int col)
+    void RoseInstanceEditor_Struct::reset()
     {
-        mColumn = col;
+        mEdit = {};
+        mKeepY = 0.0f;
+        mView = nullptr;
+        mFocus = nullptr;
+        mHasFocusTarget = false;
+        mFocusPath.clear();
+        mFocusCol = 0;
+        this->clearOverlayEditors();
+        this->detachChildren();
     }
 
-    const String& RoseObjectEditor::font() const
+    const String& RoseInstanceEditor_Struct::font() const
     {
         return mHost.font;
     }
 
-    float RoseObjectEditor::scale() const
+    float RoseInstanceEditor_Struct::scale() const
     {
         return hostScale(mHost.scale);
     }
 
-    void RoseObjectEditor::notifyRebuild()
+    void RoseInstanceEditor_Struct::notifyRebuild()
     {
         if (mHost.requestRebuild)
         {
@@ -113,12 +122,17 @@ namespace eokas::RoseAxion {
         }
     }
 
-    float RoseObjectEditor::scrollY() const
+    void RoseInstanceEditor_Struct::refreshUi()
+    {
+        this->notifyRebuild();
+    }
+
+    float RoseInstanceEditor_Struct::scrollY() const
     {
         return mView != nullptr ? mView->scrollY() : mKeepY;
     }
 
-    void RoseObjectEditor::setScroll(float y)
+    void RoseInstanceEditor_Struct::setScroll(float y)
     {
         mKeepY = y;
         if (mView != nullptr)
@@ -127,7 +141,7 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseObjectEditor::layout()
+    void RoseInstanceEditor_Struct::layout()
     {
         if (!visible)
         {
@@ -142,21 +156,22 @@ namespace eokas::RoseAxion {
         UIWidget::layout();
     }
 
-    void RoseObjectEditor::clearOverlayEditors()
+    void RoseInstanceEditor_Struct::clearOverlayEditors()
     {
-        if (mHost.overlay != nullptr)
+        UIWidget* overlay = mOverlay != nullptr ? mOverlay : mHost.overlay;
+        if (overlay != nullptr)
         {
             if (mPickMenu != nullptr)
             {
-                mHost.overlay->detachChild(mPickMenu);
+                overlay->detachChild(mPickMenu);
             }
             if (mDatePanel != nullptr)
             {
-                mHost.overlay->detachChild(mDatePanel);
+                overlay->detachChild(mDatePanel);
             }
             if (mColorPanel != nullptr)
             {
-                mHost.overlay->detachChild(mColorPanel);
+                overlay->detachChild(mColorPanel);
             }
         }
         mPickMenu = nullptr;
@@ -168,27 +183,28 @@ namespace eokas::RoseAxion {
         mColorAnchor = nullptr;
     }
 
-    void RoseObjectEditor::placeOverlayEditors()
+    void RoseInstanceEditor_Struct::placeOverlayEditors()
     {
-        if (mHost.overlay == nullptr)
+        UIWidget* overlay = mOverlay != nullptr ? mOverlay : mHost.overlay;
+        if (overlay == nullptr)
         {
             return;
         }
         if (mPickMenu != nullptr && mPickAnchor != nullptr)
         {
-            placePopup(*mHost.overlay, *mPickMenu, mPickAnchor->screenBounds());
+            placePopup(*overlay, *mPickMenu, mPickAnchor->screenBounds());
         }
         if (mDatePanel != nullptr && mDateAnchor != nullptr)
         {
-            placePopup(*mHost.overlay, *mDatePanel, mDateAnchor->screenBounds());
+            placePopup(*overlay, *mDatePanel, mDateAnchor->screenBounds());
         }
         if (mColorPanel != nullptr && mColorAnchor != nullptr)
         {
-            placePopup(*mHost.overlay, *mColorPanel, mColorAnchor->screenBounds());
+            placePopup(*overlay, *mColorPanel, mColorAnchor->screenBounds());
         }
     }
 
-    bool RoseObjectEditor::handleEscape()
+    bool RoseInstanceEditor_Struct::handleEscape()
     {
         if (mColorPicker != nullptr && mColorPicker->eyeDropping())
         {
@@ -203,12 +219,12 @@ namespace eokas::RoseAxion {
         return false;
     }
 
-    bool RoseObjectEditor::colorDropping() const
+    bool RoseInstanceEditor_Struct::colorDropping() const
     {
         return mColorPicker != nullptr && mColorPicker->eyeDropping();
     }
 
-    void RoseObjectEditor::sampleColorDropper(float x, float y, bool commit)
+    void RoseInstanceEditor_Struct::sampleColorDropper(float x, float y, bool commit)
     {
         if (mColorPicker != nullptr)
         {
@@ -216,7 +232,7 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseObjectEditor::cancelColorDropper()
+    void RoseInstanceEditor_Struct::cancelColorDropper()
     {
         if (mColorPicker != nullptr)
         {
@@ -224,16 +240,15 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseObjectEditor::closeValueEdit()
+    void RoseInstanceEditor_Struct::closeValueEdit()
     {
         mEdit = {};
-        this->notifyRebuild();
+        this->refreshUi();
     }
 
-    void RoseObjectEditor::beginValueEdit(ValueEditState::Kind kind, u32_t column, const std::vector<NestedHop>& path, const NestedField& info, const String& shown)
+    void RoseInstanceEditor_Struct::beginValueEdit(ValueEditState::Kind kind, const std::vector<NestedHop>& path, const NestedField& info, const String& shown)
     {
         mEdit.kind = kind;
-        mEdit.column = column;
         mEdit.path = path;
         mEdit.fieldKind = info.kind;
         mEdit.options = info.options;
@@ -241,79 +256,63 @@ namespace eokas::RoseAxion {
         {
             initTemporalParts(info.kind, shown, mEdit.date);
         }
-        this->notifyRebuild();
+        this->refreshUi();
     }
 
-    bool RoseObjectEditor::editingField(ValueEditState::Kind kind, u32_t column, const std::vector<NestedHop>& path) const
+    bool RoseInstanceEditor_Struct::editingField(ValueEditState::Kind kind, const std::vector<NestedHop>& path) const
     {
-        return mEdit.kind == kind && mEdit.column == column && samePath(mEdit.path, path);
+        return mEdit.kind == kind && samePath(mEdit.path, path);
     }
 
-    void RoseObjectEditor::commitText(u32_t column, const std::vector<NestedHop>& path, const String& text)
+    void RoseInstanceEditor_Struct::commitText(const std::vector<NestedHop>& path, const String& text)
     {
-        if (mDoc == nullptr || !mDoc->isOpen() || mRow < 0)
+        if (mDoc == nullptr || !mDoc->isOpen() || !mDoc->hasActiveInstance())
         {
             return;
         }
-        if (path.empty())
+        if (mDoc->instanceStructText(path) == text)
         {
-            if (mDoc->cellText(static_cast<u32_t>(mRow), column) == text)
-            {
-                return;
-            }
-            mDoc->setCellText(static_cast<u32_t>(mRow), column, text);
+            mEdit = {};
+            this->refreshUi();
+            return;
         }
-        else
-        {
-            if (mDoc->nestedText(static_cast<u32_t>(mRow), column, path) == text)
-            {
-                return;
-            }
-            mDoc->setNestedText(static_cast<u32_t>(mRow), column, path, text);
-        }
-        this->notifyRebuild();
+        mDoc->setInstanceStructText(path, text);
+        this->closeValueEdit();
     }
 
-    void RoseObjectEditor::commitBool(u32_t column, const std::vector<NestedHop>& path, bool value)
+    void RoseInstanceEditor_Struct::commitBool(const std::vector<NestedHop>& path, bool value)
     {
-        this->commitText(column, path, value ? "true" : "false");
+        this->commitText(path, value ? "true" : "false");
     }
 
-    void RoseObjectEditor::commitLabels(u32_t column, const std::vector<NestedHop>& path, const std::vector<String>& labels)
+    void RoseInstanceEditor_Struct::commitLabels(const std::vector<NestedHop>& path, const std::vector<String>& labels)
     {
-        if (mDoc == nullptr || !mDoc->isOpen() || mRow < 0)
+        if (mDoc == nullptr || !mDoc->isOpen() || !mDoc->hasActiveInstance())
         {
             return;
         }
-        if (path.empty())
-        {
-            mDoc->setCellLabels(static_cast<u32_t>(mRow), column, labels);
-        }
-        else
-        {
-            mDoc->setNestedLabels(static_cast<u32_t>(mRow), column, path, labels);
-        }
-        this->notifyRebuild();
+        mDoc->setInstanceStructLabels(path, labels);
+        this->closeValueEdit();
     }
 
-    void RoseObjectEditor::rebuild()
+    void RoseInstanceEditor_Struct::rebuild()
     {
         this->clearOverlayEditors();
         this->detachChildren();
         mView = nullptr;
         mFocus = nullptr;
-        if (mDoc == nullptr || !mDoc->isOpen() || !mDoc->hasActiveTable() || mRow < 0)
+        if (mDoc == nullptr || !mDoc->isOpen() || !mDoc->hasActiveInstance())
         {
             return;
         }
-        if (static_cast<u32_t>(mRow) >= mDoc->rowCount())
+        if (!mDoc->hasActiveInstance())
         {
             return;
         }
 
         const float s = this->scale();
-        const float fontPx = 15.0f * s;
-        const float smallPx = 13.0f * s;
+        const float fontPx = bodyPx(s);
+        const float smallPx = bodyPx(s);
         const RoseTheme& t = theme();
         const Color ink = t.ink;
         const Color mute = t.mute;
@@ -330,7 +329,8 @@ namespace eokas::RoseAxion {
         const float treeRowH = 32.0f * s;
         const float treeIndent = 18.0f * s;
         const float delW = 36.0f * s;
-        this->color = t.raised;
+        this->shape.pivot = Vector2(0.0f, 0.0f);
+        this->color = t.paper;
         this->pickable = true;
 
         auto fitRowButton = [&](const std::shared_ptr<UIButton>& button, float height)
@@ -348,10 +348,12 @@ namespace eokas::RoseAxion {
             setBox(button, Rect(0.0f, 0.0f, width, height));
         };
 
+        const float panelH = shape.size.y > 1.0f ? shape.size.y : 400.0f * s;
+
         auto view = std::make_shared<UIView>();
         view->shape.pivot = Vector2(0.0f, 0.0f);
-        view->color = t.raised;
-        setBox(view, Rect(0.0f, 0.0f, panelW, shape.size.y > 1.0f ? shape.size.y : 400.0f * s));
+        view->color = t.paper;
+        setBox(view, Rect(0.0f, 0.0f, panelW, panelH));
 
         auto body = std::make_shared<UIList>();
         body->direction = UIDirection::Vertical;
@@ -361,56 +363,19 @@ namespace eokas::RoseAxion {
         body->shape.pivot = Vector2(0.0f, 0.0f);
         setBox(body, Rect(0.0f, 0.0f, panelW, 0.0f));
 
-        auto head = std::make_shared<UIWidget>();
-        head->pickable = false;
-        head->shape.pivot = Vector2(0.0f, 0.0f);
-        head->color = t.header;
-        setBox(head, Rect(0.0f, 0.0f, panelW, headH));
-        float titleW = atLeast(panelW - headPad * 2.0f - closeW - 8.0f * s, 80.0f * s);
-        auto title = makeText("对象属性", fontPath, fontPx, ink, titleW, 20.0f * s);
-        title->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(title, Rect(headPad, 4.0f * s, titleW, 20.0f * s));
-        head->attachChild(title);
-        String tableName = mDoc->tableName(mDoc->activeTableIndex());
-        String sub = String::format("%s · 第 %d 行", tableName.cstr(), mRow + 1);
-        if (mColumn >= 0 && static_cast<u32_t>(mColumn) < mDoc->columnCount())
-        {
-            sub += " · ";
-            sub += mDoc->column(static_cast<u32_t>(mColumn)).name;
-        }
-        auto subtitle = makeText(sub, fontPath, smallPx, mute, titleW, 16.0f * s);
-        subtitle->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(subtitle, Rect(headPad, 24.0f * s, titleW, 16.0f * s));
-        head->attachChild(subtitle);
-        auto close = makeButton("关闭", fontPath, smallPx, closeW, 26.0f * s, quiet, ink);
-        close->shape.setBox(Vector2(panelW - headPad - closeW, 9.0f * s), Vector2(closeW, 26.0f * s));
-        close->onClick = [this]()
-        {
-            mRow = -1;
-            mColumn = -1;
-            mEdit = {};
-            this->notifyRebuild();
-        };
-        head->attachChild(close);
-        auto headRule = std::make_shared<UIWidget>();
-        headRule->pickable = false;
-        headRule->shape.pivot = Vector2(0.0f, 0.0f);
-        headRule->color = grid;
-        setBox(headRule, Rect(0.0f, headH - 1.0f, panelW, 1.0f));
-        head->attachChild(headRule);
-        body->attachChild(head);
-
-        const u32_t cols = mDoc->columnCount();
+        const u32_t cols = mDoc->instanceStructMemberCount();
         if (cols == 0)
         {
-            auto empty = makeText("没有字段", fontPath, fontPx, mute, panelW - headPad * 2.0f, 22.0f * s);
+            auto empty = makeText("No fields", fontPath, fontPx, mute, panelW - headPad * 2.0f, 22.0f * s);
             empty->shape.pivot = Vector2(0.0f, 0.0f);
-            setBox(empty, Rect(headPad, 0.0f, panelW - headPad * 2.0f, 22.0f * s));
+            setBox(empty, Rect(headPad, 8.0f * s, panelW - headPad * 2.0f, 22.0f * s));
             body->attachChild(empty);
+            body->layout();
             view->addChild(body);
             this->attachChild(view);
             mView = view.get();
             view->setScroll(0.0f, mKeepY);
+            view->layout();
             return;
         }
 
@@ -427,7 +392,8 @@ namespace eokas::RoseAxion {
         float valueInnerH = atLeast(treeRowH - 1.0f, 1.0f);
 
         auto tree = std::make_shared<UITable>();
-        tree->color = t.raised;
+        tree->shape.pivot = Vector2(0.0f, 0.0f);
+        tree->color = t.paper;
         tree->cellSpacing = 0.0f;
         tree->cellPadding = 0.0f;
         tree->border = UITableBorder(1.0f, 1.0f, 0.0f, 0.0f, grid);
@@ -479,7 +445,7 @@ namespace eokas::RoseAxion {
         };
         auto bindFold = [this](UITableRow* line, u32_t col, const std::vector<NestedHop>& path)
         {
-            String key = foldKey(col, path);
+            String key = foldKey(path);
             line->onExpandedChanged = [this, key](bool expanded)
             {
                 if (expanded)
@@ -497,6 +463,20 @@ namespace eokas::RoseAxion {
             }
         };
 
+        auto matchesFocus = [this](u32_t col, const std::vector<NestedHop>& path)
+        {
+            return mHasFocusTarget && samePath(path, mFocusPath) && col == mFocusCol;
+        };
+        auto trackFocus = [this](UIWidget& widget, u32_t col, const std::vector<NestedHop>& path)
+        {
+            widget.onFocusGain = [this, path, col]()
+            {
+                mFocusPath = path;
+                mFocusCol = col;
+                mHasFocusTarget = true;
+            };
+        };
+
         std::function<UIWidget::Ref(u32_t, const std::vector<NestedHop>&, const NestedField&, const String&, float)> makeEditor;
         makeEditor = [&](u32_t col, const std::vector<NestedHop>& path, const NestedField& info, const String& shown, float editorW) -> UIWidget::Ref
         {
@@ -511,9 +491,10 @@ namespace eokas::RoseAxion {
             if (kind == FieldKind::Boolean)
             {
                 auto toggle = makeBoolToggle(s, hitSize, boolFromText(shown));
-                toggle->onValueChanged = [this, col, path](bool value) { this->commitBool(col, path, value); };
+                toggle->onValueChanged = [this, col, path](bool value) { this->commitBool(path, value); };
                 hit->attachChild(toggle);
-                if (mFocus == nullptr)
+                trackFocus(*toggle, col, path);
+                if (matchesFocus(col, path))
                 {
                     mFocus = toggle.get();
                 }
@@ -526,8 +507,8 @@ namespace eokas::RoseAxion {
                 if (kind == FieldKind::MultiOption)
                 {
                     labels = path.empty()
-                        ? mDoc->cellLabels(static_cast<u32_t>(mRow), col)
-                        : mDoc->nestedLabels(static_cast<u32_t>(mRow), col, path);
+                        ? mDoc->instanceStructLabels(path)
+                        : mDoc->instanceStructLabels(path);
                 }
                 else if (!shown.isEmpty())
                 {
@@ -538,27 +519,30 @@ namespace eokas::RoseAxion {
                     {
                         if (kind == FieldKind::SingleOption)
                         {
-                            this->commitText(col, path, String::empty);
+                            this->commitText(path, String::empty);
                             return;
                         }
                         std::vector<String> current = path.empty()
-                            ? mDoc->cellLabels(static_cast<u32_t>(mRow), col)
-                            : mDoc->nestedLabels(static_cast<u32_t>(mRow), col, path);
-                        this->commitLabels(col, path, removeLabel(current, label));
+                            ? mDoc->instanceStructLabels(path)
+                            : mDoc->instanceStructLabels(path);
+                        this->commitLabels(path, removeLabel(current, label));
                     },
                     [this, col, path, info, shown]()
                     {
-                        this->beginValueEdit(ValueEditState::Kind::Option, col, path, info, shown);
+                        this->beginValueEdit(ValueEditState::Kind::Option, path, info, shown);
                     });
-                hit->onClick = [this, col, path, info, shown]()
+                auto openOption = [this, path, info, shown]()
                 {
-                    this->beginValueEdit(ValueEditState::Kind::Option, col, path, info, shown);
+                    this->beginValueEdit(ValueEditState::Kind::Option, path, info, shown);
                 };
-                if (this->editingField(ValueEditState::Kind::Option, col, path))
+                hit->onClick = openOption;
+                hit->onDoubleClick = openOption;
+                if (this->editingField(ValueEditState::Kind::Option, path))
                 {
                     mPickAnchor = hit.get();
                 }
-                if (mFocus == nullptr)
+                trackFocus(*hit, col, path);
+                if (matchesFocus(col, path))
                 {
                     mFocus = hit.get();
                 }
@@ -570,13 +554,14 @@ namespace eokas::RoseAxion {
                 attachValueText(*hit, hitSize, s, shown, fontPath, fontPx, ink);
                 hit->onClick = [this, col, path, info, shown]()
                 {
-                    this->beginValueEdit(ValueEditState::Kind::Date, col, path, info, shown);
+                    this->beginValueEdit(ValueEditState::Kind::Date, path, info, shown);
                 };
-                if (this->editingField(ValueEditState::Kind::Date, col, path))
+                if (this->editingField(ValueEditState::Kind::Date, path))
                 {
                     mDateAnchor = hit.get();
                 }
-                if (mFocus == nullptr)
+                trackFocus(*hit, col, path);
+                if (matchesFocus(col, path))
                 {
                     mFocus = hit.get();
                 }
@@ -588,13 +573,14 @@ namespace eokas::RoseAxion {
                 attachColorValue(*hit, hitSize, s, shown, fontPath, fontPx);
                 hit->onClick = [this, col, path, info, shown]()
                 {
-                    this->beginValueEdit(ValueEditState::Kind::Color, col, path, info, shown);
+                    this->beginValueEdit(ValueEditState::Kind::Color, path, info, shown);
                 };
-                if (this->editingField(ValueEditState::Kind::Color, col, path))
+                if (this->editingField(ValueEditState::Kind::Color, path))
                 {
                     mColorAnchor = hit.get();
                 }
-                if (mFocus == nullptr)
+                trackFocus(*hit, col, path);
+                if (matchesFocus(col, path))
                 {
                     mFocus = hit.get();
                 }
@@ -617,17 +603,18 @@ namespace eokas::RoseAxion {
                     }
                     if (!picked.isEmpty())
                     {
-                        this->commitText(col, path, picked);
+                        this->commitText(path, picked);
                     }
                 };
-                if (mFocus == nullptr)
+                trackFocus(*hit, col, path);
+                if (matchesFocus(col, path))
                 {
                     mFocus = hit.get();
                 }
                 return hit;
             }
 
-            auto input = std::make_shared<UIInput>();
+            auto input = std::make_shared<EscapeInput>();
             input->shape.pivot = Vector2(0.0f, 0.0f);
             setBox(input, Rect(0.0f, 0.0f, editorW, valueInnerH));
             styleCellInput(*input, leafFill, s, fontPath, fontPx, mHost.writeClipboard, mHost.readClipboard);
@@ -640,14 +627,16 @@ namespace eokas::RoseAxion {
             }
             input->setText(shown);
             UIInput* raw = input.get();
-            input->onFocusLoss = [this, raw, col, path]()
+            bindCommitOnFocusLoss(*input, mHost.isRebuildingUi, [this, raw, path]()
             {
                 if (raw != nullptr)
                 {
-                    this->commitText(col, path, raw->text);
+                    this->commitText(path, raw->text);
                 }
-            };
-            input->onSubmit = [this, col, path](const String& text) { this->commitText(col, path, text); };
+            });
+            trackFocus(*input, col, path);
+            input->onSubmit = [this, col, path](const String& text) { this->commitText(path, text); };
+            input->onEscape = [this]() { this->handleEscape(); };
             if (kind == FieldKind::Url)
             {
                 input->onPointerPress = [this, shown](const UIPointerEvent&)
@@ -659,7 +648,7 @@ namespace eokas::RoseAxion {
                 };
             }
             hit->attachChild(input);
-            if (mFocus == nullptr)
+            if (matchesFocus(col, path))
             {
                 mFocus = raw;
             }
@@ -694,14 +683,14 @@ namespace eokas::RoseAxion {
             {
                 row->attachChild(editor);
             }
-            auto del = makeDangerButton("删", fontPath, smallPx, delW, valueInnerH);
+            auto del = makeDangerButton("Del", fontPath, smallPx, delW, valueInnerH);
             fitRowButton(del, valueInnerH);
             u32_t itemIndex = path.back().index;
             del->onClick = [this, col, path, itemIndex]()
             {
                 std::vector<NestedHop> listPath(path.begin(), path.end() - 1);
-                mDoc->nestedListRemove(static_cast<u32_t>(mRow), col, listPath, itemIndex);
-                this->notifyRebuild();
+                mDoc->instanceStructListRemove(listPath, itemIndex);
+                this->refreshUi();
             };
             row->attachChild(del);
             return row;
@@ -711,8 +700,8 @@ namespace eokas::RoseAxion {
         attachField = [&](UITableRow* parent, u32_t col, const std::vector<NestedHop>& path, const NestedField& info)
         {
             String shown = path.empty()
-                ? mDoc->cellText(static_cast<u32_t>(mRow), col)
-                : mDoc->nestedText(static_cast<u32_t>(mRow), col, path);
+                ? mDoc->instanceStructText(path)
+                : mDoc->instanceStructText(path);
             bool nested = (info.nestedStruct || info.nestedList) && path.size() < 8;
             float rowH = treeRowH;
             UITableRow* line = parent != nullptr ? parent->addRow(rowH) : tree->addRow(rowH);
@@ -730,16 +719,16 @@ namespace eokas::RoseAxion {
                 {
                     line->setContent(1, wrapDelete(nullptr, col, path, valueInnerW));
                 }
-                u32_t members = mDoc->nestedFieldCount(col, path);
+                u32_t members = mDoc->instanceNestedFieldCount(path);
                 if (members == 0)
                 {
                     UITableRow* empty = line->addRow(treeRowH);
                     paintLine(empty, false);
-                    bindName(empty, "没有成员", true);
+                    bindName(empty, "No members", true);
                 }
                 for (u32_t index = 0; index < members; ++index)
                 {
-                    NestedField child = mDoc->nestedField(col, path, index);
+                    NestedField child = mDoc->instanceNestedField(path, index);
                     std::vector<NestedHop> childPath = path;
                     childPath.push_back(NestedHop::field(child.id));
                     attachField(line, col, childPath, child);
@@ -749,13 +738,13 @@ namespace eokas::RoseAxion {
             if (info.nestedList && path.size() < 8)
             {
                 bindFold(line, col, path);
-                auto add = makeButton("添加一项", fontPath, smallPx, 96.0f * s, valueInnerH, quiet, ink);
+                auto add = makeButton("Add Item", fontPath, smallPx, 96.0f * s, valueInnerH, quiet, ink);
                 fitRowButton(add, valueInnerH);
                 add->onClick = [this, col, path]()
                 {
-                    u32_t count = mDoc->nestedListCount(static_cast<u32_t>(mRow), col, path);
-                    mDoc->nestedListInsert(static_cast<u32_t>(mRow), col, path, count);
-                    this->notifyRebuild();
+                    u32_t count = mDoc->instanceNestedListCount(path);
+                    mDoc->instanceStructListInsert(path, count);
+                    this->refreshUi();
                 };
                 UIWidget::Ref value = add;
                 if (listItem)
@@ -763,17 +752,17 @@ namespace eokas::RoseAxion {
                     value = wrapDelete(add, col, path, valueInnerW);
                 }
                 line->setContent(1, value);
-                u32_t count = mDoc->nestedListCount(static_cast<u32_t>(mRow), col, path);
+                u32_t count = mDoc->instanceNestedListCount(path);
                 if (count == 0)
                 {
                     UITableRow* empty = line->addRow(treeRowH);
                     paintLine(empty, false);
-                    bindName(empty, "没有项目", true);
+                    bindName(empty, "No items", true);
                 }
                 for (u32_t index = 0; index < count; ++index)
                 {
-                    NestedField item = mDoc->nestedListElement(col, path);
-                    item.name = String::format("第 %u 项", index + 1);
+                    NestedField item = mDoc->instanceNestedListElement(path);
+                    item.name = String::format("Item %u", index + 1);
                     item.listItem = true;
                     std::vector<NestedHop> itemPath = path;
                     itemPath.push_back(NestedHop::at(index));
@@ -786,47 +775,28 @@ namespace eokas::RoseAxion {
             line->setContent(1, wrapDelete(editor, col, path, valueInnerW));
         };
 
-        if (mColumn >= 0)
+        for (u32_t index = 0; index < cols; ++index)
         {
-            if (static_cast<u32_t>(mColumn) < cols && mDoc->isNestedStructColumn(static_cast<u32_t>(mColumn)))
-            {
-                u32_t col = static_cast<u32_t>(mColumn);
-                u32_t members = mDoc->nestedFieldCount(col, {});
-                if (members == 0)
-                {
-                    UITableRow* empty = tree->addRow(treeRowH);
-                    paintLine(empty, false);
-                    bindName(empty, "没有成员", true);
-                }
-                for (u32_t index = 0; index < members; ++index)
-                {
-                    NestedField child = mDoc->nestedField(col, {}, index);
-                    attachField(nullptr, col, { NestedHop::field(child.id) }, child);
-                }
-            }
-        }
-        else
-        {
-            for (u32_t col = 0; col < cols; ++col)
-            {
-                attachField(nullptr, col, {}, mDoc->objectField(col));
-            }
+            NestedField child = mDoc->instanceStructMember(index);
+            attachField(nullptr, index, { NestedHop::field(child.id) }, child);
         }
 
         setBox(tree, Rect(0.0f, 0.0f, panelW, 0.0f));
         tree->relayout();
         body->attachChild(tree);
+        body->layout();
         view->addChild(body);
         this->attachChild(view);
         mView = view.get();
         view->setScroll(0.0f, mKeepY);
+        view->layout();
 
-        if (mHost.overlay != nullptr && mEdit.kind == ValueEditState::Kind::Option && mPickAnchor != nullptr)
+        UIWidget* overlay = mOverlay != nullptr ? mOverlay : mHost.overlay;
+        if (overlay != nullptr && mEdit.kind == ValueEditState::Kind::Option && mPickAnchor != nullptr)
         {
             std::vector<String> selected = mEdit.path.empty()
-                ? mDoc->cellLabels(static_cast<u32_t>(mRow), mEdit.column)
-                : mDoc->nestedLabels(static_cast<u32_t>(mRow), mEdit.column, mEdit.path);
-            u32_t column = mEdit.column;
+                ? mDoc->instanceStructLabels(mEdit.path)
+                : mDoc->instanceStructLabels(mEdit.path);
             std::vector<NestedHop> path = mEdit.path;
             FieldKind kind = mEdit.fieldKind;
             auto menu = makeOptionMenu(
@@ -837,39 +807,38 @@ namespace eokas::RoseAxion {
                 fontPx,
                 mPickAnchor->shape.size.x,
                 mPickAnchor,
-                [this, column, path, kind](const String& label)
+                [this, path, kind](const String& label)
                 {
                     if (kind == FieldKind::MultiOption)
                     {
                         std::vector<String> current = path.empty()
-                            ? mDoc->cellLabels(static_cast<u32_t>(mRow), column)
-                            : mDoc->nestedLabels(static_cast<u32_t>(mRow), column, path);
+                            ? mDoc->instanceStructLabels(path)
+                            : mDoc->instanceStructLabels(path);
                         if (selectedContains(current, label))
                         {
-                            this->commitLabels(column, path, removeLabel(current, label));
+                            this->commitLabels(path, removeLabel(current, label));
                         }
                         else
                         {
                             current.push_back(label);
-                            this->commitLabels(column, path, current);
+                            this->commitLabels(path, current);
                         }
                     }
                     else
                     {
                         mEdit = {};
-                        this->commitText(column, path, label);
+                        this->commitText(path, label);
                     }
                 },
                 [this]() { this->closeValueEdit(); });
-            mHost.overlay->attachChild(menu);
+            overlay->attachChild(menu);
             mPickMenu = menu.get();
             mFocus = menu.get();
         }
 
-        if (mHost.overlay != nullptr && mEdit.kind == ValueEditState::Kind::Date && mDateAnchor != nullptr)
+        if (overlay != nullptr && mEdit.kind == ValueEditState::Kind::Date && mDateAnchor != nullptr)
         {
             FieldKind dateKind = mEdit.fieldKind;
-            u32_t column = mEdit.column;
             std::vector<NestedHop> path = mEdit.path;
             DatePanelWidgets widgets = makeDatePanel(
                 dateKind,
@@ -879,31 +848,30 @@ namespace eokas::RoseAxion {
                 fontPx,
                 smallPx,
                 [this]() { this->closeValueEdit(); },
-                [this, column, path]()
+                [this, path]()
                 {
                     mEdit = {};
-                    this->commitText(column, path, String::empty);
+                    this->commitText(path, String::empty);
                 },
-                [this, column, path](const String& stored)
+                [this, path](const String& stored)
                 {
                     mEdit = {};
-                    this->commitText(column, path, stored);
+                    this->commitText(path, stored);
                 },
                 [this]() { this->handleEscape(); },
                 [this](const TemporalParts& next) { mEdit.date = next; });
-            mHost.overlay->attachChild(widgets.panel);
+            overlay->attachChild(widgets.panel);
             mDatePanel = widgets.panel.get();
             mFocus = widgets.focus;
         }
 
-        if (mHost.overlay != nullptr && mEdit.kind == ValueEditState::Kind::Color && mColorAnchor != nullptr)
+        if (overlay != nullptr && mEdit.kind == ValueEditState::Kind::Color && mColorAnchor != nullptr)
         {
             Color current(1.0f, 1.0f, 1.0f, 1.0f);
             String shown = mEdit.path.empty()
-                ? mDoc->cellText(static_cast<u32_t>(mRow), mEdit.column)
-                : mDoc->nestedText(static_cast<u32_t>(mRow), mEdit.column, mEdit.path);
+                ? mDoc->instanceStructText(mEdit.path)
+                : mDoc->instanceStructText(mEdit.path);
             parseColor(shown, current);
-            u32_t column = mEdit.column;
             std::vector<NestedHop> path = mEdit.path;
             ColorPanelWidgets widgets = makeColorPanel(
                 current,
@@ -913,19 +881,19 @@ namespace eokas::RoseAxion {
                 smallPx,
                 mHost.writeClipboard,
                 mHost.readClipboard,
-                [this, column, path](const Color& value)
+                [this, path](const Color& value)
                 {
                     mEdit = {};
-                    this->commitText(column, path, formatColor(value));
+                    this->commitText(path, formatColor(value));
                 },
-                [this, column, path]()
+                [this, path]()
                 {
                     mEdit = {};
-                    this->commitText(column, path, String::empty);
+                    this->commitText(path, String::empty);
                 },
                 [this]() { this->closeValueEdit(); },
                 [this]() { this->handleEscape(); });
-            mHost.overlay->attachChild(widgets.panel);
+            overlay->attachChild(widgets.panel);
             mColorPanel = widgets.panel.get();
             mColorPicker = widgets.picker;
             mFocus = widgets.focus;

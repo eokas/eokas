@@ -1,5 +1,6 @@
 #include "./SchemaOutliner.h"
 #include "./FieldEditors.h"
+#include "./FieldTypes.h"
 #include "./Theme.h"
 #include "./UiKit.h"
 
@@ -63,6 +64,7 @@ namespace eokas::RoseAxion {
         mRenameIndex = -1;
         mRenameSeed = String::empty;
         mKeepY = 0.0f;
+        mHeader = nullptr;
         mView = nullptr;
         mOverlay = nullptr;
         mRenameAnchor = nullptr;
@@ -89,6 +91,46 @@ namespace eokas::RoseAxion {
 
     void RoseSchemaOutliner::layout()
     {
+        if (!visible)
+        {
+            return;
+        }
+        const float s = this->scale();
+        const float width = shape.size.x;
+        const float height = shape.size.y;
+        const float headerH = kRoseOutlinerHeaderH * s;
+        const float pad = 8.0f * s;
+        if (mHeader != nullptr)
+        {
+            setBox(*mHeader, Rect(0.0f, 0.0f, width, headerH));
+            if (mAddButton != nullptr)
+            {
+                const float addW = 24.0f * s;
+                const float addH = 24.0f * s;
+                setBox(*mAddButton, Rect(width - addW - pad, (headerH - addH) * 0.5f, addW, addH));
+            }
+            if (mHeader->children().size() >= 2 && mHeader->children()[0])
+            {
+                UIWidget& title = *mHeader->children()[0];
+                title.layout();
+                setBox(title, Rect(pad, (headerH - title.shape.size.y) * 0.5f, title.shape.size.x, title.shape.size.y));
+            }
+            UIWidget* headerRule = mHeader->children().size() >= 2 ? mHeader->children()[1].get() : nullptr;
+            if (headerRule != nullptr)
+            {
+                setBox(*headerRule, Rect(0.0f, headerH - 1.0f, width, 1.0f));
+            }
+        }
+        if (mView != nullptr)
+        {
+            float listH = height - headerH;
+            if (listH < 1.0f)
+            {
+                listH = 1.0f;
+            }
+            setBox(*mView, Rect(0.0f, headerH, width, listH));
+            mView->layout();
+        }
         this->placeOverlayEditors();
         UIWidget::layout();
     }
@@ -212,6 +254,7 @@ namespace eokas::RoseAxion {
         mMenu = nullptr;
         this->detachChildren();
         mView = nullptr;
+        mHeader = nullptr;
         mRenameAnchor = nullptr;
         mAddButton = nullptr;
         mFocus = nullptr;
@@ -221,9 +264,9 @@ namespace eokas::RoseAxion {
         }
 
         const float s = this->scale();
-        const float fontPx = 15.0f * s;
-        const float smallPx = 13.0f * s;
-        const float headerH = 36.0f * s;
+        const float fontPx = bodyPx(s);
+        const float smallPx = bodyPx(s);
+        const float headerH = kRoseOutlinerHeaderH * s;
         const float itemH = 32.0f * s;
         const float pad = 8.0f * s;
         const RoseTheme& t = theme();
@@ -246,7 +289,7 @@ namespace eokas::RoseAxion {
         header->pickable = false;
         header->color = headerBg;
         setBox(header, Rect(0.0f, 0.0f, width, headerH));
-        auto title = makeText("模式", fontPath, fontPx, ink, width - 48.0f * s, 22.0f * s);
+        auto title = makeText("Schemas", fontPath, titleMdPx(s), ink, width - 48.0f * s, 22.0f * s);
         title->layout();
         setBox(title, Rect(pad, (headerH - title->shape.size.y) * 0.5f, title->shape.size.x, title->shape.size.y));
         header->attachChild(title);
@@ -263,7 +306,6 @@ namespace eokas::RoseAxion {
         headerRule->shape.pivot = Vector2(0.0f, 0.0f);
         setBox(headerRule, Rect(0.0f, headerH - 1.0f, width, 1.0f));
         header->attachChild(headerRule);
-        this->attachChild(header);
 
         auto showPopup = [this, s, fontPx, popup, fontPath](UIWidget& anchor, const std::vector<std::pair<const char*, std::function<void()>>>& entries)
         {
@@ -271,21 +313,22 @@ namespace eokas::RoseAxion {
             {
                 return;
             }
+            if (mMenu != nullptr)
+            {
+                mOverlay->detachChild(mMenu);
+                mMenu = nullptr;
+            }
             auto menu = std::make_shared<UIMenu>();
             menu->direction = UIDirection::Vertical;
-            menu->padding = 2.0f * s;
-            menu->spacing = 1.0f * s;
-            menu->color = popup;
+            stylePopupMenu(*menu, s);
             menu->overlay = true;
             menu->shape.pivot = Vector2(0.0f, 0.0f);
             menu->host = &anchor;
             for (const auto& entry : entries)
             {
                 auto item = std::make_shared<UIMenuItem>();
-                item->paddingX = 10.0f * s;
-                item->paddingY = 3.0f * s;
                 item->setText(entry.first);
-                styleMenuItem(*item, fontPath, menuFontPx(s));
+                styleMenuItem(*item, fontPath, menuFontPx(s), s);
                 auto action = entry.second;
                 UIMenu* menuRaw = menu.get();
                 item->onClick = [this, menuRaw, action]()
@@ -306,13 +349,31 @@ namespace eokas::RoseAxion {
 
         add->onClick = [this, add, showPopup]()
         {
+            if (mDoc == nullptr)
+            {
+                return;
+            }
+            this->cancelRename();
+            UIMenu* openMenu = dynamic_cast<UIMenu*>(mMenu);
+            if (openMenu != nullptr && openMenu->visible && openMenu->host == add.get())
+            {
+                openMenu->visible = false;
+                if (mOverlay != nullptr)
+                {
+                    mOverlay->detachChild(openMenu);
+                }
+                mMenu = nullptr;
+                return;
+            }
             showPopup(*add, {
-                {"结构模式", [this]() { this->addSchema(rose::SchemaType::Struct); }},
-                {"列表模式", [this]() { this->addSchema(rose::SchemaType::List); }},
-                {"单选模式", [this]() { this->addSchema(rose::SchemaType::Options); }},
+                {schemaTypeLabel(rose::SchemaType::Struct), [this]() { this->addSchema(rose::SchemaType::Struct); }},
+                {schemaTypeLabel(rose::SchemaType::List), [this]() { this->addSchema(rose::SchemaType::List); }},
+                {schemaTypeLabel(rose::SchemaType::Options), [this]() { this->addSchema(rose::SchemaType::Options); }},
             });
         };
         header->attachChild(add);
+        this->attachChild(header);
+        mHeader = header.get();
 
         float listY = headerH;
         float listH = height - headerH;
@@ -413,9 +474,9 @@ namespace eokas::RoseAxion {
                 more->onClick = [this, index, moreRaw, showPopup]()
                 {
                     showPopup(*moreRaw, {
-                        {"打开", [this, index]() { this->openSchema(index); }},
-                        {"重命名", [this, index]() { this->beginRename(index); }},
-                        {"删除", [this, index]()
+                        {"Open", [this, index]() { this->openSchema(index); }},
+                        {"Rename", [this, index]() { this->beginRename(index); }},
+                        {"Delete", [this, index]()
                         {
                             if (mHost.confirmDeleteSchema)
                             {
@@ -459,13 +520,13 @@ namespace eokas::RoseAxion {
             UIInput* inputRaw = input.get();
             input->onSubmit = [this](const String& text) { this->finishRename(text); };
             input->onEscape = [this]() { this->handleEscape(); };
-            input->onFocusLoss = [this, inputRaw]()
+            bindCommitOnFocusLoss(*input, mHost.isRebuildingUi, [this, inputRaw]()
             {
                 if (mRenameIndex >= 0)
                 {
                     this->finishRename(String(inputRaw->text));
                 }
-            };
+            });
             mOverlay->attachChild(input);
             mRenameInput = input.get();
             mFocus = input.get();

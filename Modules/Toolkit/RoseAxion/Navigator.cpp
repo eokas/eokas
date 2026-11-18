@@ -39,14 +39,23 @@ namespace eokas::RoseAxion {
             UIStroke::border(primitive, localToScreen, Rect(8.0f * u, 11.5f * u, 2.0f * u, 4.0f * u), stroke);
         }
 
-        void drawTables(UIPrimitive& primitive, const Matrix3& localToScreen, float size, const Color& ink)
+        void drawInstance(UIPrimitive& primitive, const Matrix3& localToScreen, float size, const Color& ink)
         {
             const UIStrokeStyle stroke = navStroke(ink, size);
             const float u = size / 18.0f;
-            UIStroke::border(primitive, localToScreen, Rect(3.0f * u, 3.0f * u, 12.0f * u, 12.0f * u), stroke);
-            UIStroke::segment(primitive, localToScreen, navPt(3.0f, 7.0f, u), navPt(15.0f, 7.0f, u), stroke);
-            UIStroke::segment(primitive, localToScreen, navPt(9.0f, 7.0f, u), navPt(9.0f, 15.0f, u), stroke);
-            UIStroke::segment(primitive, localToScreen, navPt(3.0f, 11.0f, u), navPt(15.0f, 11.0f, u), stroke);
+            UIStroke::border(primitive, localToScreen, Rect(3.5f * u, 3.5f * u, 11.0f * u, 11.0f * u), stroke);
+            constexpr int kSeg = 16;
+            const float cx = 12.5f * u;
+            const float cy = 12.5f * u;
+            const float r = 2.2f * u;
+            std::vector<Vector2> ring;
+            ring.reserve((size_t)kSeg);
+            for (int i = 0; i < kSeg; ++i)
+            {
+                float a = 6.28318530718f * ((float)i / (float)kSeg);
+                ring.push_back(Vector2(cx + cosf(a) * r, cy + sinf(a) * r));
+            }
+            UIStroke::path(primitive, localToScreen, ring, true, stroke);
         }
 
         void drawSchemas(UIPrimitive& primitive, const Matrix3& localToScreen, float size, const Color& ink)
@@ -208,7 +217,7 @@ namespace eokas::RoseAxion {
             return;
         }
         const float s = this->scale();
-        const float pad = 6.0f * s;
+        const float pad = kRoseNavSidePad * s;
         const float width = shape.size.x;
         const float height = shape.size.y;
         const float btnW = width - pad * 2.0f;
@@ -219,9 +228,9 @@ namespace eokas::RoseAxion {
         {
             setBox(*mHome, Rect(pad, pad, btnW, btnH));
         }
-        if (mTables != nullptr)
+        if (mInstance != nullptr)
         {
-            setBox(*mTables, Rect(pad, pad + stride, btnW, btnH));
+            setBox(*mInstance, Rect(pad, pad + stride, btnW, btnH));
         }
         if (mSchemas != nullptr)
         {
@@ -248,7 +257,7 @@ namespace eokas::RoseAxion {
     {
         this->detachChildren();
         mHome = nullptr;
-        mTables = nullptr;
+        mInstance = nullptr;
         mSchemas = nullptr;
         mSearch = nullptr;
         mSettings = nullptr;
@@ -301,10 +310,11 @@ namespace eokas::RoseAxion {
 
             if (on)
             {
+                const float navPad = kRoseNavSidePad * s;
                 auto mark = std::make_shared<UIWidget>();
                 mark->pickable = false;
                 mark->color = t.light ? t.accent : t.accentBright;
-                setBox(mark, Rect(0.0f, 0.0f, 3.0f * s, btnH));
+                setBox(mark, Rect(-navPad, 0.0f, kRoseNavMarkW * s, btnH));
                 button->attachChild(mark);
             }
             button->onClick = [this, page]()
@@ -318,7 +328,7 @@ namespace eokas::RoseAxion {
             slot = button.get();
         };
         add("Home", drawHome, EditorPage::Home, mHome);
-        add("Tables", drawTables, EditorPage::Tables, mTables);
+        add("Instance", drawInstance, EditorPage::Instance, mInstance);
         add("Schemas", drawSchemas, EditorPage::Schemas, mSchemas);
         add("Search", drawSearch, EditorPage::Search, mSearch);
         add("Settings", drawSettings, EditorPage::Settings, mSettings);

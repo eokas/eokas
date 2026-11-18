@@ -1,4 +1,5 @@
 #include "./UiKit.h"
+#include "./FieldTypes.h"
 
 #include "UI/UIFont.h"
 
@@ -16,6 +17,24 @@ namespace eokas::RoseAxion {
     void setBox(const std::shared_ptr<UIWidget>& widget, const Rect& box)
     {
         setBox(*widget, box);
+    }
+
+    void bindCommitOnFocusLoss(
+        UIWidget& widget,
+        const std::function<bool()>& isRebuilding,
+        const std::function<void()>& commit)
+    {
+        widget.onFocusLoss = [isRebuilding, commit]()
+        {
+            if (isRebuilding && isRebuilding())
+            {
+                return;
+            }
+            if (commit)
+            {
+                commit();
+            }
+        };
     }
 
     void placeOnOverlay(UIWidget& overlay, UIWidget& widget, const Rect& screen, bool below)
@@ -67,7 +86,7 @@ namespace eokas::RoseAxion {
     {
         if (path.isEmpty())
         {
-            return "未命名";
+            return "Untitled";
         }
         size_t slash = path.rfind('\\');
         size_t slash2 = path.rfind('/');
@@ -92,6 +111,19 @@ namespace eokas::RoseAxion {
         text.style.fontPath = font;
         text.style.fontSize = size;
         text.style.color = color;
+    }
+
+    void warmupRoseAxionFont(UIFont& font, float scale)
+    {
+        const float sizes[] = { kBodyPx, kTitleMdPx, kTitleLgPx };
+        const String text = fontWarmupText();
+        for (float px : sizes)
+        {
+            const float logical = px * scale;
+            const uint32_t prepared = static_cast<uint32_t>(logical + 0.5f);
+            (void)font.prepareSize(prepared);
+            (void)font.measure(text, logical);
+        }
     }
 
     std::shared_ptr<UIText> makeText(const String& value, const String& font, float size, const Color& color, float width, float height)
@@ -245,11 +277,23 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void styleMenuItem(UIMenuItem& item, const String& font, float size)
+    void stylePopupMenu(UIMenu& menu, float scale)
     {
         const RoseTheme& t = theme();
-        item.background = t.popup;
-        item.hoverFill = t.raised;
+        menu.color = t.popup;
+        menu.padding = 4.0f * scale;
+        menu.spacing = 0.0f;
+        menu.border.color = t.hair;
+        menu.border.thickness = 1.0f;
+    }
+
+    void styleMenuItem(UIMenuItem& item, const String& font, float size, float scale)
+    {
+        const RoseTheme& t = theme();
+        item.padding = 8.0f * scale;
+        item.hoverInset = 4.0f * scale;
+        item.background = Color(0.0f, 0.0f, 0.0f, 0.0f);
+        item.hoverFill = t.quiet;
         item.selectedFill = t.selected;
         if (UIText* text = item.label())
         {

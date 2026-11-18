@@ -31,9 +31,9 @@ namespace eokas::RoseAxion {
     private:
         void notifyRebuild();
         void goTo(EditorPage page);
-        void openTable(u32_t index);
+        void openInstance(u32_t index);
         void openSchema(u32_t index);
-        void addTable();
+        void addInstance();
         const String& font() const;
         float scale() const;
         String documentTitle() const;

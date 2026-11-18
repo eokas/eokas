@@ -1,4 +1,5 @@
 #include "./Editor.h"
+#include "./Theme.h"
 #include "./UiKit.h"
 
 #include "UI/Main.h"
@@ -15,9 +16,9 @@ namespace eokas::RoseAxion {
         {
             mHomePage = std::make_shared<RoseHomePage>();
         }
-        if (!mTablePage)
+        if (!mInstancePage)
         {
-            mTablePage = std::make_shared<RoseTablePage>();
+            mInstancePage = std::make_shared<RoseInstancePage>();
         }
         if (!mSchemaPage)
         {
@@ -34,7 +35,7 @@ namespace eokas::RoseAxion {
         if (mDoc != nullptr)
         {
             mHomePage->bind(*mDoc, this->homeHost());
-            mTablePage->bind(*mDoc, mHost);
+            mInstancePage->bind(*mDoc, this->instanceHost());
             mSchemaPage->bind(*mDoc, this->schemaHost());
         }
         mSearchPage->bind(this->searchHost());
@@ -56,19 +57,41 @@ namespace eokas::RoseAxion {
     {
         RoseHomePage::Host host;
         host.requestRebuild = mHost.requestRebuild;
+        host.isRebuildingUi = mHost.isRebuildingUi;
         host.selectPage = [this](EditorPage page) { this->setPage(page); };
         host.font = mHost.font;
         host.scale = mHost.scale;
         return host;
     }
 
-    RoseSchemaPage::Host RoseEditor::schemaHost() const
+    RoseInstancePage::Host RoseEditor::instanceHost()
+    {
+        RoseInstancePage::Host host;
+        host.requestRebuild = mHost.requestRebuild;
+        host.isRebuildingUi = mHost.isRebuildingUi;
+        host.writeClipboard = mHost.writeClipboard;
+        host.readClipboard = mHost.readClipboard;
+        host.openExternal = mHost.openExternal;
+        host.pickFilePath = mHost.pickFilePath;
+        host.pickFolderPath = mHost.pickFolderPath;
+        host.ctrlDown = mHost.ctrlDown;
+        host.confirmDeleteInstance = mHost.confirmDeleteInstance;
+        host.overlay = [this]() { return mOverlay; };
+        host.sharedOutlinerW = &mPaneOutlinerW;
+        host.font = mHost.font;
+        host.scale = mHost.scale;
+        return host;
+    }
+
+    RoseSchemaPage::Host RoseEditor::schemaHost()
     {
         RoseSchemaPage::Host host;
         host.requestRebuild = mHost.requestRebuild;
+        host.isRebuildingUi = mHost.isRebuildingUi;
         host.writeClipboard = mHost.writeClipboard;
         host.readClipboard = mHost.readClipboard;
         host.confirmDeleteSchema = mHost.confirmDeleteSchema;
+        host.sharedOutlinerW = &mPaneOutlinerW;
         host.font = mHost.font;
         host.scale = mHost.scale;
         return host;
@@ -86,6 +109,7 @@ namespace eokas::RoseAxion {
     {
         RoseSettingsPage::Host host;
         host.requestRebuild = mHost.requestRebuild;
+        host.isRebuildingUi = mHost.isRebuildingUi;
         host.font = mHost.font;
         host.scale = mHost.scale;
         return host;
@@ -110,6 +134,10 @@ namespace eokas::RoseAxion {
         {
             return mHomePage.get();
         }
+        if (mPageKind == EditorPage::Instance)
+        {
+            return mInstancePage.get();
+        }
         if (mPageKind == EditorPage::Schemas)
         {
             return mSchemaPage.get();
@@ -122,7 +150,7 @@ namespace eokas::RoseAxion {
         {
             return mSettingsPage.get();
         }
-        return mTablePage.get();
+        return mInstancePage.get();
     }
 
     void RoseEditor::bind(TableDocument& doc, const Host& host)
@@ -138,29 +166,24 @@ namespace eokas::RoseAxion {
         {
             mHomePage->reset();
         }
-        if (mTablePage)
+        if (mInstancePage)
         {
-            mTablePage->setOverlay(nullptr);
-            mTablePage->reset();
+            mInstancePage->setOverlay(nullptr);
+            mInstancePage->reset();
         }
         mOverlay = nullptr;
         this->detachChildren();
     }
 
-    void RoseEditor::selectTables()
-    {
-        mPageKind = EditorPage::Tables;
-    }
-
     void RoseEditor::resetOutliner()
     {
-        if (mTablePage)
-        {
-            mTablePage->resetOutliner();
-        }
         if (mSchemaPage)
         {
             mSchemaPage->resetOutliner();
+        }
+        if (mInstancePage)
+        {
+            mInstancePage->resetOutliner();
         }
     }
 
@@ -174,41 +197,17 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseEditor::closeSettings()
-    {
-        if (mTablePage)
-        {
-            mTablePage->closeSettings();
-        }
-    }
-
     UIWidget* RoseEditor::focusWidget() const
     {
         if (mPageKind == EditorPage::Schemas && mSchemaPage)
         {
             return mSchemaPage->focusWidget();
         }
-        if (mPageKind == EditorPage::Tables && mTablePage)
+        if (mPageKind == EditorPage::Instance && mInstancePage)
         {
-            return mTablePage->focusWidget();
+            return mInstancePage->focusWidget();
         }
         return nullptr;
-    }
-
-    float RoseEditor::scrollX() const
-    {
-        return mTablePage != nullptr ? mTablePage->scrollX() : 0.0f;
-    }
-
-    float RoseEditor::scrollY() const
-    {
-        return mTablePage != nullptr ? mTablePage->scrollY() : 0.0f;
-    }
-
-    void RoseEditor::setScroll(float x, float y)
-    {
-        this->ensurePages();
-        mTablePage->setScroll(x, y);
     }
 
     void RoseEditor::placeChildren()
@@ -257,9 +256,9 @@ namespace eokas::RoseAxion {
         {
             mHomePage->layout();
         }
-        else if (mPageKind == EditorPage::Tables && mTablePage != nullptr)
+        else if (mPageKind == EditorPage::Instance && mInstancePage != nullptr)
         {
-            mTablePage->layout();
+            mInstancePage->layout();
         }
         else if (mPageKind == EditorPage::Schemas && mSchemaPage != nullptr)
         {
@@ -282,32 +281,11 @@ namespace eokas::RoseAxion {
         {
             return mSchemaPage->handleEscape();
         }
-        if (mPageKind == EditorPage::Tables && mTablePage)
+        if (mPageKind == EditorPage::Instance && mInstancePage)
         {
-            return mTablePage->handleEscape();
+            return mInstancePage->handleEscape();
         }
         return false;
-    }
-
-    bool RoseEditor::colorDropping() const
-    {
-        return mPageKind == EditorPage::Tables && mTablePage != nullptr && mTablePage->colorDropping();
-    }
-
-    void RoseEditor::sampleColorDropper(float x, float y, bool commit)
-    {
-        if (mPageKind == EditorPage::Tables && mTablePage)
-        {
-            mTablePage->sampleColorDropper(x, y, commit);
-        }
-    }
-
-    void RoseEditor::cancelColorDropper()
-    {
-        if (mPageKind == EditorPage::Tables && mTablePage)
-        {
-            mTablePage->cancelColorDropper();
-        }
     }
 
     bool RoseEditor::resizeCursorAt(float x, float y) const
@@ -316,18 +294,47 @@ namespace eokas::RoseAxion {
         {
             return mSchemaPage->resizeCursorAt(x, y);
         }
-        return mPageKind == EditorPage::Tables && mTablePage != nullptr && mTablePage->resizeCursorAt(x, y);
+        if (mPageKind == EditorPage::Instance && mInstancePage)
+        {
+            return mInstancePage->resizeCursorAt(x, y);
+        }
+        return false;
+    }
+
+    bool RoseEditor::colorDropping() const
+    {
+        if (mPageKind == EditorPage::Instance && mInstancePage != nullptr)
+        {
+            return mInstancePage->colorDropping();
+        }
+        return false;
+    }
+
+    void RoseEditor::sampleColorDropper(float x, float y, bool commit)
+    {
+        if (mPageKind == EditorPage::Instance && mInstancePage != nullptr)
+        {
+            mInstancePage->sampleColorDropper(x, y, commit);
+        }
+    }
+
+    void RoseEditor::cancelColorDropper()
+    {
+        if (mPageKind == EditorPage::Instance && mInstancePage != nullptr)
+        {
+            mInstancePage->cancelColorDropper();
+        }
     }
 
     void RoseEditor::rebuild()
     {
-        if (mTablePage)
-        {
-            mTablePage->setOverlay(nullptr);
-        }
         if (mSchemaPage)
         {
             mSchemaPage->setOverlay(nullptr);
+        }
+        if (mInstancePage)
+        {
+            mInstancePage->setOverlay(nullptr);
         }
         this->detachChildren();
         mOverlay = nullptr;
@@ -352,10 +359,10 @@ namespace eokas::RoseAxion {
         {
             mHomePage->rebuild();
         }
-        else if (mPageKind == EditorPage::Tables)
+        else if (mPageKind == EditorPage::Instance)
         {
-            mTablePage->setOverlay(mOverlay);
-            mTablePage->rebuild();
+            mInstancePage->setOverlay(mOverlay);
+            mInstancePage->rebuild();
         }
         else if (mPageKind == EditorPage::Schemas)
         {
@@ -379,6 +386,10 @@ namespace eokas::RoseAxion {
         {
             this->attachChild(mHomePage);
         }
+        else if (mPageKind == EditorPage::Instance && mInstancePage)
+        {
+            this->attachChild(mInstancePage);
+        }
         else if (mPageKind == EditorPage::Schemas && mSchemaPage)
         {
             this->attachChild(mSchemaPage);
@@ -390,10 +401,6 @@ namespace eokas::RoseAxion {
         else if (mPageKind == EditorPage::Settings && mSettingsPage)
         {
             this->attachChild(mSettingsPage);
-        }
-        else if (mTablePage)
-        {
-            this->attachChild(mTablePage);
         }
         this->attachChild(overlay);
     }

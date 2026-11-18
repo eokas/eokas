@@ -1,10 +1,11 @@
-#include "./TableEditor.h"
+#include "./InstanceEditor_ListGrid.h"
 #include "./FieldEditors.h"
 #include "./Theme.h"
 #include "./UiKit.h"
 
 #include "UI/Main.h"
 #include "UI/UIFont.h"
+#include "UI/widgets/UITable.h"
 
 #include <cmath>
 #include <functional>
@@ -62,35 +63,32 @@ namespace eokas::RoseAxion {
 
     }
 
-    void RoseTableEditor::bind(TableDocument& doc, const Host& host)
+    void RoseInstanceEditor_ListGrid::bind(TableDocument& doc, const Host& host)
     {
         mDoc = &doc;
         mHost = host;
     }
 
-    void RoseTableEditor::setOverlay(UIWidget* overlay)
+    void RoseInstanceEditor_ListGrid::clearOverlayEditors()
     {
-        if (mOverlay == overlay)
-        {
-            return;
-        }
-        if (mOverlay != nullptr)
+        UIWidget* overlay = mOverlay != nullptr ? mOverlay : mHost.overlay;
+        if (overlay != nullptr)
         {
             if (mEditInput != nullptr)
             {
-                mOverlay->detachChild(mEditInput);
+                overlay->detachChild(mEditInput);
             }
             if (mPickMenu != nullptr)
             {
-                mOverlay->detachChild(mPickMenu);
+                overlay->detachChild(mPickMenu);
             }
             if (mDatePanel != nullptr)
             {
-                mOverlay->detachChild(mDatePanel);
+                overlay->detachChild(mDatePanel);
             }
             if (mColorPanel != nullptr)
             {
-                mOverlay->detachChild(mColorPanel);
+                overlay->detachChild(mColorPanel);
             }
         }
         mEditInput = nullptr;
@@ -98,25 +96,39 @@ namespace eokas::RoseAxion {
         mDatePanel = nullptr;
         mColorPanel = nullptr;
         mColorPicker = nullptr;
-        mOverlay = overlay;
+        mEditAnchor = nullptr;
+        mPickAnchor = nullptr;
+        mDateAnchor = nullptr;
+        mColorAnchor = nullptr;
     }
 
-    bool RoseTableEditor::hasPopupEdit() const
+    void RoseInstanceEditor_ListGrid::setOverlay(UIWidget* overlay)
+    {
+        if (mOverlay == overlay)
+        {
+            return;
+        }
+        this->clearOverlayEditors();
+        mOverlay = overlay;
+        mHost.overlay = overlay;
+    }
+
+    bool RoseInstanceEditor_ListGrid::hasPopupEdit() const
     {
         return mEdit != EditKind::None || mPickRow >= 0 || mDateRow >= 0 || mColorRow >= 0;
     }
 
-    const String& RoseTableEditor::font() const
+    const String& RoseInstanceEditor_ListGrid::font() const
     {
         return mHost.font;
     }
 
-    float RoseTableEditor::scale() const
+    float RoseInstanceEditor_ListGrid::scale() const
     {
         return hostScale(mHost.scale);
     }
 
-    void RoseTableEditor::notifyRebuild()
+    void RoseInstanceEditor_ListGrid::notifyRebuild()
     {
         if (mHost.requestRebuild)
         {
@@ -124,7 +136,12 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseTableEditor::reset()
+    void RoseInstanceEditor_ListGrid::refreshUi()
+    {
+        this->notifyRebuild();
+    }
+
+    void RoseInstanceEditor_ListGrid::reset()
     {
         mSelect = SelectKind::Cell;
         mSelectRow = 0;
@@ -142,9 +159,7 @@ namespace eokas::RoseAxion {
         mClickCol = -1;
         mKeepX = 0.0f;
         mKeepY = 0.0f;
-        mResizeCol = -1;
         this->setOverlay(nullptr);
-        mBar = nullptr;
         mView = nullptr;
         mTable = nullptr;
         mGridHost = nullptr;
@@ -153,21 +168,20 @@ namespace eokas::RoseAxion {
         mDateAnchor = nullptr;
         mColorAnchor = nullptr;
         mFocus = nullptr;
-        mResizeHandles.clear();
         this->detachChildren();
     }
 
-    float RoseTableEditor::scrollX() const
+    float RoseInstanceEditor_ListGrid::scrollX() const
     {
         return mView != nullptr ? mView->scrollX() : mKeepX;
     }
 
-    float RoseTableEditor::scrollY() const
+    float RoseInstanceEditor_ListGrid::scrollY() const
     {
         return mView != nullptr ? mView->scrollY() : mKeepY;
     }
 
-    void RoseTableEditor::setScroll(float x, float y)
+    void RoseInstanceEditor_ListGrid::setScroll(float x, float y)
     {
         mKeepX = x;
         mKeepY = y;
@@ -177,32 +191,27 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseTableEditor::layout()
+    void RoseInstanceEditor_ListGrid::layout()
     {
         if (!visible)
         {
             return;
         }
-        const float barH = mBar != nullptr ? 36.0f * this->scale() : 0.0f;
-        if (mBar != nullptr)
-        {
-            setBox(*mBar, Rect(0.0f, 0.0f, shape.size.x, barH));
-        }
         if (mView != nullptr)
         {
-            float viewH = shape.size.y - barH;
+            float viewH = shape.size.y - mBarH;
             if (viewH < 1.0f)
             {
                 viewH = 1.0f;
             }
-            setBox(*mView, Rect(0.0f, barH, shape.size.x, viewH));
+            setBox(*mView, Rect(0.0f, mBarH, shape.size.x, viewH));
             mView->layout();
         }
         this->placeOverlayEditors();
         UIWidget::layout();
     }
 
-    void RoseTableEditor::placeOverlayEditors()
+    void RoseInstanceEditor_ListGrid::placeOverlayEditors()
     {
         if (mOverlay == nullptr)
         {
@@ -226,14 +235,25 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseTableEditor::clampState()
+
+    bool RoseInstanceEditor_ListGrid::isReadOnlyColumn(u32_t col) const
+    {
+        if (mDoc == nullptr)
+        {
+            return true;
+        }
+        NestedField info = mDoc->instanceListColumn(col);
+        return info.nestedStruct || info.nestedList;
+    }
+
+    void RoseInstanceEditor_ListGrid::clampState()
     {
         if (mDoc == nullptr || !mDoc->isOpen())
         {
             return;
         }
-        int rows = static_cast<int>(mDoc->rowCount());
-        int cols = static_cast<int>(mDoc->columnCount());
+        int rows = static_cast<int>(mDoc->instanceListCount());
+        int cols = static_cast<int>(mDoc->instanceListColumnCount());
         if (rows > 0)
         {
             mSelectRow = clampi(mSelectRow, 0, rows - 1);
@@ -267,33 +287,24 @@ namespace eokas::RoseAxion {
             mSelect = SelectKind::Cell;
         }
         if (mDateRow >= rows || mDateCol >= cols) { mDateRow = -1; mDateCol = -1; }
-        else if (mDateCol >= 0 && cols > 0 && !temporalKind(mDoc->column(static_cast<u32_t>(mDateCol)).kind)) { mDateRow = -1; mDateCol = -1; }
+        else if (mDateCol >= 0 && cols > 0 && !temporalKind(mDoc->instanceListColumn(static_cast<u32_t>(mDateCol)).kind)) { mDateRow = -1; mDateCol = -1; }
         if (mPickRow >= rows || mPickCol >= cols) { mPickRow = -1; mPickCol = -1; }
         if (mColorRow >= rows || mColorCol >= cols) { mColorRow = -1; mColorCol = -1; }
-        else if (mColorCol >= 0 && cols > 0 && mDoc->column(static_cast<u32_t>(mColorCol)).kind != FieldKind::Color) { mColorRow = -1; mColorCol = -1; }
+        else if (mColorCol >= 0 && cols > 0 && mDoc->instanceListColumn(static_cast<u32_t>(mColorCol)).kind != FieldKind::Color) { mColorRow = -1; mColorCol = -1; }
         if (mEdit == EditKind::Cell && (rows <= 0 || cols <= 0 || mEditRow >= rows || mEditCol >= cols)) mEdit = EditKind::None;
-        if (mEdit == EditKind::Cell && cols > 0 && pickerKind(mDoc->column(static_cast<u32_t>(mEditCol)).kind)) mEdit = EditKind::None;
-        if (mEdit == EditKind::Header && (cols <= 0 || mEditCol >= cols)) mEdit = EditKind::None;
+        if (mEdit == EditKind::Cell && cols > 0 && pickerKind(mDoc->instanceListColumn(static_cast<u32_t>(mEditCol)).kind)) mEdit = EditKind::None;
     }
 
-    void RoseTableEditor::finishEdit(const String& text, int rowDelta, int colDelta)
+    void RoseInstanceEditor_ListGrid::finishEdit(const String& text, int rowDelta, int colDelta)
     {
         if (mEdit == EditKind::None || mDoc == nullptr || !mDoc->isOpen())
         {
             return;
         }
-        if (mEdit == EditKind::Header)
         {
-            mDoc->setColumnName(static_cast<u32_t>(mEditCol), text);
-            mSelect = SelectKind::Cell;
-            mSelectRow = 0;
-            mSelectCol = mEditCol;
-        }
-        else
-        {
-            mDoc->setCellText(static_cast<u32_t>(mEditRow), static_cast<u32_t>(mEditCol), text);
-            int rowHi = static_cast<int>(mDoc->rowCount()) - 1;
-            int colHi = static_cast<int>(mDoc->columnCount()) - 1;
+            mDoc->setInstanceListCellText(static_cast<u32_t>(mEditRow), static_cast<u32_t>(mEditCol), text);
+            int rowHi = static_cast<int>(mDoc->instanceListCount()) - 1;
+            int colHi = static_cast<int>(mDoc->instanceListColumnCount()) - 1;
             if (rowHi < 0 || colHi < 0)
             {
                 mSelect = SelectKind::None;
@@ -308,20 +319,20 @@ namespace eokas::RoseAxion {
             }
         }
         mEdit = EditKind::None;
-        this->notifyRebuild();
+        this->refreshUi();
     }
 
-    void RoseTableEditor::beginEdit(int row, int col, const String& seed)
+    void RoseInstanceEditor_ListGrid::beginEdit(int row, int col, const String& seed)
     {
         if (mDoc == nullptr || !mDoc->isOpen())
         {
             return;
         }
-        if (mDoc->isNestedColumn(static_cast<u32_t>(col)))
+        if (this->isReadOnlyColumn(static_cast<u32_t>(col)))
         {
             return;
         }
-        FieldKind kind = mDoc->column(static_cast<u32_t>(col)).kind;
+        FieldKind kind = mDoc->instanceListColumn(static_cast<u32_t>(col)).kind;
         mSelect = SelectKind::Cell;
         mSelectRow = row;
         mSelectCol = col;
@@ -329,7 +340,7 @@ namespace eokas::RoseAxion {
         if (temporalKind(kind))
         {
             TemporalParts parts;
-            initTemporalParts(kind, mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col)), parts);
+            initTemporalParts(kind, mDoc->instanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col)), parts);
             mDateYear = parts.year;
             mDateMonth = parts.month;
             mDateDay = parts.day;
@@ -342,18 +353,23 @@ namespace eokas::RoseAxion {
             mColorCol = -1;
             mPickRow = -1;
             mPickCol = -1;
-            this->notifyRebuild();
+            this->refreshUi();
             return;
         }
         if (kind == FieldKind::Color)
         {
+            if (mColorRow == row && mColorCol == col)
+            {
+                this->refreshUi();
+                return;
+            }
             mColorRow = row;
             mColorCol = col;
             mDateRow = -1;
             mDateCol = -1;
             mPickRow = -1;
             mPickCol = -1;
-            this->notifyRebuild();
+            this->refreshUi();
             return;
         }
         if (kind == FieldKind::Boolean)
@@ -368,7 +384,7 @@ namespace eokas::RoseAxion {
             mDateCol = -1;
             mColorRow = -1;
             mColorCol = -1;
-            String current = mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
+            String current = mDoc->instanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
             String picked = String::empty;
             if (kind == FieldKind::FilePath && mHost.pickFilePath)
             {
@@ -380,9 +396,9 @@ namespace eokas::RoseAxion {
             }
             if (!picked.isEmpty())
             {
-                mDoc->setCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), picked);
+                mDoc->setInstanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), picked);
             }
-            this->notifyRebuild();
+            this->refreshUi();
             return;
         }
         if (optionKind(kind))
@@ -393,7 +409,7 @@ namespace eokas::RoseAxion {
             mDateCol = -1;
             mColorRow = -1;
             mColorCol = -1;
-            this->notifyRebuild();
+            this->refreshUi();
             return;
         }
         mEdit = EditKind::Cell;
@@ -406,10 +422,10 @@ namespace eokas::RoseAxion {
         mDateCol = -1;
         mColorRow = -1;
         mColorCol = -1;
-        this->notifyRebuild();
+        this->refreshUi();
     }
 
-    void RoseTableEditor::selectCell(int row, int col)
+    void RoseInstanceEditor_ListGrid::selectCell(int row, int col)
     {
         auto now = std::chrono::steady_clock::now();
         bool repeat = !mClickHeader && mClickRow == row && mClickCol == col && now - mClickTime < std::chrono::milliseconds(450);
@@ -423,76 +439,44 @@ namespace eokas::RoseAxion {
         mSelectCol = col;
         if (repeat)
         {
-            if (mDoc->isNestedStructColumn(static_cast<u32_t>(col)))
+            if (!this->isReadOnlyColumn(static_cast<u32_t>(col)))
             {
-                this->openObjectEditor(row, col);
-                return;
+                this->beginEdit(row, col, mDoc->instanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col)));
             }
-            this->beginEdit(row, col, mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col)));
             return;
         }
         mPickRow = -1;
         mPickCol = -1;
-        this->notifyRebuild();
+        this->refreshUi();
     }
 
-    void RoseTableEditor::openObjectEditor(int row, int col)
-    {
-        if (mDoc == nullptr || !mDoc->isOpen() || row < 0)
-        {
-            return;
-        }
-        if (col >= 0)
-        {
-            mSelect = SelectKind::Cell;
-            mSelectRow = row;
-            mSelectCol = col;
-        }
-        else
-        {
-            mSelect = SelectKind::Row;
-            mSelectRow = row;
-        }
-        mEdit = EditKind::None;
-        mDateRow = -1;
-        mDateCol = -1;
-        mPickRow = -1;
-        mPickCol = -1;
-        mColorRow = -1;
-        mColorCol = -1;
-        if (mHost.openObject)
-        {
-            mHost.openObject(row, col);
-        }
-        this->notifyRebuild();
-    }
 
-    void RoseTableEditor::setBoolCell(int row, int col, bool value)
+    void RoseInstanceEditor_ListGrid::setBoolCell(int row, int col, bool value)
     {
         if (mDoc == nullptr || !mDoc->isOpen())
         {
             return;
         }
-        mDoc->setCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), value ? "true" : "false");
+        mDoc->setInstanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), value ? "true" : "false");
         mSelect = SelectKind::Cell;
         mSelectRow = row;
         mSelectCol = col;
         mEdit = EditKind::None;
         mPickRow = -1;
         mPickCol = -1;
-        this->notifyRebuild();
+        this->refreshUi();
     }
 
-    void RoseTableEditor::toggleBoolCell(int row, int col)
+    void RoseInstanceEditor_ListGrid::toggleBoolCell(int row, int col)
     {
         if (mDoc == nullptr || !mDoc->isOpen())
         {
             return;
         }
-        this->setBoolCell(row, col, !boolFromText(mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col))));
+        this->setBoolCell(row, col, !boolFromText(mDoc->instanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col))));
     }
 
-    void RoseTableEditor::selectAll()
+    void RoseInstanceEditor_ListGrid::selectAll()
     {
         if (mDoc == nullptr || !mDoc->isOpen())
         {
@@ -505,21 +489,16 @@ namespace eokas::RoseAxion {
         mClickRowHead = false;
         mClickRow = -1;
         mClickCol = -1;
-        this->notifyRebuild();
+        this->refreshUi();
     }
 
-    bool RoseTableEditor::handleEscape()
+    bool RoseInstanceEditor_ListGrid::handleEscape()
     {
-        if (mResizeCol >= 0)
-        {
-            this->cancelResize();
-            return true;
-        }
-        if (mDateRow >= 0 || mDateCol >= 0)
+if (mDateRow >= 0 || mDateCol >= 0)
         {
             mDateRow = -1;
             mDateCol = -1;
-            this->notifyRebuild();
+            this->refreshUi();
             return true;
         }
         if (mColorRow >= 0 || mColorCol >= 0)
@@ -531,31 +510,31 @@ namespace eokas::RoseAxion {
             }
             mColorRow = -1;
             mColorCol = -1;
-            this->notifyRebuild();
+            this->refreshUi();
             return true;
         }
         if (mEdit != EditKind::None)
         {
             mEdit = EditKind::None;
-            this->notifyRebuild();
+            this->refreshUi();
             return true;
         }
         if (mPickRow >= 0 || mPickCol >= 0)
         {
             mPickRow = -1;
             mPickCol = -1;
-            this->notifyRebuild();
+            this->refreshUi();
             return true;
         }
         return false;
     }
 
-    bool RoseTableEditor::colorDropping() const
+    bool RoseInstanceEditor_ListGrid::colorDropping() const
     {
         return mColorPicker != nullptr && mColorPicker->eyeDropping();
     }
 
-    void RoseTableEditor::sampleColorDropper(float x, float y, bool commit)
+    void RoseInstanceEditor_ListGrid::sampleColorDropper(float x, float y, bool commit)
     {
         if (mColorPicker != nullptr)
         {
@@ -563,7 +542,7 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseTableEditor::cancelColorDropper()
+    void RoseInstanceEditor_ListGrid::cancelColorDropper()
     {
         if (mColorPicker != nullptr)
         {
@@ -571,135 +550,21 @@ namespace eokas::RoseAxion {
         }
     }
 
-    bool RoseTableEditor::resizeCursorAt(float x, float y) const
-    {
-        if (mResizeCol >= 0)
-        {
-            return true;
-        }
-        int tableCol = -1;
-        return this->hitResizeCol(x, y, tableCol);
-    }
 
-    bool RoseTableEditor::hitResizeCol(float screenX, float screenY, int& tableCol) const
-    {
-        tableCol = -1;
-        if (mTable == nullptr)
-        {
-            return false;
-        }
-        Vector2 local = mTable->screenToLocal(Vector2(screenX, screenY));
-        if (local.y < 0.0f || local.y > mTable->shape.size.y)
-        {
-            return false;
-        }
-        const float grip = 6.0f * this->scale();
-        float right = 0.0f;
-        int count = mTable->columnCount();
-        for (int i = 0; i < count; ++i)
-        {
-            right += mTable->columnWidth(i);
-            if (local.x >= right - grip * 0.5f && local.x <= right + grip * 0.5f)
-            {
-                tableCol = i;
-                return true;
-            }
-        }
-        return false;
-    }
 
-    void RoseTableEditor::placeResizeHandles()
-    {
-        if (mTable == nullptr || mGridHost == nullptr)
-        {
-            return;
-        }
-        const float grip = 6.0f * this->scale();
-        float right = 0.0f;
-        float tableH = mTable->shape.size.y;
-        int count = mTable->columnCount();
-        for (int i = 0; i < count && i < static_cast<int>(mResizeHandles.size()); ++i)
-        {
-            right += mTable->columnWidth(i);
-            setBox(*mResizeHandles[static_cast<size_t>(i)], Rect(right - grip * 0.5f, 0.0f, grip, tableH));
-        }
-    }
 
-    void RoseTableEditor::applyTableWidth(int tableCol, float pixelWidth)
-    {
-        if (mTable == nullptr || mGridHost == nullptr || mView == nullptr)
-        {
-            return;
-        }
-        float minW = 48.0f * this->scale();
-        if (pixelWidth < minW)
-        {
-            pixelWidth = minW;
-        }
-        mTable->setColumnWidth(tableCol, pixelWidth);
-        float tableW = 0.0f;
-        int count = mTable->columnCount();
-        for (int i = 0; i < count; ++i)
-        {
-            tableW += mTable->columnWidth(i);
-        }
-        float tableH = mTable->shape.size.y;
-        setBox(*mTable, Rect(0.0f, 0.0f, tableW, tableH));
-        setBox(*mGridHost, Rect(0.0f, 0.0f, tableW, tableH));
-        mTable->layout();
-        this->placeResizeHandles();
-        mView->layout();
-        this->placeOverlayEditors();
-    }
 
-    void RoseTableEditor::commitResize()
-    {
-        if (mResizeCol < 0 || mTable == nullptr || mDoc == nullptr || !mDoc->isOpen())
-        {
-            mResizeCol = -1;
-            return;
-        }
-        float logical = mTable->columnWidth(mResizeCol) / this->scale();
-        if (mResizeCol == 0)
-        {
-            mDoc->setHeadWidth(logical);
-        }
-        else
-        {
-            mDoc->setColumnWidth(static_cast<u32_t>(mResizeCol - 1), logical);
-        }
-        mResizeCol = -1;
-        this->notifyRebuild();
-    }
 
-    void RoseTableEditor::cancelResize()
-    {
-        if (mResizeCol >= 0)
-        {
-            this->applyTableWidth(mResizeCol, mResizeOriginW);
-        }
-        mResizeCol = -1;
-    }
 
-    void RoseTableEditor::rebuild()
+    void RoseInstanceEditor_ListGrid::rebuild()
     {
+        this->clearOverlayEditors();
         this->detachChildren();
-        mBar = nullptr;
         mView = nullptr;
         mTable = nullptr;
         mGridHost = nullptr;
-        mEditAnchor = nullptr;
-        mPickAnchor = nullptr;
-        mDateAnchor = nullptr;
-        mColorAnchor = nullptr;
-        mPickMenu = nullptr;
-        mEditInput = nullptr;
-        mDatePanel = nullptr;
-        mColorPanel = nullptr;
-        mColorPicker = nullptr;
         mFocus = nullptr;
-        mResizeHandles.clear();
-        if (mDoc == nullptr || !mDoc->isOpen() || !mDoc->hasActiveTable())
+        if (mDoc == nullptr || !mDoc->isOpen() || !mDoc->hasActiveInstance())
         {
             return;
         }
@@ -720,59 +585,29 @@ namespace eokas::RoseAxion {
         const Color url = t.url;
         const Color clear(0.0f, 0.0f, 0.0f, 0.0f);
         const String& fontPath = this->font();
+        this->shape.pivot = Vector2(0.0f, 0.0f);
         fillSurface(*this, paper);
         const float height = shape.size.y;
-        const float barH = 36.0f * s;
+        mBarH = 0.0f;
         const float pad = 8.0f * s;
-        float viewH = height - barH;
-        if (viewH < 1.0f)
-        {
-            viewH = 1.0f;
-        }
-        UIWidget* overlay = mOverlay;
+        float viewH = height;
+        if (viewH < 1.0f) { viewH = 1.0f; }
+        UIWidget* overlay = mOverlay != nullptr ? mOverlay : mHost.overlay;
 
-        auto bar = std::make_shared<UIWidget>();
-        bar->shape.pivot = Vector2(0.0f, 0.0f);
-        bar->pickable = false;
-        fillSurface(*bar, headerBg);
-        setBox(bar, Rect(0.0f, 0.0f, shape.size.x, barH));
-        auto tableName = makeText(mDoc->tableName(mDoc->activeTableIndex()), fontPath, fontPx, ink, shape.size.x - pad * 2.0f, 22.0f * s);
-        tableName->layout();
-        float nameW = tableName->shape.size.x;
-        float nameH = tableName->shape.size.y;
-        if (nameW > shape.size.x - pad * 2.0f)
-        {
-            nameW = shape.size.x - pad * 2.0f;
-        }
-        if (nameW < 1.0f)
-        {
-            nameW = 1.0f;
-        }
-        if (nameH < 1.0f)
-        {
-            nameH = 22.0f * s;
-        }
-        setBox(tableName, Rect(pad, (barH - nameH) * 0.5f, nameW, nameH));
-        bar->attachChild(tableName);
-        auto barRule = makeSplit(shape.size.x, false);
-        setBox(barRule, Rect(0.0f, barH - 1.0f, shape.size.x, 1.0f));
-        bar->attachChild(barRule);
-        this->attachChild(bar);
-        mBar = bar.get();
-
-        int rows = static_cast<int>(mDoc->rowCount());
-        int cols = static_cast<int>(mDoc->columnCount());
-        const float headW = mDoc->headWidth() * s;
-        std::vector<float> colWs(static_cast<size_t>(cols), 0.0f);
-        for (int col = 0; col < cols; ++col)
-        {
-            colWs[static_cast<size_t>(col)] = mDoc->columnWidth(static_cast<u32_t>(col)) * s;
-        }
+        int rows = static_cast<int>(mDoc->instanceListCount());
+        int cols = static_cast<int>(mDoc->instanceListColumnCount());
+        const float headW = 56.0f * s;
+        float minColW = 120.0f * s;
+        float avail = shape.size.x - headW;
+        if (avail < minColW && cols > 0) { avail = minColW * static_cast<float>(cols); }
+        float colW = cols > 0 ? avail / static_cast<float>(cols) : minColW;
+        if (colW < minColW) { colW = minColW; }
+        std::vector<float> colWs(static_cast<size_t>(cols), colW);
 
         auto view = std::make_shared<UIView>();
         view->shape.pivot = Vector2(0.0f, 0.0f);
         fillSurface(*view, paper);
-        setBox(view, Rect(0.0f, barH, shape.size.x, viewH));
+        setBox(view, Rect(0.0f, 0.0f, shape.size.x, viewH));
 
         auto table = std::make_shared<UITable>();
         table->shape.pivot = Vector2(0.0f, 0.0f);
@@ -861,8 +696,7 @@ namespace eokas::RoseAxion {
             for (const auto& entry : entries)
             {
                 auto item = std::make_shared<UIMenuItem>();
-                item->paddingX = 10.0f * s;
-                item->paddingY = 3.0f * s;
+                item->padding = 10.0f * s;
                 item->setText(entry.first);
                 styleMenuItem(*item, fontPath, menuFontPx(s));
                 auto action = entry.second;
@@ -898,39 +732,17 @@ namespace eokas::RoseAxion {
             auto more = makeMoreButton(fontPath, fontPx, moreW, moreH, ink);
             setBox(more, Rect(cornerSize.x - moreW - moreGap, (cornerSize.y - moreH) * 0.5f, moreW, moreH));
             UIButton* moreRaw = more.get();
-            more->onClick = [this, moreRaw, showPopup, rows, cols]()
+            more->onClick = [this, moreRaw, showPopup]()
             {
-                std::vector<std::pair<const char*, std::function<void()>>> entries;
-                if (cols == 0)
-                {
-                    entries.push_back({"插入一列", [this]()
+                showPopup(*moreRaw, {
+                    {"Insert Row", [this]()
                     {
-                        mDoc->insertColumn(0);
-                        mSelect = SelectKind::Column;
-                        mSelectCol = 0;
-                        this->notifyRebuild();
-                    }});
-                }
-                if (rows == 0)
-                {
-                    entries.push_back({"插入一行", [this]()
-                    {
-                        if (mDoc->columnCount() == 0)
-                        {
-                            mDoc->insertColumn(0);
-                            mSelect = SelectKind::Column;
-                            mSelectCol = 0;
-                        }
-                        else
-                        {
-                            mDoc->insertRow(0);
-                            mSelect = SelectKind::Row;
-                            mSelectRow = 0;
-                        }
-                        this->notifyRebuild();
-                    }});
-                }
-                showPopup(*moreRaw, entries);
+                        mDoc->instanceListInsert(0);
+                        mSelect = SelectKind::Row;
+                        mSelectRow = 0;
+                        this->refreshUi();
+                    }},
+                });
             };
             corner->attachChild(more);
         }
@@ -943,7 +755,7 @@ namespace eokas::RoseAxion {
 
         for (int col = 0; col < cols; ++col)
         {
-            TableColumn info = mDoc->column(static_cast<u32_t>(col));
+            NestedField info = mDoc->instanceListColumn(static_cast<u32_t>(col));
             bool columnSelected = mSelect == SelectKind::Column && mSelectCol == col;
             Color headFill = (columnSelected || allSelected) ? selected : headerBg;
             Vector2 hitSize = innerBox(0, col + 1, colWs[static_cast<size_t>(col)], rowH);
@@ -953,28 +765,13 @@ namespace eokas::RoseAxion {
             setBox(hit, Rect(0.0f, 0.0f, hitSize.x, hitSize.y));
             hit->onClick = [this, col]()
             {
-                auto now = std::chrono::steady_clock::now();
-                bool repeat = mClickHeader && mClickCol == col && now - mClickTime < std::chrono::milliseconds(450);
-                mClickTime = now;
                 mClickHeader = true;
                 mClickRowHead = false;
                 mClickCol = col;
                 mClickRow = -1;
                 mSelect = SelectKind::Column;
                 mSelectCol = col;
-                if (mHost.selectField)
-                {
-                    mHost.selectField(col);
-                }
-                if (repeat)
-                {
-                    mEdit = EditKind::Header;
-                    mEditCol = col;
-                    mEditSeed = mDoc->column(static_cast<u32_t>(col)).name;
-                    this->notifyRebuild();
-                    return;
-                }
-                this->notifyRebuild();
+                this->refreshUi();
             };
             const float moreW = 28.0f * s;
             const float moreH = 24.0f * s;
@@ -991,36 +788,6 @@ namespace eokas::RoseAxion {
             auto nameText = makeText(info.name, fontPath, fontPx, ink, nameW, 22.0f * s);
             centerText(nameText, textPadX, nameW, hitSize.y);
             hit->attachChild(nameText);
-            if (columnSelected)
-            {
-                auto more = makeMoreButton(fontPath, fontPx, moreW, moreH, ink);
-                setBox(more, Rect(hitSize.x - moreW - moreGap, (hitSize.y - moreH) * 0.5f, moreW, moreH));
-                UIButton* moreRaw = more.get();
-                more->onClick = [this, col, moreRaw, showPopup]()
-                {
-                    showPopup(*moreRaw, {
-                        {"字段设置", [this, col]() {
-                            mDateRow = -1;
-                            mDateCol = -1;
-                            mColorRow = -1;
-                            mColorCol = -1;
-                            if (mHost.openField)
-                            {
-                                mHost.openField(col);
-                            }
-                            this->notifyRebuild();
-                        }},
-                        {"在左边插入一列", [this, col]() { mDoc->insertColumn(static_cast<u32_t>(col)); mSelect = SelectKind::Column; mSelectCol = col; this->notifyRebuild(); }},
-                        {"在右边插入一列", [this, col]() { mDoc->insertColumn(static_cast<u32_t>(col + 1)); mSelect = SelectKind::Column; mSelectCol = col + 1; this->notifyRebuild(); }},
-                    });
-                };
-                hit->attachChild(more);
-            }
-            if (mEdit == EditKind::Header && mEditCol == col)
-            {
-                mEditAnchor = hit.get();
-                mEditFill = headFill;
-            }
             if (columnSelected && mFocus == nullptr)
             {
                 mFocus = hit.get();
@@ -1051,12 +818,8 @@ namespace eokas::RoseAxion {
                 mSelectRow = row;
                 mPickRow = -1;
                 mPickCol = -1;
-                if (repeat)
-                {
-                    this->openObjectEditor(row);
-                    return;
-                }
-                this->notifyRebuild();
+
+                this->refreshUi();
             };
             const float moreW = 28.0f * s;
             const float moreH = 24.0f * s;
@@ -1089,37 +852,24 @@ namespace eokas::RoseAxion {
                 more->onClick = [this, row, moreRaw, showPopup]()
                 {
                     showPopup(*moreRaw, {
-                        {"编辑对象", [this, row]() { this->openObjectEditor(row); }},
-                        {"删除当前行", [this, row]() {
-                            if (mHost.noteRowDeleted)
-                            {
-                                mHost.noteRowDeleted(row);
-                            }
-                            mDoc->deleteRow(static_cast<u32_t>(row));
+                        {"Delete Row", [this, row]() {
+mDoc->instanceListRemove(static_cast<u32_t>(row));
                             mSelect = SelectKind::Cell;
-                            mSelectRow = clampi(row, 0, static_cast<int>(mDoc->rowCount()) - 1);
+                            mSelectRow = clampi(row, 0, static_cast<int>(mDoc->instanceListCount()) - 1);
                             mSelectCol = 0;
-                            this->notifyRebuild();
+                            this->refreshUi();
                         }},
-                        {"在上方插入一行", [this, row]() {
-                            if (mHost.noteRowInserted)
-                            {
-                                mHost.noteRowInserted(row);
-                            }
-                            mDoc->insertRow(static_cast<u32_t>(row));
+                        {"Insert Row Above", [this, row]() {
+mDoc->instanceListInsert(static_cast<u32_t>(row));
                             mSelect = SelectKind::Row;
                             mSelectRow = row;
-                            this->notifyRebuild();
+                            this->refreshUi();
                         }},
-                        {"在下方插入一行", [this, row]() {
-                            if (mHost.noteRowInserted)
-                            {
-                                mHost.noteRowInserted(row + 1);
-                            }
-                            mDoc->insertRow(static_cast<u32_t>(row + 1));
+                        {"Insert Row Below", [this, row]() {
+mDoc->instanceListInsert(static_cast<u32_t>(row + 1));
                             mSelect = SelectKind::Row;
                             mSelectRow = row + 1;
-                            this->notifyRebuild();
+                            this->refreshUi();
                         }},
                     });
                 };
@@ -1130,11 +880,11 @@ namespace eokas::RoseAxion {
 
             for (int col = 0; col < cols; ++col)
             {
-                TableColumn info = mDoc->column(static_cast<u32_t>(col));
+                NestedField info = mDoc->instanceListColumn(static_cast<u32_t>(col));
                 bool cellSelected = mSelect == SelectKind::Cell && mSelectRow == row && mSelectCol == col;
                 bool columnSelected = mSelect == SelectKind::Column && mSelectCol == col;
                 bool editing = mEdit == EditKind::Cell && mEditRow == row && mEditCol == col;
-                String shown = mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
+                String shown = mDoc->instanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
                 Color fill = paper;
                 Color textColor = ink;
                 if (info.kind == FieldKind::Url && !shown.isEmpty())
@@ -1152,7 +902,7 @@ namespace eokas::RoseAxion {
                 {
                     if (mHost.ctrlDown && mHost.ctrlDown() && info.kind == FieldKind::Url && mHost.openExternal)
                     {
-                        String link = mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
+                        String link = mDoc->instanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
                         if (!link.isEmpty())
                         {
                             mHost.openExternal(link);
@@ -1170,13 +920,9 @@ namespace eokas::RoseAxion {
                         this->handleEscape();
                         return;
                     }
-                    if (mHost.handleShortcut && mHost.handleShortcut(key, ctrl))
+if (ctrl && key == UIKeyCode::C)
                     {
-                        return;
-                    }
-                    if (ctrl && key == UIKeyCode::C)
-                    {
-                        String text = mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
+                        String text = mDoc->instanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col));
                         if (mHost.writeClipboard && !text.isEmpty())
                         {
                             mHost.writeClipboard(text);
@@ -1187,15 +933,15 @@ namespace eokas::RoseAxion {
                     {
                         if (mHost.readClipboard)
                         {
-                            mDoc->setCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), mHost.readClipboard());
-                            this->notifyRebuild();
+                            mDoc->setInstanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), mHost.readClipboard());
+                            this->refreshUi();
                         }
                         return;
                     }
-                    if (key == UIKeyCode::Left) { mSelectCol = clampi(col - 1, 0, static_cast<int>(mDoc->columnCount()) - 1); mSelectRow = row; mSelect = SelectKind::Cell; this->notifyRebuild(); return; }
-                    if (key == UIKeyCode::Right || key == UIKeyCode::Tab) { mSelectCol = clampi(col + 1, 0, static_cast<int>(mDoc->columnCount()) - 1); mSelectRow = row; mSelect = SelectKind::Cell; this->notifyRebuild(); return; }
-                    if (key == UIKeyCode::Up) { mSelectRow = clampi(row - 1, 0, static_cast<int>(mDoc->rowCount()) - 1); mSelectCol = col; mSelect = SelectKind::Cell; this->notifyRebuild(); return; }
-                    if (key == UIKeyCode::Down) { mSelectRow = clampi(row + 1, 0, static_cast<int>(mDoc->rowCount()) - 1); mSelectCol = col; mSelect = SelectKind::Cell; this->notifyRebuild(); return; }
+                    if (key == UIKeyCode::Left) { mSelectCol = clampi(col - 1, 0, static_cast<int>(mDoc->instanceListColumnCount()) - 1); mSelectRow = row; mSelect = SelectKind::Cell; this->refreshUi(); return; }
+                    if (key == UIKeyCode::Right || key == UIKeyCode::Tab) { mSelectCol = clampi(col + 1, 0, static_cast<int>(mDoc->instanceListColumnCount()) - 1); mSelectRow = row; mSelect = SelectKind::Cell; this->refreshUi(); return; }
+                    if (key == UIKeyCode::Up) { mSelectRow = clampi(row - 1, 0, static_cast<int>(mDoc->instanceListCount()) - 1); mSelectCol = col; mSelect = SelectKind::Cell; this->refreshUi(); return; }
+                    if (key == UIKeyCode::Down) { mSelectRow = clampi(row + 1, 0, static_cast<int>(mDoc->instanceListCount()) - 1); mSelectCol = col; mSelect = SelectKind::Cell; this->refreshUi(); return; }
                     if (kind == FieldKind::Boolean && (key == UIKeyCode::Enter || key == UIKeyCode::F2 || key == UIKeyCode::Space))
                     {
                         this->toggleBoolCell(row, col);
@@ -1203,23 +949,18 @@ namespace eokas::RoseAxion {
                     }
                     if (key == UIKeyCode::Enter || key == UIKeyCode::F2)
                     {
-                        if (mDoc->isNestedStructColumn(static_cast<u32_t>(col)))
-                        {
-                            this->openObjectEditor(row, col);
-                            return;
-                        }
-                        this->beginEdit(row, col, mDoc->cellText(static_cast<u32_t>(row), static_cast<u32_t>(col)));
+this->beginEdit(row, col, mDoc->instanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col)));
                         return;
                     }
                     if (key == UIKeyCode::Delete || key == UIKeyCode::Backspace)
                     {
-                        mDoc->setCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), String::empty);
-                        this->notifyRebuild();
+                        mDoc->setInstanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), String::empty);
+                        this->refreshUi();
                     }
                 };
-                hit->onKeyChar = [this, row, col, kind = info.kind](uint32_t character)
+                hit->onKeyChar = [this, row, col, kind = info.kind, readOnly = info.nestedStruct || info.nestedList](uint32_t character)
                 {
-                    if (character < 32 || character == 127 || pickerKind(kind))
+                    if (readOnly || character < 32 || character == 127 || pickerKind(kind))
                     {
                         return;
                     }
@@ -1239,7 +980,7 @@ namespace eokas::RoseAxion {
                     std::vector<String> labels;
                     if (info.kind == FieldKind::MultiOption)
                     {
-                        labels = mDoc->cellLabels(static_cast<u32_t>(row), static_cast<u32_t>(col));
+                        labels = mDoc->instanceListCellLabels(static_cast<u32_t>(row), static_cast<u32_t>(col));
                     }
                     else if (!shown.isEmpty())
                     {
@@ -1250,11 +991,11 @@ namespace eokas::RoseAxion {
                         {
                             if (kind == FieldKind::SingleOption)
                             {
-                                mDoc->setCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), String::empty);
+                                mDoc->setInstanceListCellText(static_cast<u32_t>(row), static_cast<u32_t>(col), String::empty);
                             }
                             else
                             {
-                                std::vector<String> current = mDoc->cellLabels(static_cast<u32_t>(row), static_cast<u32_t>(col));
+                                std::vector<String> current = mDoc->instanceListCellLabels(static_cast<u32_t>(row), static_cast<u32_t>(col));
                                 std::vector<String> next;
                                 for (const String& item : current)
                                 {
@@ -1263,15 +1004,19 @@ namespace eokas::RoseAxion {
                                         next.push_back(item);
                                     }
                                 }
-                                mDoc->setCellLabels(static_cast<u32_t>(row), static_cast<u32_t>(col), next);
+                                mDoc->setInstanceListCellLabels(static_cast<u32_t>(row), static_cast<u32_t>(col), next);
                             }
-                            this->notifyRebuild();
+                            this->refreshUi();
                         },
                         [this, row, col]() { this->selectCell(row, col); });
                 }
                 else if (info.kind == FieldKind::Color)
                 {
                     attachColorValue(*hit, hitSize, s, shown, fontPath, fontPx);
+                }
+                else if (info.nestedStruct || info.nestedList)
+                {
+                    attachValueText(*hit, hitSize, s, shown, fontPath, fontPx, textColor);
                 }
                 else
                 {
@@ -1311,45 +1056,6 @@ namespace eokas::RoseAxion {
         mTable = table.get();
         mGridHost = host.get();
         mView = view.get();
-        mResizeHandles.clear();
-        int tableCols = cols + 1;
-        for (int tableCol = 0; tableCol < tableCols; ++tableCol)
-        {
-            auto handle = std::make_shared<UIWidget>();
-            handle->overlay = true;
-            handle->pickable = true;
-            handle->color = clear;
-            handle->shape.pivot = Vector2(0.0f, 0.0f);
-            handle->onPointerPress = [this, tableCol](const UIPointerEvent& event)
-            {
-                if (event.pointerCode != UIPointerCode::Left || mTable == nullptr)
-                {
-                    return;
-                }
-                mResizeCol = tableCol;
-                mResizeOriginX = event.position.x;
-                mResizeOriginW = mTable->columnWidth(tableCol);
-            };
-            handle->onDrag = [this, tableCol](const Vector2&, const Vector2& delta)
-            {
-                if (mResizeCol != tableCol)
-                {
-                    return;
-                }
-                this->applyTableWidth(tableCol, mResizeOriginW + delta.x);
-            };
-            handle->onPointerRelease = [this](const UIPointerEvent&)
-            {
-                this->commitResize();
-            };
-            handle->onDrop = [this](const Vector2&, const Vector2&)
-            {
-                this->commitResize();
-            };
-            host->attachChild(handle);
-            mResizeHandles.push_back(handle);
-        }
-        this->placeResizeHandles();
         view->addChild(host);
         this->attachChild(view);
         view->setScroll(mKeepX, mKeepY);
@@ -1385,22 +1091,18 @@ namespace eokas::RoseAxion {
             styleCellInput(*input, mEditFill, s, fontPath, fontPx, mHost.writeClipboard, mHost.readClipboard);
             input->setText(mEditSeed);
             UIInput* inputRaw = input.get();
-            input->onSubmit = [this](const String& text) { this->finishEdit(text, mEdit == EditKind::Header ? 0 : 1, 0); };
+            input->onSubmit = [this](const String& text) { this->finishEdit(text, 1, 0); };
             input->onEscape = [this]() { this->handleEscape(); };
-            input->onFocusLoss = [this, inputRaw]()
+            bindCommitOnFocusLoss(*input, mHost.isRebuildingUi, [this, inputRaw]()
             {
                 if (mEdit != EditKind::None)
                 {
                     this->finishEdit(inputRaw->text, 0, 0);
                 }
-            };
+            });
             input->onKeyPress = [this, inputRaw](const UIKeyEvent& event)
             {
-                if (mHost.handleShortcut && mHost.handleShortcut(event.key, event.ctrl))
-                {
-                    return;
-                }
-                if (event.key == UIKeyCode::Tab && mEdit == EditKind::Cell)
+if (event.key == UIKeyCode::Tab && mEdit == EditKind::Cell)
                 {
                     this->finishEdit(inputRaw->text, 0, 1);
                 }
@@ -1412,8 +1114,8 @@ namespace eokas::RoseAxion {
 
         if (overlay != nullptr && mPickAnchor != nullptr && mPickRow >= 0 && mPickCol >= 0)
         {
-            TableColumn info = mDoc->column(static_cast<u32_t>(mPickCol));
-            std::vector<String> selectedLabels = mDoc->cellLabels(static_cast<u32_t>(mPickRow), static_cast<u32_t>(mPickCol));
+            NestedField info = mDoc->instanceListColumn(static_cast<u32_t>(mPickCol));
+            std::vector<String> selectedLabels = mDoc->instanceListCellLabels(static_cast<u32_t>(mPickRow), static_cast<u32_t>(mPickCol));
             int pickRow = mPickRow;
             int pickCol = mPickCol;
             FieldKind kind = info.kind;
@@ -1429,7 +1131,7 @@ namespace eokas::RoseAxion {
                 {
                     if (kind == FieldKind::MultiOption)
                     {
-                        std::vector<String> current = mDoc->cellLabels(static_cast<u32_t>(pickRow), static_cast<u32_t>(pickCol));
+                        std::vector<String> current = mDoc->instanceListCellLabels(static_cast<u32_t>(pickRow), static_cast<u32_t>(pickCol));
                         if (selectedContains(current, label))
                         {
                             std::vector<String> next;
@@ -1440,21 +1142,21 @@ namespace eokas::RoseAxion {
                                     next.push_back(item);
                                 }
                             }
-                            mDoc->setCellLabels(static_cast<u32_t>(pickRow), static_cast<u32_t>(pickCol), next);
+                            mDoc->setInstanceListCellLabels(static_cast<u32_t>(pickRow), static_cast<u32_t>(pickCol), next);
                         }
                         else
                         {
                             current.push_back(label);
-                            mDoc->setCellLabels(static_cast<u32_t>(pickRow), static_cast<u32_t>(pickCol), current);
+                            mDoc->setInstanceListCellLabels(static_cast<u32_t>(pickRow), static_cast<u32_t>(pickCol), current);
                         }
                     }
                     else
                     {
-                        mDoc->setCellText(static_cast<u32_t>(pickRow), static_cast<u32_t>(pickCol), label);
+                        mDoc->setInstanceListCellText(static_cast<u32_t>(pickRow), static_cast<u32_t>(pickCol), label);
                         mPickRow = -1;
                         mPickCol = -1;
                     }
-                    this->notifyRebuild();
+                    this->refreshUi();
                 },
                 [this]()
                 {
@@ -1467,7 +1169,7 @@ namespace eokas::RoseAxion {
 
         if (overlay != nullptr && mDateRow >= 0 && mDateCol >= 0)
         {
-            FieldKind dateKind = mDoc->column(static_cast<u32_t>(mDateCol)).kind;
+            FieldKind dateKind = mDoc->instanceListColumn(static_cast<u32_t>(mDateCol)).kind;
             TemporalParts parts { mDateYear, mDateMonth, mDateDay, mDateHour, mDateMinute, mDateSecond };
             int dateRow = mDateRow;
             int dateCol = mDateCol;
@@ -1478,20 +1180,20 @@ namespace eokas::RoseAxion {
                 fontPath,
                 fontPx,
                 smallPx,
-                [this]() { mDateRow = -1; mDateCol = -1; this->notifyRebuild(); },
+                [this]() { mDateRow = -1; mDateCol = -1; this->refreshUi(); },
                 [this, dateRow, dateCol]()
                 {
-                    mDoc->setCellText(static_cast<u32_t>(dateRow), static_cast<u32_t>(dateCol), String::empty);
+                    mDoc->setInstanceListCellText(static_cast<u32_t>(dateRow), static_cast<u32_t>(dateCol), String::empty);
                     mDateRow = -1;
                     mDateCol = -1;
-                    this->notifyRebuild();
+                    this->refreshUi();
                 },
                 [this, dateRow, dateCol](const String& stored)
                 {
-                    mDoc->setCellText(static_cast<u32_t>(dateRow), static_cast<u32_t>(dateCol), stored);
+                    mDoc->setInstanceListCellText(static_cast<u32_t>(dateRow), static_cast<u32_t>(dateCol), stored);
                     mDateRow = -1;
                     mDateCol = -1;
-                    this->notifyRebuild();
+                    this->refreshUi();
                 },
                 [this]() { this->handleEscape(); },
                 [this](const TemporalParts& next)
@@ -1513,7 +1215,7 @@ namespace eokas::RoseAxion {
             int colorRow = mColorRow;
             int colorCol = mColorCol;
             Color current(1.0f, 1.0f, 1.0f, 1.0f);
-            parseColor(mDoc->cellText(static_cast<u32_t>(mColorRow), static_cast<u32_t>(mColorCol)), current);
+            parseColor(mDoc->instanceListCellText(static_cast<u32_t>(mColorRow), static_cast<u32_t>(mColorCol)), current);
             ColorPanelWidgets widgets = makeColorPanel(
                 current,
                 s,
@@ -1524,19 +1226,19 @@ namespace eokas::RoseAxion {
                 mHost.readClipboard,
                 [this, colorRow, colorCol](const Color& value)
                 {
-                    mDoc->setCellText(static_cast<u32_t>(colorRow), static_cast<u32_t>(colorCol), formatColor(value));
+                    mDoc->setInstanceListCellText(static_cast<u32_t>(colorRow), static_cast<u32_t>(colorCol), formatColor(value));
                     mColorRow = -1;
                     mColorCol = -1;
-                    this->notifyRebuild();
+                    this->refreshUi();
                 },
                 [this, colorRow, colorCol]()
                 {
-                    mDoc->setCellText(static_cast<u32_t>(colorRow), static_cast<u32_t>(colorCol), String::empty);
+                    mDoc->setInstanceListCellText(static_cast<u32_t>(colorRow), static_cast<u32_t>(colorCol), String::empty);
                     mColorRow = -1;
                     mColorCol = -1;
-                    this->notifyRebuild();
+                    this->refreshUi();
                 },
-                [this]() { mColorRow = -1; mColorCol = -1; this->notifyRebuild(); },
+                [this]() { mColorRow = -1; mColorCol = -1; this->refreshUi(); },
                 [this]() { this->handleEscape(); });
             overlay->attachChild(widgets.panel);
             mColorPanel = widgets.panel.get();

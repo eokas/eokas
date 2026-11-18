@@ -55,10 +55,6 @@ namespace eokas::RoseAxion {
         {
             return;
         }
-        if (mWindow->pressed() != nullptr)
-        {
-            return;
-        }
         mRebuild = false;
         this->build();
     }
@@ -119,58 +115,63 @@ namespace eokas::RoseAxion {
     {
         RoseEditor::Host host;
         host.requestRebuild = [this]() { this->requestRebuild(); };
+        host.isRebuildingUi = [this]() { return mRebuildingUi; };
         host.writeClipboard = mHost.writeClipboard;
         host.readClipboard = mHost.readClipboard;
         host.openExternal = mHost.openExternal;
         host.pickFilePath = mHost.pickFilePath;
         host.pickFolderPath = mHost.pickFolderPath;
-        host.ctrlDown = mHost.ctrlDown;
-        host.handleShortcut = [this](UIKeyCode key, bool ctrl) { return this->handleShortcut(key, ctrl); };
-        host.confirmChangeType = [this](int col, const String& typeName)
-        {
-            mConfirmCol = col;
-            mPendingType = typeName;
-            mConfirm = ConfirmKind::ChangeType;
-            this->requestRebuild();
-        };
-        host.confirmDeleteColumn = [this](int col)
-        {
-            mConfirmCol = col;
-            mConfirm = ConfirmKind::DeleteColumn;
-            this->requestRebuild();
-        };
-        host.confirmDeleteTable = [this](int index)
-        {
-            mConfirmTable = index;
-            mConfirm = ConfirmKind::DeleteTable;
-            this->requestRebuild();
-        };
         host.confirmDeleteSchema = [this](int index)
         {
             mConfirmSchema = index;
             mConfirm = ConfirmKind::DeleteSchema;
             this->requestRebuild();
         };
+        host.confirmDeleteInstance = [this](int index)
+        {
+            mConfirmInstance = index;
+            mConfirm = ConfirmKind::DeleteInstance;
+            this->requestRebuild();
+        };
+        host.ctrlDown = mHost.ctrlDown;
         host.font = mFont;
         host.scale = mScale;
         return host;
+    }
+
+    bool AxionApp::colorDropping() const
+    {
+        return mEditor != nullptr && mEditor->colorDropping();
+    }
+
+    void AxionApp::sampleColorDropper(float x, float y, bool commit)
+    {
+        if (mEditor != nullptr)
+        {
+            mEditor->sampleColorDropper(x, y, commit);
+        }
+    }
+
+    void AxionApp::cancelColorDropper()
+    {
+        if (mEditor != nullptr)
+        {
+            mEditor->cancelColorDropper();
+        }
     }
 
     void AxionApp::resetView()
     {
         mConfirm = ConfirmKind::None;
         mPending = PendingAction::None;
-        mResetScroll = true;
-        mConfirmCol = -1;
-        mConfirmTable = -1;
         mConfirmSchema = -1;
-        mBoundTable = -1;
+        mConfirmInstance = -1;
+        mBoundInstance = -1;
         if (mEditor)
         {
             mEditor->resetOutliner();
             mEditor->reset();
             mEditor->resetSchema();
-            mEditor->selectTables();
         }
     }
 
@@ -358,51 +359,23 @@ namespace eokas::RoseAxion {
         return mEditor && mEditor->resizeCursorAt(x, y);
     }
 
-    bool AxionApp::colorDropping() const
-    {
-        return mEditor && mEditor->colorDropping();
-    }
-
-    void AxionApp::sampleColorDropper(float x, float y, bool commit)
-    {
-        if (mEditor)
-        {
-            mEditor->sampleColorDropper(x, y, commit);
-        }
-    }
-
-    void AxionApp::cancelColorDropper()
-    {
-        if (mEditor)
-        {
-            mEditor->cancelColorDropper();
-        }
-    }
-
     void AxionApp::build()
     {
         if (mWindow == nullptr)
         {
             return;
         }
-        float keepX = 0.0f;
-        float keepY = 0.0f;
-        if (!mResetScroll && mEditor)
-        {
-            keepX = mEditor->scrollX();
-            keepY = mEditor->scrollY();
-        }
-        mResetScroll = false;
         // Drop window focus/hover before RoseEditor::rebuild() destroys
         // the previously focused cell. setRoot(nullptr) keeps mEditor alive
         // via the shared_ptr, but clears dangling UIWindow pointers.
+        mRebuildingUi = true;
         mWindow->setRoot(nullptr);
 
         UIWidget* focus = nullptr;
         const float s = mScale;
-        const float fontPx = 15.0f * s;
-        const float smallPx = 13.0f * s;
-        const float titlePx = 20.0f * s;
+        const float fontPx = bodyPx(s);
+        const float smallPx = bodyPx(s);
+        const float titlePx = titleLgPx(s);
         const float menuPx = menuFontPx(s);
         const float statusH = 26.0f * s;
         const RoseTheme& t = theme();
@@ -444,9 +417,7 @@ namespace eokas::RoseAxion {
         {
             auto menu = std::make_shared<UIMenu>();
             menu->direction = UIDirection::Vertical;
-            menu->padding = 2.0f * s;
-            menu->spacing = 1.0f * s;
-            menu->color = popup;
+            stylePopupMenu(*menu, s);
             menu->overlay = true;
             menu->visible = false;
             menu->shape.pivot = Vector2(0.0f, 0.0f);
@@ -471,10 +442,8 @@ namespace eokas::RoseAxion {
         auto addMenuItem = [&](UIMenu& menu, const char* label, const std::function<void()>& action)
         {
             auto item = std::make_shared<UIMenuItem>();
-            item->paddingX = 10.0f * s;
-            item->paddingY = 3.0f * s;
             item->setText(label);
-            styleMenuItem(*item, mFont, menuPx);
+            styleMenuItem(*item, mFont, menuPx, s);
             item->onClick = [action, gate]()
             {
                 gate->hide();
@@ -486,15 +455,14 @@ namespace eokas::RoseAxion {
         auto makeBarItem = [&](const char* label)
         {
             auto item = std::make_shared<UIMenuItem>();
-            item->paddingX = 10.0f * s;
-            item->paddingY = 2.0f * s;
+            item->padding = 6.0f * s;
             item->setText(label);
             styleMenuBarItem(*item, mFont, menuPx, bar);
             item->syncSize();
             return item;
         };
-        auto fileItem = makeBarItem("文件");
-        auto helpItem = makeBarItem("帮助");
+        auto fileItem = makeBarItem("File");
+        auto helpItem = makeBarItem("Help");
         fileMenu->host = fileItem.get();
         helpMenu->host = helpItem.get();
         UIMenuItem* fileRaw = fileItem.get();
@@ -534,11 +502,11 @@ namespace eokas::RoseAxion {
         {
             openBarMenu(helpRaw, helpMenuRaw, 200.0f * s);
         };
-        addMenuItem(*fileMenu, "新建", [this]() { this->newDocument(); });
-        addMenuItem(*fileMenu, "打开...", [this]() { this->openDocument(); });
-        addMenuItem(*fileMenu, "保存", [this]() { this->saveDocument(); });
-        addMenuItem(*fileMenu, "另存为...", [this]() { this->saveDocumentAs(); });
-        addMenuItem(*helpMenu, "关于 RoseAxion", [this]() { this->showAbout(); });
+        addMenuItem(*fileMenu, "New Library", [this]() { this->newDocument(); });
+        addMenuItem(*fileMenu, "Open Library", [this]() { this->openDocument(); });
+        addMenuItem(*fileMenu, "Save", [this]() { this->saveDocument(); });
+        addMenuItem(*fileMenu, "Save As", [this]() { this->saveDocumentAs(); });
+        addMenuItem(*helpMenu, "About RoseAxion", [this]() { this->showAbout(); });
 
         auto left = std::make_shared<UIList>();
         left->direction = UIDirection::Horizontal;
@@ -615,7 +583,7 @@ namespace eokas::RoseAxion {
             }
             auto title = makeText("RoseAxion", mFont, titlePx, ink, textMax, 32.0f * s);
             title->layout();
-            auto hint = makeText("打开 Library 或新建表格开始", mFont, fontPx, mute, textMax, 28.0f * s);
+            auto hint = makeText("Open or create a Library to get started", mFont, fontPx, mute, textMax, 28.0f * s);
             hint->layout();
             auto actions = std::make_shared<UIList>();
             actions->direction = UIDirection::Horizontal;
@@ -624,9 +592,9 @@ namespace eokas::RoseAxion {
             actions->centerCross = true;
             actions->color = clear;
             actions->shape.pivot = Vector2(0.0f, 0.0f);
-            auto create = makeButton("新建表格", mFont, fontPx, 128.0f * s, 36.0f * s, accent, t.inkOnAccent);
+            auto create = makeButton("New Library", mFont, fontPx, 128.0f * s, 36.0f * s, accent, t.inkOnAccent);
             create->onClick = [this]() { this->newDocument(); };
-            auto open = makeButton("打开 Library", mFont, fontPx, 128.0f * s, 36.0f * s, quiet, ink);
+            auto open = makeButton("Open Library", mFont, fontPx, 128.0f * s, 36.0f * s, quiet, ink);
             open->onClick = [this]() { this->openDocument(); };
             actions->attachChild(create);
             actions->attachChild(open);
@@ -648,16 +616,14 @@ namespace eokas::RoseAxion {
         }
         else
         {
-            int activeTable = mDoc.hasActiveTable() ? static_cast<int>(mDoc.activeTableIndex()) : -1;
-            if (activeTable != mBoundTable)
+            int activeInstance = mDoc.hasActiveInstance() ? static_cast<int>(mDoc.activeInstanceIndex()) : -1;
+            if (activeInstance != mBoundInstance)
             {
                 if (mEditor)
                 {
                     mEditor->reset();
                 }
-                keepX = 0.0f;
-                keepY = 0.0f;
-                mBoundTable = activeTable;
+                mBoundInstance = activeInstance;
             }
             if (!mEditor)
             {
@@ -666,7 +632,6 @@ namespace eokas::RoseAxion {
             mEditor->bind(mDoc, this->editorHost());
             mEditor->shape.pivot = Vector2(0.0f, 0.0f);
             setBox(mEditor, Rect(0.0f, workY, mWidth, workH));
-            mEditor->setScroll(keepX, keepY);
             mEditor->rebuild();
             root->attachChild(mEditor);
             focus = mEditor->focusWidget();
@@ -690,7 +655,7 @@ namespace eokas::RoseAxion {
             Color statusColor = docStatusFailed(mDoc.statusKind()) ? warn : mute;
             if (statusText.isEmpty())
             {
-                statusText = String("就绪");
+                statusText = String("Ready");
             }
             float statusW = mWidth - 24.0f * s;
             if (statusW < 40.0f * s)
@@ -737,22 +702,18 @@ namespace eokas::RoseAxion {
             shade->shape.pivot = Vector2(0.0f, 0.0f);
             shade->color = t.shade;
             setBox(shade, Rect(0.0f, 0.0f, mWidth, mHeight));
-            const char* message = "部分单元格无法转换为新类型，这些单元格会被清空。是否继续？";
+            const char* message = "";
             if (unsaved)
             {
-                message = "当前表格尚未保存，是否保存？";
-            }
-            else if (mConfirm == ConfirmKind::DeleteColumn)
-            {
-                message = "删除该字段？只剩一列时会清空内容并保留这一列。";
-            }
-            else if (mConfirm == ConfirmKind::DeleteTable)
-            {
-                message = "删除该表格？此操作无法撤销。";
+                message = "The current Library has unsaved changes. Save before continuing?";
             }
             else if (mConfirm == ConfirmKind::DeleteSchema)
             {
-                message = "删除该模式？此操作无法撤销。";
+                message = "Delete this schema? This cannot be undone.";
+            }
+            else if (mConfirm == ConfirmKind::DeleteInstance)
+            {
+                message = "Delete this instance? This cannot be undone.";
             }
             const float padX = 24.0f * s;
             const float padY = 20.0f * s;
@@ -771,7 +732,7 @@ namespace eokas::RoseAxion {
             actions->centerCross = true;
             actions->color = clear;
             actions->shape.pivot = Vector2(0.0f, 0.0f);
-            auto cancel = makeButton("取消", mFont, fontPx, 80.0f * s, 32.0f * s, quiet, ink);
+            auto cancel = makeButton("Cancel", mFont, fontPx, 80.0f * s, 32.0f * s, quiet, ink);
             cancel->onClick = [this]()
             {
                 mConfirm = ConfirmKind::None;
@@ -785,8 +746,8 @@ namespace eokas::RoseAxion {
             cancel->onKeyPress = escapeConfirm;
             if (unsaved)
             {
-                auto discard = makeDangerButton("不保存", mFont, fontPx, 96.0f * s, 32.0f * s);
-                auto save = makeButton("保存", mFont, fontPx, 80.0f * s, 32.0f * s, accent, t.inkOnAccent);
+                auto discard = makeDangerButton("Don't Save", mFont, fontPx, 96.0f * s, 32.0f * s);
+                auto save = makeButton("Save", mFont, fontPx, 80.0f * s, 32.0f * s, accent, t.inkOnAccent);
                 discard->onKeyPress = escapeConfirm;
                 save->onKeyPress = escapeConfirm;
                 discard->onClick = [this]() { this->runPending(); };
@@ -805,34 +766,20 @@ namespace eokas::RoseAxion {
             }
             else
             {
-                auto ok = makeDangerButton("确定", mFont, fontPx, 80.0f * s, 32.0f * s);
+                auto ok = makeDangerButton("OK", mFont, fontPx, 80.0f * s, 32.0f * s);
                 ok->onKeyPress = escapeConfirm;
                 ok->onClick = [this]()
                 {
-                    if (mConfirm == ConfirmKind::ChangeType && mConfirmCol >= 0)
-                    {
-                        mDoc.setColumnType(static_cast<u32_t>(mConfirmCol), mPendingType);
-                    }
-                    else if (mConfirm == ConfirmKind::DeleteColumn && mConfirmCol >= 0)
-                    {
-                        int col = mConfirmCol;
-                        mDoc.deleteColumn(static_cast<u32_t>(col));
-                        if (mEditor)
-                        {
-                            mEditor->closeSettings();
-                        }
-                    }
-                    else if (mConfirm == ConfirmKind::DeleteTable && mConfirmTable >= 0)
-                    {
-                        mDoc.deleteTable(static_cast<u32_t>(mConfirmTable));
-                    }
-                    else if (mConfirm == ConfirmKind::DeleteSchema && mConfirmSchema >= 0)
+                    if (mConfirm == ConfirmKind::DeleteSchema && mConfirmSchema >= 0)
                     {
                         mDoc.deleteUserSchema(static_cast<u32_t>(mConfirmSchema));
                     }
+                    else if (mConfirm == ConfirmKind::DeleteInstance && mConfirmInstance >= 0)
+                    {
+                        mDoc.deleteInstance(static_cast<u32_t>(mConfirmInstance));
+                    }
                     mConfirm = ConfirmKind::None;
-                    mConfirmCol = -1;
-                    mConfirmTable = -1;
+                    mConfirmInstance = -1;
                     mConfirmSchema = -1;
                     this->requestRebuild();
                 };
@@ -881,6 +828,7 @@ namespace eokas::RoseAxion {
         {
             mWindow->setFocus(root.get());
         }
+        mRebuildingUi = false;
         this->notifyTitle();
     }
 

@@ -68,14 +68,14 @@ EOKAS_TEST_CASE(schema_options) {
     Schema* color = heap.add(SchemaType::Options, "Color");
     EOKAS_EXPECT(color != nullptr);
     EOKAS_EXPECT(color->is(SchemaType::Options));
-    EOKAS_EXPECT(color->addOption("red", "Red"));
-    EOKAS_EXPECT(color->addOption("green", "Green"));
-    EOKAS_EXPECT(color->addOption("blue", "Blue"));
-    EOKAS_EXPECT(!color->addOption("red", "Dup"));
+    EOKAS_EXPECT(color->addOption("red"));
+    EOKAS_EXPECT(color->addOption("green"));
+    EOKAS_EXPECT(color->addOption("blue"));
+    EOKAS_EXPECT(!color->addOption("red"));
     EOKAS_EXPECT(color->getOptionCount() == 3);
     EOKAS_EXPECT(color->getOption(1)->name == "green");
     EOKAS_EXPECT(color->getOptionIndex("green") == 1);
-    EOKAS_EXPECT(color->setOption("green", "Greenish", 0xff00ff00u));
+    EOKAS_EXPECT(color->setOption("green", 0xff00ff00u));
 
     Schema* integer = heap.get("Int");
     EOKAS_EXPECT(!integer->addOption("nope"));
@@ -85,8 +85,8 @@ EOKAS_TEST_CASE(schema_options) {
     Schema* status = library.addSchema(SchemaType::Options, "Status");
     static const u32_t kTodoColor = 0xFF0000FFu;
     static const u32_t kDoneColor = 0xff00ff00u;
-    EOKAS_EXPECT(status->addOption("todo", "Todo", kTodoColor));
-    EOKAS_EXPECT(status->addOption("done", "Done", kDoneColor));
+    EOKAS_EXPECT(status->addOption("todo", kTodoColor));
+    EOKAS_EXPECT(status->addOption("done", kDoneColor));
     Value* picked = library.make(status);
     EOKAS_EXPECT(library.set(picked, String("done")));
     String got;
@@ -107,7 +107,6 @@ EOKAS_TEST_CASE(schema_options) {
     EOKAS_EXPECT(loadedStatus->getOptionCount() == 2);
     EOKAS_EXPECT(loadedStatus->getOption(0)->name == "todo");
     EOKAS_EXPECT(loadedStatus->getOption(0)->color == kTodoColor);
-    EOKAS_EXPECT(loadedStatus->getOption(1)->label == "Done");
     EOKAS_EXPECT(loadedStatus->getOption(1)->color == kDoneColor);
     String loadedPicked;
     EOKAS_EXPECT(loaded.get("picked", loadedPicked));
@@ -265,36 +264,6 @@ EOKAS_TEST_CASE(row_string_list) {
     return 0;
 }
 
-EOKAS_TEST_CASE(schema_member_meta) {
-    Library library("member-meta");
-    Schema* text = library.getSchema("String");
-    Schema* row = library.addSchema(SchemaType::Struct, "Row");
-    static const u32_t kRed = 0xFF0000FFu;
-    row->addMember("id", text, String("编号"), kRed);
-    Schema::Member* m = row->getMember("id");
-    EOKAS_EXPECT(m != nullptr);
-    EOKAS_EXPECT(m->label == "编号");
-    EOKAS_EXPECT(m->color == kRed);
-
-    row->setMember("id", text, String("ID"), 0u);
-    EOKAS_EXPECT(m->label == "ID");
-    EOKAS_EXPECT(m->color == 0u);
-
-    MemoryStream memory;
-    EOKAS_EXPECT(memory.open());
-    BinaryStream stream(memory);
-    EOKAS_EXPECT(library.save(stream));
-    EOKAS_EXPECT(stream.seek(0, 0));
-    Library loaded("loaded-member-meta");
-    EOKAS_EXPECT(loaded.load(stream));
-    Schema* loadedRow = loaded.getSchema("Row");
-    Schema::Member* loadedMember = loadedRow->getMember("id");
-    EOKAS_EXPECT(loadedMember != nullptr);
-    EOKAS_EXPECT(loadedMember->label == "ID");
-    EOKAS_EXPECT(loadedMember->color == 0u);
-    return 0;
-}
-
 EOKAS_TEST_CASE(struct_member_list_grows) {
     Library library("struct-member-list-grows");
     Schema* text = library.getSchema("String");
@@ -353,6 +322,24 @@ EOKAS_TEST_CASE(library_schema_dependency_and_roots) {
     return 0;
 }
 
+EOKAS_TEST_CASE(library_root_rename_remove) {
+    Library library("root-ops");
+    Value* val = library.make(String("first"));
+    library.set("alpha", val);
+    EOKAS_EXPECT(library.get("alpha") == val);
+    EOKAS_EXPECT(library.renameRoot("alpha", "beta"));
+    EOKAS_EXPECT(library.get("alpha") == nullptr);
+    EOKAS_EXPECT(library.get("beta") == val);
+    EOKAS_EXPECT(!library.renameRoot("beta", "beta"));
+    EOKAS_EXPECT(!library.renameRoot("missing", "gamma"));
+    library.set("taken", library.make(String("x")));
+    EOKAS_EXPECT(!library.renameRoot("beta", "taken"));
+    EOKAS_EXPECT(library.removeRoot("beta"));
+    EOKAS_EXPECT(library.get("beta") == nullptr);
+    EOKAS_EXPECT(!library.removeRoot("beta"));
+    return 0;
+}
+
 EOKAS_TEST_CASE(library_file_roundtrip) {
     Library library("file-trip");
     library.set("pi", 3.14159);
@@ -392,11 +379,11 @@ EOKAS_TEST_CASE(rose_full_chain) {
     Schema* priority = library.addSchema(SchemaType::Options, "Priority");
     static const u32_t kLowColor = 0xFF3366FFu;
     static const u32_t kHighColor = 0xFFFF6633u;
-    EOKAS_EXPECT(priority->addOption("low", "Low", kLowColor));
-    EOKAS_EXPECT(priority->addOption("high", "High", kHighColor));
+    EOKAS_EXPECT(priority->addOption("low", kLowColor));
+    EOKAS_EXPECT(priority->addOption("high", kHighColor));
 
     Schema* task = library.addSchema(SchemaType::Struct, "Task");
-    task->addMember("title", text, "Title");
+    task->addMember("title", text);
     task->addMember("done", boolean);
     task->addMember("score", flt);
     task->addMember("order", integer);
@@ -468,5 +455,23 @@ EOKAS_TEST_CASE(rose_full_chain) {
     Schema* unused = fileLoaded.addSchema(SchemaType::Struct, "FreshUnused");
     EOKAS_EXPECT(unused != nullptr);
     EOKAS_EXPECT(!fileLoaded.hasValueDependOnSchema(unused));
+    return 0;
+}
+
+EOKAS_TEST_CASE(library_schema_forward_reference) {
+    Library library("forward");
+    Schema *tags = library.addSchema(SchemaType::List, "Tags");
+    Schema *item = library.addSchema(SchemaType::Struct, "Item");
+    EOKAS_EXPECT(tags != nullptr && item != nullptr);
+    tags->setElementSchema(library.getSchema("String"));
+    EOKAS_EXPECT(item->addMember("tags", tags));
+    library.set("row", library.make(item));
+
+    Library loaded("forward-loaded");
+    EOKAS_EXPECT(rose_save_load_memory(library, loaded));
+    Schema *loadedItem = loaded.getSchema("Item");
+    EOKAS_EXPECT(loadedItem != nullptr);
+    EOKAS_EXPECT(loadedItem->getMember("tags") != nullptr);
+    EOKAS_EXPECT(loadedItem->getMember("tags")->schema == loaded.getSchema("Tags"));
     return 0;
 }

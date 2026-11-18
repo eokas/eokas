@@ -51,15 +51,15 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseHomePage::openTable(u32_t index)
+    void RoseHomePage::openInstance(u32_t index)
     {
         if (mDoc == nullptr)
         {
             return;
         }
-        if (mDoc->selectTable(index))
+        if (mDoc->selectInstance(index))
         {
-            this->goTo(EditorPage::Tables);
+            this->goTo(EditorPage::Instance);
         }
     }
 
@@ -75,15 +75,21 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseHomePage::addTable()
+    void RoseHomePage::addInstance()
     {
         if (mDoc == nullptr)
         {
             return;
         }
-        if (mDoc->addTable())
+        std::vector<String> types = mDoc->columnTypeNames();
+        if (types.empty())
         {
-            this->goTo(EditorPage::Tables);
+            this->goTo(EditorPage::Schemas);
+            return;
+        }
+        if (mDoc->addInstance(types[0]))
+        {
+            this->goTo(EditorPage::Instance);
         }
         else
         {
@@ -108,7 +114,7 @@ namespace eokas::RoseAxion {
         }
         if (mDoc->path().isEmpty())
         {
-            return "尚未写入磁盘的 Library";
+            return "Library not yet saved to disk";
         }
         return mDoc->path();
     }
@@ -148,10 +154,11 @@ namespace eokas::RoseAxion {
         }
 
         const float s = this->scale();
-        const float fontPx = 14.0f * s;
-        const float smallPx = 12.0f * s;
-        const float titlePx = 32.0f * s;
-        const float valuePx = 34.0f * s;
+        const float fontPx = bodyPx(s);
+        const float smallPx = bodyPx(s);
+        const float titlePx = titleLgPx(s);
+        const float titleChipPx = titleMdPx(s);
+        const float valuePx = titleLgPx(s);
         const float pad = 28.0f * s;
         const float gap = 14.0f * s;
         const float cardH = 108.0f * s;
@@ -221,46 +228,55 @@ namespace eokas::RoseAxion {
         markB->pickable = false;
         markB->color = violet;
         setBox(markB, Rect(6.0f * s, 6.0f * s, 10.0f * s, 10.0f * s));
-        auto brand = makeText("ROSEAXION", fontPath, 11.0f * s, cyan, innerW, 16.0f * s);
+        auto brand = makeText("ROSEAXION", fontPath, bodyPx(s), cyan, innerW, 16.0f * s);
         brand->layout();
 
-        auto title = makeText(this->documentTitle(), fontPath, titlePx, ink, innerW, 40.0f * s);
+        const float heroPad = 22.0f * s;
+        const float heroInnerW = innerW - heroPad * 2.0f;
+
+        auto kindLabel = mDoc->path().isEmpty()
+            ? makeChip("LIVE SESSION", fontPath, titleChipPx, withAlpha(cyan, t.washAlpha), cyan)
+            : makeChip("LIBRARY", fontPath, titleChipPx, withAlpha(primary, t.washAlpha), primary);
+        kindLabel->pickable = false;
+
+        float titleMaxW = heroInnerW - kindLabel->shape.size.x - 12.0f * s;
+        if (titleMaxW < 24.0f * s)
+        {
+            titleMaxW = 24.0f * s;
+        }
+        String libraryName = this->documentTitle();
+        if (mDoc->dirty())
+        {
+            libraryName += " *";
+        }
+        auto title = makeText(libraryName, fontPath, titlePx, ink, titleMaxW, 40.0f * s);
         title->layout();
+
+        auto titleRow = std::make_shared<UIList>();
+        titleRow->direction = UIDirection::Horizontal;
+        titleRow->padding = 0.0f;
+        titleRow->spacing = 12.0f * s;
+        titleRow->centerCross = true;
+        titleRow->color = clear;
+        titleRow->shape.pivot = Vector2(0.0f, 0.0f);
+        titleRow->attachChild(kindLabel);
+        titleRow->attachChild(title);
+        setBox(titleRow, Rect(0.0f, 0.0f, 0.0f, 0.0f));
+        titleRow->layout();
+
         auto sub = makeText(this->documentSubtitle(), fontPath, smallPx, mute, innerW, 20.0f * s);
         sub->layout();
 
-        auto statusRow = std::make_shared<UIList>();
-        statusRow->direction = UIDirection::Horizontal;
-        statusRow->padding = 0.0f;
-        statusRow->spacing = 8.0f * s;
-        statusRow->centerCross = true;
-        statusRow->color = clear;
-        statusRow->shape.pivot = Vector2(0.0f, 0.0f);
-        if (mDoc->path().isEmpty())
-        {
-            statusRow->attachChild(makeChip("LIVE SESSION", fontPath, 11.0f * s, withAlpha(cyan, t.washAlpha), cyan));
-        }
-        else
-        {
-            statusRow->attachChild(makeChip("LIBRARY", fontPath, 11.0f * s, withAlpha(violet, t.washAlpha), violet));
-        }
-        if (mDoc->dirty())
-        {
-            statusRow->attachChild(makeChip("未保存", fontPath, 11.0f * s, withAlpha(amber, t.washAlpha), amber));
-        }
-        setBox(statusRow, Rect(0.0f, 0.0f, 0.0f, 0.0f));
-        statusRow->layout();
-
-        auto openTables = makeButton("打开表格", fontPath, fontPx, 118.0f * s, 36.0f * s, primary, t.inkOnAccent);
-        openTables->onClick = [this]() { this->goTo(EditorPage::Tables); };
-        auto openSchemas = makeButton("打开模式", fontPath, fontPx, 118.0f * s, 36.0f * s, t.ghost, ink);
+        auto openInstances = makeButton("Open Instances", fontPath, fontPx, 118.0f * s, 36.0f * s, primary, t.inkOnAccent);
+        openInstances->onClick = [this]() { this->goTo(EditorPage::Instance); };
+        auto openSchemas = makeButton("Open Schemas", fontPath, fontPx, 118.0f * s, 36.0f * s, t.ghost, ink);
         openSchemas->hoverFill = withAlpha(cyan, t.washAlpha);
         openSchemas->pressedFill = withAlpha(cyan, t.washAlpha * 1.6f);
         openSchemas->onClick = [this]() { this->goTo(EditorPage::Schemas); };
-        auto createTable = makeButton("新建表格", fontPath, fontPx, 118.0f * s, 36.0f * s, t.ghost, ink);
-        createTable->hoverFill = withAlpha(violet, t.washAlpha);
-        createTable->pressedFill = withAlpha(violet, t.washAlpha * 1.6f);
-        createTable->onClick = [this]() { this->addTable(); };
+        auto createInstance = makeButton("New Instance", fontPath, fontPx, 118.0f * s, 36.0f * s, t.ghost, ink);
+        createInstance->hoverFill = withAlpha(violet, t.washAlpha);
+        createInstance->pressedFill = withAlpha(violet, t.washAlpha * 1.6f);
+        createInstance->onClick = [this]() { this->addInstance(); };
         auto actions = std::make_shared<UIList>();
         actions->direction = UIDirection::Horizontal;
         actions->padding = 0.0f;
@@ -268,13 +284,12 @@ namespace eokas::RoseAxion {
         actions->centerCross = true;
         actions->color = clear;
         actions->shape.pivot = Vector2(0.0f, 0.0f);
-        actions->attachChild(openTables);
+        actions->attachChild(openInstances);
         actions->attachChild(openSchemas);
-        actions->attachChild(createTable);
+        actions->attachChild(createInstance);
         setBox(actions, Rect(0.0f, 0.0f, 0.0f, 0.0f));
         actions->layout();
 
-        const float heroPad = 22.0f * s;
         float y = heroPad;
         setBox(markA, Rect(heroPad, y + 2.0f * s, 10.0f * s, 10.0f * s));
         setBox(markB, Rect(heroPad + 6.0f * s, y + 8.0f * s, 10.0f * s, 10.0f * s));
@@ -283,20 +298,22 @@ namespace eokas::RoseAxion {
         hero->attachChild(markB);
         hero->attachChild(brand);
         y += 22.0f * s;
-        float titleW = title->shape.size.x;
-        if (titleW > innerW - heroPad * 2.0f)
+        float titleRowW = titleRow->shape.size.x;
+        if (titleRowW > heroInnerW)
         {
-            titleW = innerW - heroPad * 2.0f;
+            titleRowW = heroInnerW;
         }
-        setBox(title, Rect(heroPad, y, titleW, title->shape.size.y));
-        hero->attachChild(title);
-        y += title->shape.size.y + 6.0f * s;
+        setBox(titleRow, Rect(heroPad, y, titleRowW, titleRow->shape.size.y));
+        hero->attachChild(titleRow);
+        y += titleRow->shape.size.y + 6.0f * s;
         setBox(sub, Rect(heroPad, y, sub->shape.size.x, sub->shape.size.y));
         hero->attachChild(sub);
         y += sub->shape.size.y + 10.0f * s;
-        setBox(statusRow, Rect(heroPad, y, statusRow->shape.size.x, statusRow->shape.size.y));
-        hero->attachChild(statusRow);
-        y += statusRow->shape.size.y + 16.0f * s;
+        auto sizeLine = makeText(mDoc->librarySizeText(), fontPath, smallPx, mute, innerW, 20.0f * s);
+        sizeLine->layout();
+        setBox(sizeLine, Rect(heroPad, y, sizeLine->shape.size.x, sizeLine->shape.size.y));
+        hero->attachChild(sizeLine);
+        y += sizeLine->shape.size.y + 16.0f * s;
         setBox(actions, Rect(heroPad, y, actions->shape.size.x, actions->shape.size.y));
         hero->attachChild(actions);
         y += actions->shape.size.y + heroPad;
@@ -344,9 +361,8 @@ namespace eokas::RoseAxion {
             return box;
         };
 
-        const u32_t tableCount = mDoc->tableCount();
+        const u32_t instanceCount = mDoc->instanceCount();
         const u32_t schemaCount = mDoc->userSchemaCount();
-        const u32_t rowCount = mDoc->rowCount();
         auto stats = std::make_shared<UIGrid>();
         stats->columns = statCols;
         stats->padding = 0.0f;
@@ -355,9 +371,8 @@ namespace eokas::RoseAxion {
         stats->color = clear;
         stats->shape.pivot = Vector2(0.0f, 0.0f);
         setBox(stats, Rect(0.0f, 0.0f, innerW, 0.0f));
-        stats->attachChild(makeStat("TABLES", String::format("%u", tableCount), cyan, [this]() { this->goTo(EditorPage::Tables); }));
+        stats->attachChild(makeStat("INSTANCES", String::format("%u", instanceCount), cyan, [this]() { this->goTo(EditorPage::Instance); }));
         stats->attachChild(makeStat("SCHEMAS", String::format("%u", schemaCount), violet, [this]() { this->goTo(EditorPage::Schemas); }));
-        stats->attachChild(makeStat("ROWS", String::format("%u", rowCount), amber, [this]() { this->goTo(EditorPage::Tables); }));
         stats->layout();
         setBox(stats, Rect(0.0f, cursorY, innerW, stats->shape.size.y));
         content->attachChild(stats);
@@ -383,11 +398,11 @@ namespace eokas::RoseAxion {
             dot->color = accent;
             setBox(dot, Rect(textX, (headerH - 6.0f * s) * 0.5f, 6.0f * s, 6.0f * s));
             head->attachChild(dot);
-            auto headTitle = makeText(heading, fontPath, fontPx, ink, sectionW - 80.0f * s, 22.0f * s);
+            auto headTitle = makeText(heading, fontPath, titleMdPx(s), ink, sectionW - 80.0f * s, 22.0f * s);
             headTitle->layout();
             setBox(headTitle, Rect(textX + 12.0f * s, (headerH - headTitle->shape.size.y) * 0.5f, headTitle->shape.size.x, headTitle->shape.size.y));
             head->attachChild(headTitle);
-            auto countChip = makeChip(String::format("%u", count), fontPath, 11.0f * s, withAlpha(accent, t.washAlpha), accent);
+            auto countChip = makeChip(String::format("%u", count), fontPath, bodyPx(s), withAlpha(accent, t.washAlpha), accent);
             float countX = sectionW - 14.0f * s - countChip->shape.size.x;
             if (countX < 30.0f * s)
             {
@@ -445,7 +460,7 @@ namespace eokas::RoseAxion {
                     if (!extra.isEmpty())
                     {
                         Color extraColor = extraColorOf(index);
-                        auto chip = makeChip(extra, fontPath, 11.0f * s, withAlpha(extraColor, t.washAlpha), extraColor);
+                        auto chip = makeChip(extra, fontPath, bodyPx(s), withAlpha(extraColor, t.washAlpha), extraColor);
                         extraW = chip->shape.size.x + 10.0f * s;
                         setBox(chip, Rect(rowW - chip->shape.size.x - 14.0f * s, (itemH - chip->shape.size.y) * 0.5f, chip->shape.size.x, chip->shape.size.y));
                         item->attachChild(chip);
@@ -501,19 +516,19 @@ namespace eokas::RoseAxion {
         {
             colW = innerW;
         }
-        auto tables = makeSection("Tables", cyan, colW, tableCount, mDoc->hasActiveTable(), mDoc->activeTableIndex(),
-            [this](u32_t index) { return mDoc->tableName(index); },
-            [this, tableCount](u32_t index) -> String
+        auto instances = makeSection("Instances", cyan, colW, instanceCount, mDoc->hasActiveInstance(), mDoc->activeInstanceIndex(),
+            [this](u32_t index) { return mDoc->instanceName(index); },
+            [this, instanceCount](u32_t index) -> String
             {
-                if (tableCount > 1 && mDoc->hasActiveTable() && mDoc->activeTableIndex() == index)
+                if (instanceCount > 1 && mDoc->hasActiveInstance() && mDoc->activeInstanceIndex() == index)
                 {
                     return "ACTIVE";
                 }
                 return String::empty;
             },
             [cyan](u32_t) { return cyan; },
-            [this](u32_t index) { this->openTable(index); },
-            "还没有表格");
+            [this](u32_t index) { this->openInstance(index); },
+            "No instances yet");
         auto schemas = makeSection("Schemas", violet, colW, schemaCount, mDoc->hasActiveSchema(), mDoc->activeSchemaIndex(),
             [this](u32_t index) { return mDoc->schemaName(index); },
             [this](u32_t index) { return String(schemaTypeLabel(mDoc->schemaType(index))); },
@@ -522,27 +537,27 @@ namespace eokas::RoseAxion {
                 return mDoc->schemaType(index) == rose::SchemaType::List ? cyan : violet;
             },
             [this](u32_t index) { this->openSchema(index); },
-            "还没有模式");
+            "No schemas yet");
 
         if (stack || colW >= innerW)
         {
-            setBox(tables, Rect(0.0f, cursorY, colW, tables->shape.size.y));
-            content->attachChild(tables);
-            cursorY += tables->shape.size.y + colGap;
+            setBox(instances, Rect(0.0f, cursorY, colW, instances->shape.size.y));
+            content->attachChild(instances);
+            cursorY += instances->shape.size.y + colGap;
             setBox(schemas, Rect(0.0f, cursorY, colW, schemas->shape.size.y));
             content->attachChild(schemas);
             cursorY += schemas->shape.size.y;
         }
         else
         {
-            float rowH = tables->shape.size.y;
+            float rowH = instances->shape.size.y;
             if (schemas->shape.size.y > rowH)
             {
                 rowH = schemas->shape.size.y;
             }
-            setBox(tables, Rect(0.0f, cursorY, colW, tables->shape.size.y));
+            setBox(instances, Rect(0.0f, cursorY, colW, instances->shape.size.y));
             setBox(schemas, Rect(colW + colGap, cursorY, colW, schemas->shape.size.y));
-            content->attachChild(tables);
+            content->attachChild(instances);
             content->attachChild(schemas);
             cursorY += rowH;
         }

@@ -15,7 +15,7 @@ namespace eokas::RoseAxion {
     enum class EditorPage
     {
         Home,
-        Tables,
+        Instance,
         Schemas,
         Search,
         Settings
@@ -27,7 +27,7 @@ namespace eokas::RoseAxion {
         struct Host : RoseUiHost
         {
             std::function<void(EditorPage)> selectPage;
-            EditorPage current = EditorPage::Tables;
+            EditorPage current = EditorPage::Instance;
         };
 
         void bind(const Host& host);
@@ -41,7 +41,7 @@ namespace eokas::RoseAxion {
 
         Host mHost;
         UIWidget* mHome = nullptr;
-        UIWidget* mTables = nullptr;
+        UIWidget* mInstance = nullptr;
         UIWidget* mSchemas = nullptr;
         UIWidget* mSearch = nullptr;
         UIWidget* mSettings = nullptr;

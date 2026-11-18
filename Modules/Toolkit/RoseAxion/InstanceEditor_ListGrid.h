@@ -1,5 +1,5 @@
-#ifndef _EOKAS_ROSE_AXION_TABLE_EDITOR_H_
-#define _EOKAS_ROSE_AXION_TABLE_EDITOR_H_
+#ifndef _EOKAS_ROSE_AXION_INSTANCE_EDITOR_LIST_GRID_H_
+#define _EOKAS_ROSE_AXION_INSTANCE_EDITOR_LIST_GRID_H_
 
 #include "./Document.h"
 #include "./Host.h"
@@ -8,19 +8,18 @@
 #include "UI/UIWidget.h"
 
 #include <chrono>
-#include <functional>
 #include <memory>
 #include <vector>
 
 namespace eokas {
     class UIColorPicker;
-    class UITable;
     class UIView;
+    class UITable;
 }
 
 namespace eokas::RoseAxion {
 
-    class RoseTableEditor : public UIWidget
+    class RoseInstanceEditor_ListGrid : public UIWidget
     {
     public:
         struct Host : RoseUiHost
@@ -29,20 +28,13 @@ namespace eokas::RoseAxion {
             std::function<String(const String& suggested)> pickFilePath;
             std::function<String(const String& suggested)> pickFolderPath;
             std::function<bool()> ctrlDown;
-            std::function<bool(UIKeyCode, bool)> handleShortcut;
-            std::function<void(int, int)> openObject;
-            std::function<void(int)> openField;
-            std::function<void(int)> selectField;
-            std::function<void(int)> noteRowDeleted;
-            std::function<void(int)> noteRowInserted;
+            UIWidget* overlay = nullptr;
         };
 
         void bind(TableDocument& doc, const Host& host);
         void setOverlay(UIWidget* overlay);
         void reset();
         void rebuild();
-        void cancelResize();
-        bool resizeCursorAt(float x, float y) const;
         bool handleEscape();
         bool colorDropping() const;
         void sampleColorDropper(float x, float y, bool commit);
@@ -52,33 +44,29 @@ namespace eokas::RoseAxion {
         void setScroll(float x, float y);
         UIWidget* focusWidget() const { return mFocus; }
         bool hasPopupEdit() const;
-
+        void placeOverlayEditors();
         void layout() override;
 
     private:
         enum class SelectKind { None, Cell, Row, Column, All };
-        enum class EditKind { None, Cell, Header };
+        enum class EditKind { None, Cell };
 
         void clampState();
         void finishEdit(const String& text, int rowDelta, int colDelta);
         void beginEdit(int row, int col, const String& seed);
         void selectCell(int row, int col);
-        void openObjectEditor(int row, int col = -1);
         void setBoolCell(int row, int col, bool value);
         void toggleBoolCell(int row, int col);
         void selectAll();
-        void commitResize();
-        void applyTableWidth(int tableCol, float pixelWidth);
-        void placeResizeHandles();
-        bool hitResizeCol(float screenX, float screenY, int& tableCol) const;
-        void placeOverlayEditors();
         void notifyRebuild();
+        void refreshUi();
         const String& font() const;
         float scale() const;
+        bool isReadOnlyColumn(u32_t col) const;
+        void clearOverlayEditors();
 
         TableDocument* mDoc = nullptr;
         Host mHost;
-        UIWidget* mBar = nullptr;
         UIView* mView = nullptr;
         UITable* mTable = nullptr;
         UIWidget* mGridHost = nullptr;
@@ -89,6 +77,7 @@ namespace eokas::RoseAxion {
         UIWidget* mColorAnchor = nullptr;
         UIWidget* mPickMenu = nullptr;
         UIWidget* mEditInput = nullptr;
+        float mBarH = 0.0f;
         UIWidget* mDatePanel = nullptr;
         UIWidget* mColorPanel = nullptr;
         UIColorPicker* mColorPicker = nullptr;
@@ -108,23 +97,19 @@ namespace eokas::RoseAxion {
         int mPickCol = -1;
         int mColorRow = -1;
         int mColorCol = -1;
-        int mDateYear = 1970;
-        int mDateMonth = 1;
-        int mDateDay = 1;
+        int mDateYear = 0;
+        int mDateMonth = 0;
+        int mDateDay = 0;
         int mDateHour = 0;
         int mDateMinute = 0;
         int mDateSecond = 0;
-        std::chrono::steady_clock::time_point mClickTime {};
-        int mClickRow = -1;
-        int mClickCol = -1;
         bool mClickHeader = false;
         bool mClickRowHead = false;
+        int mClickRow = -1;
+        int mClickCol = -1;
+        std::chrono::steady_clock::time_point mClickTime {};
         float mKeepX = 0.0f;
         float mKeepY = 0.0f;
-        int mResizeCol = -1;
-        float mResizeOriginX = 0.0f;
-        float mResizeOriginW = 0.0f;
-        std::vector<std::shared_ptr<UIWidget>> mResizeHandles;
     };
 
 }

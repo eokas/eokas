@@ -47,6 +47,7 @@ namespace eokas::RoseAxion {
 
         TableDocument* mDoc = nullptr;
         Host mHost;
+        UIWidget* mHeader = nullptr;
         UIView* mView = nullptr;
         UIWidget* mOverlay = nullptr;
         UIWidget* mRenameAnchor = nullptr;

@@ -38,8 +38,8 @@ namespace eokas::RoseAxion {
             RoseTheme t;
             t.id = RoseThemeId::Light;
             t.key = "light";
-            t.name = "浅色";
-            t.blurb = "云母浅底、柔分层、雾蓝";
+            t.name = "Light";
+            t.blurb = "Mica light base, soft layering, mist blue";
             t.light = true;
             t.voidBg = Color(0.847f, 0.855f, 0.882f, 1.0f);
             t.canvas = Color(0.918f, 0.924f, 0.941f, 1.0f);
@@ -97,8 +97,8 @@ namespace eokas::RoseAxion {
             RoseTheme t;
             t.id = RoseThemeId::Black;
             t.key = "black";
-            t.name = "黑色";
-            t.blurb = "OLED 黑底、高对比、冰青描边";
+            t.name = "Black";
+            t.blurb = "OLED black, high contrast, icy cyan outlines";
             t.light = false;
             t.voidBg = Color(0.000f, 0.000f, 0.000f, 1.0f);
             t.canvas = Color(0.055f, 0.058f, 0.066f, 1.0f);
@@ -157,7 +157,7 @@ namespace eokas::RoseAxion {
             t.id = RoseThemeId::Unreal;
             t.key = "unreal";
             t.name = "UE5";
-            t.blurb = "启动器近黑底与虚幻金";
+            t.blurb = "Launcher near-black with Unreal gold";
             t.light = false;
             t.voidBg = Color(8.0f / 255.0f, 8.0f / 255.0f, 8.0f / 255.0f, 1.0f);
             t.canvas = Color(20.0f / 255.0f, 20.0f / 255.0f, 20.0f / 255.0f, 1.0f);

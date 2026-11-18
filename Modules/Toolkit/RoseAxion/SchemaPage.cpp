@@ -11,6 +11,10 @@ namespace eokas::RoseAxion {
     {
         mDoc = &doc;
         mHost = host;
+        if (mHost.sharedOutlinerW != nullptr)
+        {
+            mOutlinerW = *mHost.sharedOutlinerW;
+        }
     }
 
     void RoseSchemaPage::setOverlay(UIWidget* overlay)
@@ -19,9 +23,9 @@ namespace eokas::RoseAxion {
         {
             mOutliner->setOverlay(overlay);
         }
-        if (mSchemaEditor)
+        if (mDesigner)
         {
-            mSchemaEditor->setOverlay(overlay);
+            mDesigner->setOverlay(overlay);
         }
         mOverlay = overlay;
     }
@@ -36,14 +40,16 @@ namespace eokas::RoseAxion {
         return hostScale(mHost.scale);
     }
 
-    RoseSchemaEditor::Host RoseSchemaPage::editorHost() const
+    RoseSchemaDesigner::Host RoseSchemaPage::designerHost() const
     {
-        RoseSchemaEditor::Host host;
+        RoseSchemaDesigner::Host host;
         host.requestRebuild = mHost.requestRebuild;
+        host.isRebuildingUi = mHost.isRebuildingUi;
         host.writeClipboard = mHost.writeClipboard;
         host.readClipboard = mHost.readClipboard;
         host.font = mHost.font;
         host.scale = mHost.scale;
+        host.overlay = mOverlay;
         return host;
     }
 
@@ -51,6 +57,7 @@ namespace eokas::RoseAxion {
     {
         RoseSchemaOutliner::Host host;
         host.requestRebuild = mHost.requestRebuild;
+        host.isRebuildingUi = mHost.isRebuildingUi;
         host.confirmDeleteSchema = mHost.confirmDeleteSchema;
         host.font = mHost.font;
         host.scale = mHost.scale;
@@ -61,9 +68,9 @@ namespace eokas::RoseAxion {
     {
         mResizePane = false;
         this->setOverlay(nullptr);
-        if (mSchemaEditor)
+        if (mDesigner)
         {
-            mSchemaEditor->reset();
+            mDesigner->reset();
         }
         mSplit = nullptr;
         mSplitHandle = nullptr;
@@ -80,10 +87,10 @@ namespace eokas::RoseAxion {
             mOutliner->setOverlay(nullptr);
             mOutliner->reset();
         }
-        if (mSchemaEditor)
+        if (mDesigner)
         {
-            mSchemaEditor->setOverlay(nullptr);
-            mSchemaEditor->reset();
+            mDesigner->setOverlay(nullptr);
+            mDesigner->reset();
         }
     }
 
@@ -96,19 +103,20 @@ namespace eokas::RoseAxion {
                 return focus;
             }
         }
-        return mSchemaEditor != nullptr ? mSchemaEditor->focusWidget() : nullptr;
+        return mDesigner != nullptr ? mDesigner->focusWidget() : nullptr;
     }
 
     float RoseSchemaPage::outlinerWidth() const
     {
         const float s = this->scale();
-        const float minW = 160.0f * s;
-        float maxW = shape.size.x - 80.0f * s;
+        const float minW = kRoseOutlinerMinW * s;
+        float maxW = shape.size.x - kRoseOutlinerEditorMinW * s;
         if (maxW < minW)
         {
             maxW = minW;
         }
-        float width = mOutlinerW * s;
+        const float logicalW = mHost.sharedOutlinerW != nullptr ? *mHost.sharedOutlinerW : mOutlinerW;
+        float width = logicalW * s;
         if (width > maxW)
         {
             width = maxW;
@@ -151,10 +159,10 @@ namespace eokas::RoseAxion {
             setBox(*mSplit, Rect(outlinerW, 0.0f, 1.0f, height));
         }
         this->placePaneHandle();
-        if (mSchemaEditor != nullptr && mSchemaEditor->parent() == this)
+        if (mDesigner != nullptr && mDesigner->parent() == this)
         {
-            setBox(*mSchemaEditor, Rect(editorX, 0.0f, editorW, height));
-            mSchemaEditor->layout();
+            setBox(*mDesigner, Rect(editorX, 0.0f, editorW, height));
+            mDesigner->layout();
         }
         if (mHint != nullptr)
         {
@@ -184,7 +192,7 @@ namespace eokas::RoseAxion {
             this->cancelResize();
             return true;
         }
-        return mSchemaEditor != nullptr && mSchemaEditor->handleEscape();
+        return mDesigner != nullptr && mDesigner->handleEscape();
     }
 
     bool RoseSchemaPage::resizeCursorAt(float x, float y) const
@@ -204,7 +212,7 @@ namespace eokas::RoseAxion {
             return mSplitHandle->contains(local);
         }
         Vector2 local = this->screenToLocal(Vector2(screenX, screenY));
-        const float grip = 6.0f * this->scale();
+        const float grip = kRosePaneGrip * this->scale();
         float outlinerW = this->outlinerWidth();
         return local.y >= 0.0f && local.y <= shape.size.y
             && local.x >= outlinerW - grip * 0.5f && local.x <= outlinerW + grip * 0.5f;
@@ -216,7 +224,7 @@ namespace eokas::RoseAxion {
         {
             return;
         }
-        const float grip = 6.0f * this->scale();
+        const float grip = kRosePaneGrip * this->scale();
         float outlinerW = this->outlinerWidth();
         setBox(*mSplitHandle, Rect(outlinerW - grip * 0.5f, 0.0f, grip, shape.size.y));
     }
@@ -224,8 +232,8 @@ namespace eokas::RoseAxion {
     void RoseSchemaPage::applyPaneWidth(float pixelWidth)
     {
         const float s = this->scale();
-        const float minW = 160.0f * s;
-        float maxW = shape.size.x - 80.0f * s;
+        const float minW = kRoseOutlinerMinW * s;
+        float maxW = shape.size.x - kRoseOutlinerEditorMinW * s;
         if (maxW < minW)
         {
             maxW = minW;
@@ -239,6 +247,10 @@ namespace eokas::RoseAxion {
             pixelWidth = maxW;
         }
         mOutlinerW = pixelWidth / s;
+        if (mHost.sharedOutlinerW != nullptr)
+        {
+            *mHost.sharedOutlinerW = mOutlinerW;
+        }
         this->layout();
         if (mOutliner != nullptr)
         {
@@ -247,12 +259,12 @@ namespace eokas::RoseAxion {
             mOutliner->rebuild();
             mOutliner->layout();
         }
-        if (mSchemaEditor != nullptr && mSchemaEditor->parent() == this)
+        if (mDesigner != nullptr && mDesigner->parent() == this)
         {
-            mKeepEditorY = mSchemaEditor->scrollY();
-            mSchemaEditor->setScroll(mKeepEditorY);
-            mSchemaEditor->rebuild();
-            mSchemaEditor->layout();
+            mKeepEditorY = mDesigner->scrollY();
+            mDesigner->setScroll(mKeepEditorY);
+            mDesigner->rebuild();
+            mDesigner->layout();
         }
     }
 
@@ -263,7 +275,7 @@ namespace eokas::RoseAxion {
 
     void RoseSchemaPage::attachPaneHandle()
     {
-        const float grip = 6.0f * this->scale();
+        const float grip = kRosePaneGrip * this->scale();
         float outlinerW = this->outlinerWidth();
         auto handle = std::make_shared<UIWidget>();
         handle->overlay = true;
@@ -316,10 +328,10 @@ namespace eokas::RoseAxion {
             mKeepOutlinerY = mOutliner->scrollY();
             mOutliner->setOverlay(nullptr);
         }
-        if (mSchemaEditor)
+        if (mDesigner)
         {
-            mKeepEditorY = mSchemaEditor->scrollY();
-            mSchemaEditor->setOverlay(nullptr);
+            mKeepEditorY = mDesigner->scrollY();
+            mDesigner->setOverlay(nullptr);
         }
         this->detachChildren();
         mSplit = nullptr;
@@ -332,7 +344,7 @@ namespace eokas::RoseAxion {
         }
 
         const float s = this->scale();
-        const float fontPx = 15.0f * s;
+        const float fontPx = bodyPx(s);
         const RoseTheme& t = theme();
         const Color mute = t.mute;
         const String& fontPath = this->font();
@@ -382,7 +394,7 @@ namespace eokas::RoseAxion {
             {
                 cardW = 1.0f;
             }
-            auto hint = makeText("选择或新建模式", fontPath, fontPx, mute, cardW - 32.0f * s, 28.0f * s);
+            auto hint = makeText("Select or create a schema", fontPath, fontPx, mute, cardW - 32.0f * s, 28.0f * s);
             hint->layout();
             float cardH = 48.0f * s + hint->shape.size.y;
             setBox(card, Rect((paneW - cardW) * 0.5f, (height - cardH) * 0.5f, cardW, cardH));
@@ -394,17 +406,17 @@ namespace eokas::RoseAxion {
             return;
         }
 
-        if (!mSchemaEditor)
+        if (!mDesigner)
         {
-            mSchemaEditor = std::make_shared<RoseSchemaEditor>();
+            mDesigner = std::make_shared<RoseSchemaDesigner>();
         }
-        mSchemaEditor->bind(*mDoc, this->editorHost());
-        mSchemaEditor->shape.pivot = Vector2(0.0f, 0.0f);
-        setBox(mSchemaEditor, Rect(paneX, 0.0f, paneW, height));
-        mSchemaEditor->setOverlay(mOverlay);
-        mSchemaEditor->setScroll(mKeepEditorY);
-        mSchemaEditor->rebuild();
-        this->attachChild(mSchemaEditor);
+        mDesigner->bind(*mDoc, this->designerHost());
+        mDesigner->shape.pivot = Vector2(0.0f, 0.0f);
+        setBox(mDesigner, Rect(paneX, 0.0f, paneW, height));
+        mDesigner->setOverlay(mOverlay);
+        mDesigner->setScroll(mKeepEditorY);
+        mDesigner->rebuild();
+        this->attachChild(mDesigner);
     }
 
 }

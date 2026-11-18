@@ -43,6 +43,7 @@ namespace eokas::RoseAxion {
     String canonicalizeColumnType(const String& stored);
     String schemaLabel(const String& schemaName);
     const char* schemaTypeLabel(rose::SchemaType type);
+    String fontWarmupText();
 
     String trimCopy(const String& text);
     bool validateField(FieldKind kind, const String& text);

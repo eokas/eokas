@@ -338,17 +338,15 @@ namespace eokas::RoseAxion {
         const RoseTheme& t = theme();
         auto menu = std::make_shared<UIMenu>();
         menu->direction = UIDirection::Vertical;
-        menu->padding = 2.0f * s;
-        menu->spacing = 1.0f * s;
-        menu->color = t.popup;
+        stylePopupMenu(*menu, s);
         menu->overlay = true;
         menu->shape.pivot = Vector2(0.0f, 0.0f);
         menu->host = host;
         if (options.empty())
         {
             auto item = std::make_shared<UIMenuItem>();
-            item->setText("无可选选项");
-            styleMenuItem(*item, font, menuFontPx(s));
+            item->setText("No options available");
+            styleMenuItem(*item, font, menuFontPx(s), s);
             if (UIText* text = item->label())
             {
                 styleText(*text, font, fontPx, t.mute);
@@ -358,11 +356,9 @@ namespace eokas::RoseAxion {
         for (const FieldOption& option : options)
         {
             auto item = std::make_shared<UIMenuItem>();
-            item->paddingX = 10.0f * s;
-            item->paddingY = 3.0f * s;
             bool on = selectedContains(selectedLabels, option.label);
             item->setText(option.label);
-            styleMenuItem(*item, font, menuFontPx(s));
+            styleMenuItem(*item, font, menuFontPx(s), s);
             item->selected = on;
             item->showChip = true;
             item->chip = optionChipColor(option.color);
@@ -457,16 +453,16 @@ namespace eokas::RoseAxion {
         panel->color = t.raised;
         panel->shape.pivot = Vector2(0.0f, 0.0f);
         Vector2 pickerSize = UIDateTimePicker::preferredSize(s, true);
-        const char* titleText = "日期时间选择";
+        const char* titleText = "Pick DateTime";
         if (kind == FieldKind::Date)
         {
             pickerSize = UIDatePicker::preferredSize(s);
-            titleText = "日期选择";
+            titleText = "Pick date";
         }
         else if (kind == FieldKind::Time)
         {
             pickerSize = UITimePicker::preferredSize(s, true);
-            titleText = "时间选择";
+            titleText = "Pick time";
         }
         float panelW = pickerSize.x + 32.0f * s;
         float panelH = pickerSize.y + 116.0f * s;
@@ -477,11 +473,11 @@ namespace eokas::RoseAxion {
         head->shape.pivot = Vector2(0.0f, 0.0f);
         head->color = clear;
         setBox(head, Rect(0.0f, 0.0f, innerW, 32.0f * s));
-        auto title = makeText(titleText, font, fontPx + 1.0f, ink, innerW - 76.0f * s, 28.0f * s);
+        auto title = makeText(titleText, font, titleMdPx(s), ink, innerW - 76.0f * s, 28.0f * s);
         title->shape.pivot = Vector2(0.0f, 0.0f);
         setBox(title, Rect(0.0f, 2.0f * s, innerW - 76.0f * s, 28.0f * s));
         head->attachChild(title);
-        auto close = makeButton("关闭", font, smallPx, 64.0f * s, 28.0f * s, quiet, ink);
+        auto close = makeButton("Close", font, smallPx, 64.0f * s, 28.0f * s, quiet, ink);
         close->shape.setBox(Vector2(innerW - 64.0f * s, 2.0f * s), Vector2(64.0f * s, 28.0f * s));
         close->onClick = onClose;
         head->attachChild(close);
@@ -588,9 +584,9 @@ namespace eokas::RoseAxion {
         actions->spacing = 8.0f * s;
         actions->color = clear;
         actions->shape.pivot = Vector2(0.0f, 0.0f);
-        auto clearBtn = makeButton("清除", font, fontPx, 80.0f * s, 32.0f * s, quiet, ink);
+        auto clearBtn = makeButton("Clear", font, fontPx, 80.0f * s, 32.0f * s, quiet, ink);
         clearBtn->onClick = onClear;
-        auto ok = makeButton("确定", font, fontPx, 80.0f * s, 32.0f * s, accent, t.inkOnAccent);
+        auto ok = makeButton("OK", font, fontPx, 80.0f * s, 32.0f * s, accent, t.inkOnAccent);
         ok->onClick = [kind, parts, capturePicker, onCommit]()
         {
             if (capturePicker)
@@ -656,15 +652,15 @@ namespace eokas::RoseAxion {
         head->shape.pivot = Vector2(0.0f, 0.0f);
         head->color = clear;
         setBox(head, Rect(0.0f, 0.0f, innerW, 32.0f * s));
-        auto title = makeText("颜色选择", font, fontPx + 1.0f, ink, innerW - headActions, 28.0f * s);
+        auto title = makeText("Pick color", font, titleMdPx(s), ink, innerW - headActions, 28.0f * s);
         title->shape.pivot = Vector2(0.0f, 0.0f);
         setBox(title, Rect(0.0f, 2.0f * s, innerW - headActions, 28.0f * s));
         head->attachChild(title);
-        auto clearBtn = makeButton("清除", font, smallPx, btnW, btnH, quiet, ink);
+        auto clearBtn = makeButton("Clear", font, smallPx, btnW, btnH, quiet, ink);
         clearBtn->shape.setBox(Vector2(innerW - btnW * 2.0f - btnGap, 2.0f * s), Vector2(btnW, btnH));
         clearBtn->onClick = onClear;
         head->attachChild(clearBtn);
-        auto close = makeButton("关闭", font, smallPx, btnW, btnH, quiet, ink);
+        auto close = makeButton("Close", font, smallPx, btnW, btnH, quiet, ink);
         close->shape.setBox(Vector2(innerW - btnW, 2.0f * s), Vector2(btnW, btnH));
         close->onClick = onClose;
         head->attachChild(close);

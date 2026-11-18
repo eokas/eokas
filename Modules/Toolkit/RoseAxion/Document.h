@@ -17,12 +17,9 @@ namespace eokas::RoseAxion {
         Saved,
         OpenFailed,
         CannotOpenFile,
-        NotATable,
+        InvalidLibrary,
         SaveFailed,
         CannotSaveFile,
-        TableNameEmpty,
-        TableNameTaken,
-        CannotCreateTable,
         SchemaNameEmpty,
         SchemaNameTaken,
         CannotCreateSchema,
@@ -33,21 +30,15 @@ namespace eokas::RoseAxion {
         OptionNameEmpty,
         OptionNameTaken,
         CannotUpdateOptions,
+        InstanceNameEmpty,
+        InstanceNameTaken,
+        CannotCreateInstance,
+        CannotDeleteInstance,
         TypeMismatchCleared,
     };
 
     const char* docStatusText(DocStatus status);
     bool docStatusFailed(DocStatus status);
-
-    struct TableColumn
-    {
-        String id;
-        String name;
-        String schemaName = "String";
-        FieldKind kind = FieldKind::Text;
-        std::vector<FieldOption> options;
-        float width = 168.0f;
-    };
 
     struct NestedHop
     {
@@ -95,15 +86,8 @@ namespace eokas::RoseAxion {
         bool load(const String& path);
         bool save(const String& path);
 
-        u32_t tableCount() const;
-        bool hasActiveTable() const;
-        u32_t activeTableIndex() const { return mActiveIndex < 0 ? 0 : static_cast<u32_t>(mActiveIndex); }
-        String tableId(u32_t index) const;
-        String tableName(u32_t index) const;
-        bool selectTable(u32_t index);
-        bool addTable();
-        bool renameTable(u32_t index, const String& name);
-        bool deleteTable(u32_t index);
+        size_t loadedLibraryBytes() const { return mLoadedLibraryBytes; }
+        String librarySizeText() const;
 
         u32_t userSchemaCount() const;
         bool hasActiveSchema() const;
@@ -118,13 +102,9 @@ namespace eokas::RoseAxion {
         u32_t schemaMemberCount() const;
         String schemaMemberName(u32_t memberIndex) const;
         String schemaMemberTypeName(u32_t memberIndex) const;
-        String schemaMemberLabel(u32_t memberIndex) const;
-        String schemaMemberColor(u32_t memberIndex) const;
         bool addSchemaMember();
         bool renameSchemaMember(u32_t memberIndex, const String& name);
         bool setSchemaMemberType(u32_t memberIndex, const String& typeName);
-        bool setSchemaMemberLabel(u32_t memberIndex, const String& label);
-        bool setSchemaMemberColor(u32_t memberIndex, const String& hex);
         bool moveSchemaMember(u32_t memberIndex, int delta);
         bool deleteSchemaMember(u32_t memberIndex);
 
@@ -135,60 +115,51 @@ namespace eokas::RoseAxion {
         std::vector<FieldOption> schemaOptions() const;
         bool setSchemaOptions(const std::vector<FieldOption>& options);
 
-        bool isNestedColumn(u32_t column) const;
-        bool isNestedStructColumn(u32_t column) const;
-        bool isNestedListColumn(u32_t column) const;
-        NestedField objectField(u32_t column) const;
-        u32_t nestedFieldCount(u32_t column, const std::vector<NestedHop>& path) const;
-        NestedField nestedField(u32_t column, const std::vector<NestedHop>& path, u32_t index) const;
-        u32_t nestedListCount(u32_t row, u32_t column, const std::vector<NestedHop>& path) const;
-        NestedField nestedListElement(u32_t column, const std::vector<NestedHop>& path) const;
-        bool nestedListInsert(u32_t row, u32_t column, const std::vector<NestedHop>& path, u32_t index);
-        bool nestedListRemove(u32_t row, u32_t column, const std::vector<NestedHop>& path, u32_t index);
-        String nestedText(u32_t row, u32_t column, const std::vector<NestedHop>& path) const;
-        bool setNestedText(u32_t row, u32_t column, const std::vector<NestedHop>& path, const String& text);
-        std::vector<String> nestedLabels(u32_t row, u32_t column, const std::vector<NestedHop>& path) const;
-        bool setNestedLabels(u32_t row, u32_t column, const std::vector<NestedHop>& path, const std::vector<String>& labels);
+        u32_t instanceCount() const;
+        bool hasActiveInstance() const;
+        u32_t activeInstanceIndex() const;
+        bool selectInstance(u32_t index);
+        String instanceName(u32_t index) const;
+        String instanceSchemaName(u32_t index) const;
+        rose::Value* instanceValue(u32_t index) const;
+        rose::Value* activeInstanceValue() const;
+        bool addInstance(const String& schemaName);
+        bool renameInstance(u32_t index, const String& name);
+        bool deleteInstance(u32_t index);
 
-        u32_t rowCount() const;
-        u32_t columnCount() const;
-        TableColumn column(u32_t index) const;
-        float columnWidth(u32_t index) const;
-        bool setColumnWidth(u32_t index, float width);
-        float headWidth() const;
-        bool setHeadWidth(float width);
+        NestedField instanceRootField() const;
+        String instanceText() const;
+        bool setInstanceText(const String& text);
+        std::vector<String> instanceLabels() const;
+        bool setInstanceLabels(const std::vector<String>& labels);
 
-        bool cellIsNull(u32_t row, u32_t column) const;
-        String cellText(u32_t row, u32_t column) const;
-        bool setCellText(u32_t row, u32_t column, const String& text);
-        std::vector<String> cellLabels(u32_t row, u32_t column) const;
-        bool setCellLabels(u32_t row, u32_t column, const std::vector<String>& labels);
-        bool dropOptionLabel(u32_t column, const String& label);
+        u32_t instanceListCount() const;
+        bool instanceListInsert(u32_t index);
+        bool instanceListRemove(u32_t index);
+        u32_t instanceListColumnCount() const;
+        NestedField instanceListColumn(u32_t col) const;
+        String instanceListCellText(u32_t row, u32_t col) const;
+        bool setInstanceListCellText(u32_t row, u32_t col, const String& text);
+        std::vector<String> instanceListCellLabels(u32_t row, u32_t col) const;
+        bool setInstanceListCellLabels(u32_t row, u32_t col, const std::vector<String>& labels);
 
-        bool setColumnName(u32_t column, const String& name);
-        bool columnChangeClears(u32_t column, const String& typeName) const;
-        bool setColumnType(u32_t column, const String& typeName);
-        bool setOptions(u32_t column, const std::vector<FieldOption>& options);
-
-        void insertRow(u32_t index);
-        void deleteRow(u32_t index);
-        void insertColumn(u32_t index);
-        void deleteColumn(u32_t index);
+        u32_t instanceStructMemberCount() const;
+        NestedField instanceStructMember(u32_t memberIndex) const;
+        u32_t instanceNestedFieldCount(const std::vector<NestedHop>& path) const;
+        NestedField instanceNestedField(const std::vector<NestedHop>& path, u32_t index) const;
+        NestedField instanceNestedListElement(const std::vector<NestedHop>& path) const;
+        u32_t instanceNestedListCount(const std::vector<NestedHop>& path) const;
+        String instanceStructText(const std::vector<NestedHop>& path) const;
+        bool setInstanceStructText(const std::vector<NestedHop>& path, const String& text);
+        std::vector<String> instanceStructLabels(const std::vector<NestedHop>& path) const;
+        bool setInstanceStructLabels(const std::vector<NestedHop>& path, const std::vector<String>& labels);
+        bool instanceStructListInsert(const std::vector<NestedHop>& path, u32_t index);
+        bool instanceStructListRemove(const std::vector<NestedHop>& path, u32_t index);
 
     private:
         bool bind();
         bool ensureSharedSchemas(bool install);
-        bool bindTable(rose::Value* table, int index);
         void clearActive();
-        void refreshIds();
-        void refreshTableIds();
-        rose::Value* tableValue(u32_t index) const;
-        String nextNewTableName() const;
-        String makeTableId();
-        bool tableNameTaken(const String& name, int skipIndex) const;
-        bool isReservedSchemaName(const String& name) const;
-        bool isScaffoldingSchemaName(const String& name) const;
-        bool isUserSchemaName(const String& name) const;
         rose::Schema* userSchemaAt(u32_t index) const;
         rose::Schema* activeSchema() const;
         String nextNewSchemaName() const;
@@ -198,66 +169,52 @@ namespace eokas::RoseAxion {
         bool schemaReferenced(rose::Schema* schema) const;
         String nextMemberName(rose::Schema* schema) const;
         rose::Schema* resolveAssignableType(const String& typeName, rose::Schema* current) const;
-        float readFloat(rose::Value* object, const char* field, float fallback) const;
-        rose::Value* rebuildColumn(u32_t index, float width);
         FieldKind fieldKindForColumnType(const String& typeName) const;
         rose::Schema* storageForType(const String& typeName) const;
-        rose::Schema* optionsSchemaForStorage(rose::Schema* storage) const;
         bool isNestedColumnType(const String& typeName) const;
-        bool isStructType(const String& typeName) const;
         bool isListType(const String& typeName) const;
         NestedField fieldFromStorage(rose::Schema* storage, const String& id, const String& name) const;
-        NestedField leafAtPath(u32_t column, const std::vector<NestedHop>& path) const;
-        rose::Schema* schemaAtPath(u32_t column, const std::vector<NestedHop>& path) const;
-        rose::Value* valueAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path) const;
-        rose::Value* ensureAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path);
-        rose::Value* ensureParentAtPath(u32_t row, u32_t column, const std::vector<NestedHop>& path);
         void markDirty();
         String displayFromValue(rose::Value* field, const NestedField& info) const;
         String textFromValue(rose::Value* field, const NestedField& info) const;
         std::vector<String> labelsFromValue(rose::Value* field, const NestedField& info) const;
         rose::Value* makeStoredValue(FieldKind kind, const String& schemaName, const std::vector<FieldOption>& options, const String& text, bool nested);
-        void writeFieldValue(rose::Value* parent, const NestedHop& hop, const NestedField& info, const String& text);
+        bool writeFieldValue(rose::Value* parent, const NestedHop& hop, const NestedField& info, const String& text);
         void writeFieldLabels(rose::Value* parent, const NestedHop& hop, const NestedField& info, const std::vector<String>& labels);
-        rose::Value* columnValue(u32_t index) const;
-        rose::Value* rowValue(u32_t index) const;
-        String readString(rose::Value* object, const char* field) const;
-        void writeCell(u32_t row, const TableColumn& column, const String& text);
-        void putNull(rose::Value* row, const String& field, rose::Schema* schema);
-        std::vector<String> readStoredOptionNames(u32_t row, u32_t column) const;
         std::vector<String> filterLabels(const std::vector<String>& labels, const std::vector<FieldOption>& options) const;
-        void writeLabels(u32_t row, const TableColumn& column, const std::vector<String>& labels);
-        rose::Value* makeColumn(const String& id, const String& name, const String& schemaName);
-        String makeId();
         rose::Schema* noneSchema();
         rose::Value* makeNone();
         rose::Value* fieldAt(rose::Value* object, const String& field) const;
-        bool rebuildRows(bool replaceAll);
+        bool isReservedSchemaName(const String& name) const;
+        bool isScaffoldingSchemaName(const String& name) const;
+        bool isUserSchemaName(const String& name) const;
+
+        bool ensureInstancesRegistry();
+        bool isReservedRootName(const String& name) const;
+        String nextNewInstanceName() const;
+        bool instanceNameTaken(const String& name, int skipIndex) const;
+        String instanceKeyAt(u32_t index) const;
+        rose::Schema* instanceSchemaAtPath(const std::vector<NestedHop>& path) const;
+        NestedField instanceLeafAtPath(const std::vector<NestedHop>& path) const;
+        rose::Value* instanceValueAtPath(const std::vector<NestedHop>& path) const;
+        rose::Value* instanceEnsureAtPath(const std::vector<NestedHop>& path);
+        rose::Value* instanceEnsureParentAtPath(const std::vector<NestedHop>& path);
 
         std::unique_ptr<rose::Library> mLibrary;
-        rose::Schema* mRowSchema = nullptr;
         rose::Schema* mString = nullptr;
         rose::Schema* mInt = nullptr;
         rose::Schema* mFloat = nullptr;
         rose::Schema* mBool = nullptr;
-        rose::Schema* mColumnSchema = nullptr;
-        rose::Schema* mColumnsSchema = nullptr;
-        rose::Schema* mTableSchema = nullptr;
-        rose::Schema* mTablesSchema = nullptr;
-        rose::Value* mTables = nullptr;
-        rose::Value* mActiveTable = nullptr;
-        rose::Value* mColumns = nullptr;
-        rose::Value* mRows = nullptr;
+        rose::Value* mInstances = nullptr;
         String mPath;
         DocStatus mStatus = DocStatus::Ready;
-        u32_t mNextId = 0;
-        u32_t mNextTableId = 0;
-        int mActiveIndex = -1;
         int mActiveSchema = -1;
+        int mActiveInstance = -1;
         bool mOpen = false;
         bool mDirty = false;
+        size_t mLoadedLibraryBytes = 0;
     };
 
 }
 
-#endif//_EOKAS_ROSE_AXION_DOCUMENT_H_
+#endif

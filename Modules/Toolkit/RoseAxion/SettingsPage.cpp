@@ -19,11 +19,11 @@ namespace eokas::RoseAxion {
         this->shape.pivot = Vector2(0.0f, 0.0f);
         const float s = hostScale(mHost.scale);
         const float pad = 28.0f * s;
-        auto title = makeText("外观", mHost.font, 22.0f * s, t.ink, 400.0f * s, 28.0f * s);
+        auto title = makeText("Appearance", mHost.font, titleLgPx(s), t.ink, 400.0f * s, 28.0f * s);
         title->layout();
         setBox(title, Rect(pad, pad, title->shape.size.x, title->shape.size.y));
         this->attachChild(title);
-        auto sub = makeText("浅色、黑色、UE5 三套工作区主题，立即生效并记住选择。", mHost.font, 13.0f * s, t.mute, 560.0f * s, 20.0f * s);
+        auto sub = makeText("Light, Black, and UE5 workspace themes. Takes effect immediately and your choice is remembered.", mHost.font, bodyPx(s), t.mute, 560.0f * s, 20.0f * s);
         sub->layout();
         setBox(sub, Rect(pad, pad + title->shape.size.y + 8.0f * s, sub->shape.size.x, sub->shape.size.y));
         this->attachChild(sub);
@@ -77,11 +77,11 @@ namespace eokas::RoseAxion {
             setBox(swatchC, Rect(16.0f * s + (sw + 6.0f * s) * 2.0f, swY, sw, sw));
             card->attachChild(swatchC);
 
-            auto name = makeText(preview.name, mHost.font, 16.0f * s, preview.ink, cardW - 32.0f * s, 22.0f * s);
+            auto name = makeText(preview.name, mHost.font, titleMdPx(s), preview.ink, cardW - 32.0f * s, 22.0f * s);
             name->layout();
             setBox(name, Rect(16.0f * s, 84.0f * s, name->shape.size.x, name->shape.size.y));
             card->attachChild(name);
-            auto blurb = makeText(preview.blurb, mHost.font, 12.0f * s, preview.mute, cardW - 32.0f * s, 40.0f * s);
+            auto blurb = makeText(preview.blurb, mHost.font, bodyPx(s), preview.mute, cardW - 32.0f * s, 40.0f * s);
             blurb->layout();
             setBox(blurb, Rect(16.0f * s, 110.0f * s, blurb->shape.size.x, blurb->shape.size.y));
             card->attachChild(blurb);

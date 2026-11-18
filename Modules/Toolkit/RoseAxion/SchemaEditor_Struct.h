@@ -1,14 +1,11 @@
-#ifndef _EOKAS_ROSE_AXION_TABLE_OUTLINER_H_
-#define _EOKAS_ROSE_AXION_TABLE_OUTLINER_H_
+#ifndef _EOKAS_ROSE_AXION_SCHEMA_EDITOR_STRUCT_H_
+#define _EOKAS_ROSE_AXION_SCHEMA_EDITOR_STRUCT_H_
 
 #include "./Document.h"
 #include "./Host.h"
+#include "./SchemaTypeDrop.h"
 
-#include "UI/UIEvent.h"
 #include "UI/UIWidget.h"
-
-#include <functional>
-#include <memory>
 
 namespace eokas {
     class UIView;
@@ -16,43 +13,42 @@ namespace eokas {
 
 namespace eokas::RoseAxion {
 
-    class RoseTableOutliner : public UIWidget
+    class RoseSchemaEditor_Struct : public UIWidget
     {
     public:
         struct Host : RoseUiHost
         {
-            std::function<void(int)> confirmDeleteTable;
+            UIWidget* overlay = nullptr;
         };
 
         void bind(TableDocument& doc, const Host& host);
         void setOverlay(UIWidget* overlay);
         void reset();
         void rebuild();
-        bool handleEscape();
-        UIWidget* focusWidget() const { return mFocus; }
         float scrollY() const;
         void setScroll(float y);
+        bool handleEscape();
+        UIWidget* focusWidget() const { return mFocus; }
+        void placeOverlayEditors();
         void layout() override;
 
     private:
         void notifyRebuild();
         const String& font() const;
         float scale() const;
-        void openTable(u32_t index);
-        void beginRename(u32_t index);
-        void finishRename(const String& text);
-        void cancelRename();
-        void placeOverlayEditors();
+        void commitMemberName(u32_t memberIndex, const String& text);
+        void applyMemberType(u32_t memberIndex, const String& typeName);
+        void detachTypeMenu();
 
         TableDocument* mDoc = nullptr;
         Host mHost;
         UIView* mView = nullptr;
-        UIWidget* mOverlay = nullptr;
-        UIWidget* mRenameAnchor = nullptr;
-        UIWidget* mRenameInput = nullptr;
-        UIWidget* mMenu = nullptr;
         UIWidget* mFocus = nullptr;
+        UIWidget* mOverlay = nullptr;
+        RoseSchemaTypeMenu mTypeMenu;
+        int mTypeIndex = -2;
         int mRenameIndex = -1;
+        int mFocusMemberIndex = -1;
         String mRenameSeed;
         float mKeepY = 0.0f;
     };

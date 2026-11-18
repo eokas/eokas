@@ -10,6 +10,7 @@ namespace eokas::RoseAxion {
     struct RoseUiHost
     {
         std::function<void()> requestRebuild;
+        std::function<bool()> isRebuildingUi;
         std::function<void(const String&)> writeClipboard;
         std::function<String()> readClipboard;
         String font;

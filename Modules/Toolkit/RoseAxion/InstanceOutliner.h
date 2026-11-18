@@ -1,5 +1,5 @@
-#ifndef _EOKAS_ROSE_AXION_SCHEMA_EDITOR_H_
-#define _EOKAS_ROSE_AXION_SCHEMA_EDITOR_H_
+#ifndef _EOKAS_ROSE_AXION_INSTANCE_OUTLINER_H_
+#define _EOKAS_ROSE_AXION_INSTANCE_OUTLINER_H_
 
 #include "./Document.h"
 #include "./Host.h"
@@ -16,11 +16,12 @@ namespace eokas {
 
 namespace eokas::RoseAxion {
 
-    class RoseSchemaEditor : public UIWidget
+    class RoseInstanceOutliner : public UIWidget
     {
     public:
         struct Host : RoseUiHost
         {
+            std::function<void(int)> confirmDeleteInstance;
         };
 
         void bind(TableDocument& doc, const Host& host);
@@ -37,29 +38,23 @@ namespace eokas::RoseAxion {
         void notifyRebuild();
         const String& font() const;
         float scale() const;
-        void beginSchemaNameRename();
+        void openInstance(u32_t index);
+        void beginRename(u32_t index);
         void finishRename(const String& text);
         void cancelRename();
-        void commitMemberName(u32_t memberIndex, const String& text);
-        void commitOptionName(u32_t optionIndex, const String& text);
-        void applyType(const String& typeName);
         void placeOverlayEditors();
 
         TableDocument* mDoc = nullptr;
         Host mHost;
+        UIWidget* mHeader = nullptr;
+        UIWidget* mAddButton = nullptr;
         UIView* mView = nullptr;
         UIWidget* mOverlay = nullptr;
         UIWidget* mRenameAnchor = nullptr;
         UIWidget* mRenameInput = nullptr;
-        UIWidget* mTypeAnchor = nullptr;
         UIWidget* mMenu = nullptr;
-        UIWidget* mColorAnchor = nullptr;
-        UIWidget* mColorPanel = nullptr;
         UIWidget* mFocus = nullptr;
         int mRenameIndex = -1;
-        bool mRenameSchemaName = false;
-        int mTypeIndex = -2;
-        int mColorIndex = -1;
         String mRenameSeed;
         float mKeepY = 0.0f;
     };

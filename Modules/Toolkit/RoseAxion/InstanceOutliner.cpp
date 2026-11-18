@@ -1,4 +1,4 @@
-#include "./TableOutliner.h"
+#include "./InstanceOutliner.h"
 #include "./FieldEditors.h"
 #include "./Theme.h"
 #include "./UiKit.h"
@@ -12,13 +12,13 @@
 
 namespace eokas::RoseAxion {
 
-    void RoseTableOutliner::bind(TableDocument& doc, const Host& host)
+    void RoseInstanceOutliner::bind(TableDocument& doc, const Host& host)
     {
         mDoc = &doc;
         mHost = host;
     }
 
-    void RoseTableOutliner::setOverlay(UIWidget* overlay)
+    void RoseInstanceOutliner::setOverlay(UIWidget* overlay)
     {
         if (mOverlay == overlay)
         {
@@ -40,17 +40,17 @@ namespace eokas::RoseAxion {
         mOverlay = overlay;
     }
 
-    const String& RoseTableOutliner::font() const
+    const String& RoseInstanceOutliner::font() const
     {
         return mHost.font;
     }
 
-    float RoseTableOutliner::scale() const
+    float RoseInstanceOutliner::scale() const
     {
         return hostScale(mHost.scale);
     }
 
-    void RoseTableOutliner::notifyRebuild()
+    void RoseInstanceOutliner::notifyRebuild()
     {
         if (mHost.requestRebuild)
         {
@@ -58,7 +58,7 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseTableOutliner::reset()
+    void RoseInstanceOutliner::reset()
     {
         mRenameIndex = -1;
         mRenameSeed = String::empty;
@@ -68,16 +68,18 @@ namespace eokas::RoseAxion {
         mRenameAnchor = nullptr;
         mRenameInput = nullptr;
         mMenu = nullptr;
+        mHeader = nullptr;
+        mAddButton = nullptr;
         mFocus = nullptr;
         this->detachChildren();
     }
 
-    float RoseTableOutliner::scrollY() const
+    float RoseInstanceOutliner::scrollY() const
     {
         return mView != nullptr ? mView->scrollY() : mKeepY;
     }
 
-    void RoseTableOutliner::setScroll(float y)
+    void RoseInstanceOutliner::setScroll(float y)
     {
         mKeepY = y;
         if (mView != nullptr)
@@ -86,13 +88,53 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseTableOutliner::layout()
+    void RoseInstanceOutliner::layout()
     {
+        if (!visible)
+        {
+            return;
+        }
+        const float s = this->scale();
+        const float width = shape.size.x;
+        const float height = shape.size.y;
+        const float headerH = kRoseOutlinerHeaderH * s;
+        const float pad = 8.0f * s;
+        if (mHeader != nullptr)
+        {
+            setBox(*mHeader, Rect(0.0f, 0.0f, width, headerH));
+            if (mAddButton != nullptr)
+            {
+                const float addW = 24.0f * s;
+                const float addH = 24.0f * s;
+                setBox(*mAddButton, Rect(width - addW - pad, (headerH - addH) * 0.5f, addW, addH));
+            }
+            if (mHeader->children().size() >= 2 && mHeader->children()[0])
+            {
+                UIWidget& title = *mHeader->children()[0];
+                title.layout();
+                setBox(title, Rect(pad, (headerH - title.shape.size.y) * 0.5f, title.shape.size.x, title.shape.size.y));
+            }
+            UIWidget* headerRule = mHeader->children().size() >= 2 ? mHeader->children()[1].get() : nullptr;
+            if (headerRule != nullptr)
+            {
+                setBox(*headerRule, Rect(0.0f, headerH - 1.0f, width, 1.0f));
+            }
+        }
+        if (mView != nullptr)
+        {
+            float listH = height - headerH;
+            if (listH < 1.0f)
+            {
+                listH = 1.0f;
+            }
+            setBox(*mView, Rect(0.0f, headerH, width, listH));
+            mView->layout();
+        }
         this->placeOverlayEditors();
         UIWidget::layout();
     }
 
-    void RoseTableOutliner::placeOverlayEditors()
+    void RoseInstanceOutliner::placeOverlayEditors()
     {
         if (mOverlay == nullptr)
         {
@@ -112,31 +154,31 @@ namespace eokas::RoseAxion {
         }
     }
 
-    void RoseTableOutliner::openTable(u32_t index)
+    void RoseInstanceOutliner::openInstance(u32_t index)
     {
         if (mDoc == nullptr)
         {
             return;
         }
         this->cancelRename();
-        if (mDoc->selectTable(index))
+        if (mDoc->selectInstance(index))
         {
             this->notifyRebuild();
         }
     }
 
-    void RoseTableOutliner::beginRename(u32_t index)
+    void RoseInstanceOutliner::beginRename(u32_t index)
     {
-        if (mDoc == nullptr || index >= mDoc->tableCount())
+        if (mDoc == nullptr || index >= mDoc->instanceCount())
         {
             return;
         }
         mRenameIndex = static_cast<int>(index);
-        mRenameSeed = mDoc->tableName(index);
+        mRenameSeed = mDoc->instanceName(index);
         this->notifyRebuild();
     }
 
-    void RoseTableOutliner::finishRename(const String& text)
+    void RoseInstanceOutliner::finishRename(const String& text)
     {
         if (mDoc == nullptr || mRenameIndex < 0)
         {
@@ -145,7 +187,7 @@ namespace eokas::RoseAxion {
         int index = mRenameIndex;
         mRenameInput = nullptr;
         mRenameIndex = -1;
-        if (!mDoc->renameTable(static_cast<u32_t>(index), text))
+        if (!mDoc->renameInstance(static_cast<u32_t>(index), text))
         {
             mRenameSeed = text;
             mRenameIndex = index;
@@ -155,7 +197,7 @@ namespace eokas::RoseAxion {
         this->notifyRebuild();
     }
 
-    void RoseTableOutliner::cancelRename()
+    void RoseInstanceOutliner::cancelRename()
     {
         if (mRenameIndex < 0)
         {
@@ -165,7 +207,7 @@ namespace eokas::RoseAxion {
         this->notifyRebuild();
     }
 
-    bool RoseTableOutliner::handleEscape()
+    bool RoseInstanceOutliner::handleEscape()
     {
         if (mMenu != nullptr && mMenu->visible)
         {
@@ -180,7 +222,7 @@ namespace eokas::RoseAxion {
         return false;
     }
 
-    void RoseTableOutliner::rebuild()
+    void RoseInstanceOutliner::rebuild()
     {
         if (mOverlay != nullptr)
         {
@@ -197,6 +239,8 @@ namespace eokas::RoseAxion {
         mMenu = nullptr;
         this->detachChildren();
         mView = nullptr;
+        mHeader = nullptr;
+        mAddButton = nullptr;
         mRenameAnchor = nullptr;
         mFocus = nullptr;
         if (mDoc == nullptr || !mDoc->isOpen())
@@ -205,9 +249,9 @@ namespace eokas::RoseAxion {
         }
 
         const float s = this->scale();
-        const float fontPx = 15.0f * s;
-        const float smallPx = 13.0f * s;
-        const float headerH = 36.0f * s;
+        const float fontPx = bodyPx(s);
+        const float smallPx = bodyPx(s);
+        const float headerH = kRoseOutlinerHeaderH * s;
         const float itemH = 32.0f * s;
         const float pad = 8.0f * s;
         const RoseTheme& t = theme();
@@ -230,7 +274,7 @@ namespace eokas::RoseAxion {
         header->pickable = false;
         header->color = headerBg;
         setBox(header, Rect(0.0f, 0.0f, width, headerH));
-        auto title = makeText("表格", fontPath, fontPx, ink, width - 48.0f * s, 22.0f * s);
+        auto title = makeText("Instances", fontPath, titleMdPx(s), ink, width - 48.0f * s, 22.0f * s);
         title->layout();
         setBox(title, Rect(pad, (headerH - title->shape.size.y) * 0.5f, title->shape.size.x, title->shape.size.y));
         header->attachChild(title);
@@ -240,28 +284,15 @@ namespace eokas::RoseAxion {
         add->paddingX = 0.0f;
         add->paddingY = 0.0f;
         setBox(add, Rect(width - addW - pad, (headerH - addH) * 0.5f, addW, addH));
-        add->onClick = [this]()
-        {
-            if (mDoc == nullptr)
-            {
-                return;
-            }
-            this->cancelRename();
-            if (mDoc->addTable())
-            {
-                this->notifyRebuild();
-            }
-        };
-        header->attachChild(add);
+        mAddButton = add.get();
         auto headerRule = std::make_shared<UIWidget>();
         headerRule->pickable = false;
         headerRule->color = line;
         headerRule->shape.pivot = Vector2(0.0f, 0.0f);
         setBox(headerRule, Rect(0.0f, headerH - 1.0f, width, 1.0f));
         header->attachChild(headerRule);
-        this->attachChild(header);
 
-        auto showPopup = [this, s, fontPx, popup, fontPath](UIWidget& anchor, const std::vector<std::pair<const char*, std::function<void()>>>& entries)
+        auto showPopup = [this, s, fontPx, popup, fontPath](UIWidget& anchor, const std::vector<std::pair<String, std::function<void()>>>& entries)
         {
             if (mOverlay == nullptr)
             {
@@ -269,19 +300,15 @@ namespace eokas::RoseAxion {
             }
             auto menu = std::make_shared<UIMenu>();
             menu->direction = UIDirection::Vertical;
-            menu->padding = 2.0f * s;
-            menu->spacing = 1.0f * s;
-            menu->color = popup;
+            stylePopupMenu(*menu, s);
             menu->overlay = true;
             menu->shape.pivot = Vector2(0.0f, 0.0f);
             menu->host = &anchor;
             for (const auto& entry : entries)
             {
                 auto item = std::make_shared<UIMenuItem>();
-                item->paddingX = 10.0f * s;
-                item->paddingY = 3.0f * s;
                 item->setText(entry.first);
-                styleMenuItem(*item, fontPath, menuFontPx(s));
+                styleMenuItem(*item, fontPath, menuFontPx(s), s);
                 auto action = entry.second;
                 UIMenu* menuRaw = menu.get();
                 item->onClick = [this, menuRaw, action]()
@@ -299,6 +326,34 @@ namespace eokas::RoseAxion {
             mMenu = menu.get();
             placePopup(*mOverlay, *menu, anchor.screenBounds());
         };
+
+        add->onClick = [this, add, showPopup]()
+        {
+            if (mDoc == nullptr)
+            {
+                return;
+            }
+            this->cancelRename();
+            std::vector<std::pair<String, std::function<void()>>> entries;
+            for (const String& typeName : mDoc->columnTypeNames())
+            {
+                String label = schemaLabel(typeName);
+                entries.push_back({label, [this, typeName]()
+                {
+                    if (mDoc != nullptr && mDoc->addInstance(typeName))
+                    {
+                        this->notifyRebuild();
+                    }
+                }});
+            }
+            if (!entries.empty())
+            {
+                showPopup(*add, entries);
+            }
+        };
+        header->attachChild(add);
+        this->attachChild(header);
+        mHeader = header.get();
 
         float listY = headerH;
         float listH = height - headerH;
@@ -318,9 +373,9 @@ namespace eokas::RoseAxion {
         list->color = clear;
         list->shape.pivot = Vector2(0.0f, 0.0f);
 
-        const u32_t count = mDoc->tableCount();
-        const bool hasActive = mDoc->hasActiveTable();
-        const u32_t active = mDoc->activeTableIndex();
+        const u32_t count = mDoc->instanceCount();
+        const bool hasActive = mDoc->hasActiveInstance();
+        const u32_t active = mDoc->activeInstanceIndex();
         const float moreW = 28.0f * s;
         const float moreH = 24.0f * s;
         const float moreGap = 4.0f * s;
@@ -332,7 +387,7 @@ namespace eokas::RoseAxion {
             item->shape.pivot = Vector2(0.0f, 0.0f);
             item->color = isActive ? selected : clear;
             setBox(item, Rect(0.0f, 0.0f, width - 8.0f * s, itemH));
-            item->onClick = [this, index]() { this->openTable(index); };
+            item->onClick = [this, index]() { this->openInstance(index); };
             if (isActive)
             {
                 auto mark = std::make_shared<UIWidget>();
@@ -343,7 +398,13 @@ namespace eokas::RoseAxion {
             }
 
             const float nameW = item->shape.size.x - pad * 2.0f - moreW - moreGap;
-            auto nameText = makeText(mDoc->tableName(index), fontPath, smallPx, ink, nameW > 0.0f ? nameW : 1.0f, 20.0f * s);
+            String lineTitle = mDoc->instanceName(index);
+            String schema = schemaLabel(mDoc->instanceSchemaName(index));
+            if (!schema.isEmpty())
+            {
+                lineTitle += String(" · ") + schema;
+            }
+            auto nameText = makeText(lineTitle, fontPath, smallPx, ink, nameW > 0.0f ? nameW : 1.0f, 20.0f * s);
             nameText->layout();
             float nameH = nameText->shape.size.y;
             if (nameH < 1.0f)
@@ -394,13 +455,18 @@ namespace eokas::RoseAxion {
                 more->onClick = [this, index, moreRaw, showPopup]()
                 {
                     showPopup(*moreRaw, {
-                        {"打开", [this, index]() { this->openTable(index); }},
-                        {"重命名", [this, index]() { this->beginRename(index); }},
-                        {"删除", [this, index]()
+                        {"Open", [this, index]() { this->openInstance(index); }},
+                        {"Rename", [this, index]() { this->beginRename(index); }},
+                        {"Delete", [this, index]()
                         {
-                            if (mHost.confirmDeleteTable)
+                            if (mHost.confirmDeleteInstance)
                             {
-                                mHost.confirmDeleteTable(static_cast<int>(index));
+                                mHost.confirmDeleteInstance(static_cast<int>(index));
+                            }
+                            else if (mDoc != nullptr)
+                            {
+                                mDoc->deleteInstance(index);
+                                this->notifyRebuild();
                             }
                         }},
                     });
@@ -440,13 +506,13 @@ namespace eokas::RoseAxion {
             UIInput* inputRaw = input.get();
             input->onSubmit = [this](const String& text) { this->finishRename(text); };
             input->onEscape = [this]() { this->handleEscape(); };
-            input->onFocusLoss = [this, inputRaw]()
+            bindCommitOnFocusLoss(*input, mHost.isRebuildingUi, [this, inputRaw]()
             {
                 if (mRenameIndex >= 0)
                 {
                     this->finishRename(String(inputRaw->text));
                 }
-            };
+            });
             mOverlay->attachChild(input);
             mRenameInput = input.get();
             mFocus = input.get();

@@ -167,9 +167,9 @@ namespace eokas::RoseAxion {
 
         const RoseTheme& t = theme();
         const float s = hostScale(mHost.scale);
-        const float fontPx = 15.0f * s;
-        const float smallPx = 13.0f * s;
-        const float titlePx = 20.0f * s;
+        const float fontPx = bodyPx(s);
+        const float smallPx = bodyPx(s);
+        const float titlePx = titleLgPx(s);
         const float iconPx = 52.0f * s;
         const float padX = 28.0f * s;
         const float headPadY = 22.0f * s;
@@ -210,14 +210,14 @@ namespace eokas::RoseAxion {
         mark->rim = mixWhite(t.accent, t.light ? 0.28f : 0.18f);
         mark->rimWidth = 2.0f * s;
         setBox(mark, Rect(0.0f, 0.0f, iconPx, iconPx));
-        auto glyph = makeText("R", mHost.font, 20.0f * s, t.inkOnAccent, iconPx, 0.0f);
+        auto glyph = makeText("R", mHost.font, titleMdPx(s), t.inkOnAccent, iconPx, 0.0f);
         glyph->layout();
         mark->attachChild(glyph);
         mark->layout();
 
         auto name = makeText(kAppName, mHost.font, titlePx, ink, innerW - iconPx - identityGap, 0.0f);
         name->layout();
-        auto tagline = makeText("Rose Library 编辑器", mHost.font, smallPx, mute, innerW - iconPx - identityGap, 0.0f);
+        auto tagline = makeText("Rose Library editor", mHost.font, smallPx, mute, innerW - iconPx - identityGap, 0.0f);
         tagline->layout();
 
         float textBlockH = name->shape.size.y + 6.0f * s + tagline->shape.size.y;
@@ -228,15 +228,15 @@ namespace eokas::RoseAxion {
         }
         float headerH = headPadY + heroH + headPadY;
 
-        auto versionLabel = makeText("版本", mHost.font, smallPx, mute, innerW * 0.45f, 0.0f);
+        auto versionLabel = makeText("Version", mHost.font, smallPx, mute, innerW * 0.45f, 0.0f);
         versionLabel->layout();
         auto versionValue = makeText(kAppVersion, mHost.font, fontPx, ink, innerW * 0.55f, 0.0f);
         versionValue->layout();
-        auto roseLabel = makeText("Rose 版本", mHost.font, smallPx, mute, innerW * 0.45f, 0.0f);
+        auto roseLabel = makeText("Rose version", mHost.font, smallPx, mute, innerW * 0.45f, 0.0f);
         roseLabel->layout();
         auto roseValue = makeText(String::format("%d", rose::Library::version), mHost.font, fontPx, ink, innerW * 0.55f, 0.0f);
         roseValue->layout();
-        auto repoName = makeText("项目主页", mHost.font, smallPx, mute, innerW * 0.40f, 0.0f);
+        auto repoName = makeText("Project home", mHost.font, smallPx, mute, innerW * 0.40f, 0.0f);
         repoName->layout();
         auto repoValue = makeText(repoLabel(), mHost.font, fontPx, t.url, innerW * 0.60f, 0.0f);
         repoValue->pickable = true;
@@ -295,7 +295,7 @@ namespace eokas::RoseAxion {
 
         auto copy = makeText("Copyright \xC2\xA9 2026 eokas", mHost.font, smallPx, mute, innerW, 0.0f);
         copy->layout();
-        auto ok = makeButton("确定", mHost.font, fontPx, 88.0f * s, 32.0f * s, t.accent, t.inkOnAccent);
+        auto ok = makeButton("OK", mHost.font, fontPx, 88.0f * s, 32.0f * s, t.accent, t.inkOnAccent);
         ok->onClick = [this]() { this->close(); };
         ok->onKeyPress = [this](const UIKeyEvent& event)
         {
