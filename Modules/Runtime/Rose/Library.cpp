@@ -2,6 +2,8 @@
 #include "./Schema.h"
 #include "./Value.h"
 
+#include <vector>
+
 namespace eokas::rose
 {
     Library::Library(const String &name)
@@ -59,6 +61,23 @@ namespace eokas::rose
 
         u32_t schemaCount = 0;
         if (!stream.read(schemaCount)) return false;
+
+        struct PendingListElement
+        {
+            Schema *schema;
+            u32_t elementSchemaIndex;
+        };
+        struct PendingStructMember
+        {
+            Schema *owner;
+            String name;
+            u32_t schemaIndex;
+        };
+        std::vector<PendingListElement> pendingLists;
+        std::vector<PendingStructMember> pendingMembers;
+        pendingLists.reserve(schemaCount);
+        pendingMembers.reserve(schemaCount * 2);
+
         for (u32_t schemaIndex = 0; schemaIndex < schemaCount; schemaIndex++)
         {
             SchemaType type;
@@ -80,8 +99,7 @@ namespace eokas::rose
             {
                 u32_t elementSchemaIndex = -1;
                 if (!stream.read(elementSchemaIndex)) return false;
-                Schema *elementSchema = mSchemas.get(elementSchemaIndex);
-                schema->setElementSchema(elementSchema);
+                pendingLists.push_back({schema, elementSchemaIndex});
             } else if (type == SchemaType::Struct)
             {
                 u32_t memberCount = 0;
@@ -90,17 +108,9 @@ namespace eokas::rose
                 {
                     String memberName;
                     u32_t memberSchemaIndex = -1;
-                    String memberLabel;
-                    u32_t memberColor = 0;
                     if (!stream.read(memberName)) return false;
                     if (!stream.read(memberSchemaIndex)) return false;
-                    if (!stream.read(memberLabel)) return false;
-                    if (!stream.read(memberColor)) return false;
-                    Schema *memberSchema = mSchemas.get(memberSchemaIndex);
-                    if (memberSchema == nullptr)
-                        return false;
-                    if (!schema->addMember(memberName, memberSchema, memberLabel, memberColor))
-                        return false;
+                    pendingMembers.push_back({schema, memberName, memberSchemaIndex});
                 }
             }
             else if (type == SchemaType::Options)
@@ -109,15 +119,35 @@ namespace eokas::rose
                 if (!stream.read(optionCount)) return false;
                 for (u32_t optionIndex = 0; optionIndex < optionCount; optionIndex++)
                 {
-                    String name;
-                    String label;
+                    String optionName;
                     u32_t color = 0;
-                    if (!stream.read(name)) return false;
-                    if (!stream.read(label)) return false;
+                    if (!stream.read(optionName)) return false;
                     if (!stream.read(color)) return false;
-                    if (!schema->addOption(name, label, color))
+                    if (!schema->addOption(optionName, color))
                         return false;
                 }
+            }
+        }
+
+        for (const PendingListElement &entry : pendingLists)
+        {
+            Schema *elementSchema = mSchemas.get(entry.elementSchemaIndex);
+            if (elementSchema == nullptr)
+            {
+                return false;
+            }
+            entry.schema->setElementSchema(elementSchema);
+        }
+        for (const PendingStructMember &member : pendingMembers)
+        {
+            Schema *memberSchema = mSchemas.get(member.schemaIndex);
+            if (memberSchema == nullptr)
+            {
+                return false;
+            }
+            if (!member.owner->addMember(member.name, memberSchema))
+            {
+                return false;
             }
         }
 
@@ -238,8 +268,6 @@ namespace eokas::rose
                     auto *member = schema->getMember(memberIndex);
                     stream.write(member->name);
                     stream.write(mSchemas.indexOf(member->schema->name()));
-                    stream.write(member->label);
-                    stream.write(member->color);
                 }
             }
             else if (type == SchemaType::Options)
@@ -250,7 +278,6 @@ namespace eokas::rose
                 {
                     Schema::Option* option = schema->getOption(i);
                     stream.write(option->name);
-                    stream.write(option->label);
                     stream.write(option->color);
                 }
             }
@@ -363,6 +390,28 @@ namespace eokas::rose
         {
             names.push_back(pair.first);
         }
+    }
+
+    bool Library::removeRoot(const String& name)
+    {
+        return mRoot.erase(name) > 0;
+    }
+
+    bool Library::renameRoot(const String& from, const String& to)
+    {
+        if (from == to || to.isEmpty())
+        {
+            return false;
+        }
+        auto iter = mRoot.find(from);
+        if (iter == mRoot.end() || mRoot.find(to) != mRoot.end())
+        {
+            return false;
+        }
+        Value* val = iter->second;
+        mRoot.erase(iter);
+        mRoot[to] = val;
+        return true;
     }
 
     Value *Library::make(Schema *schema)

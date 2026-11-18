@@ -67,7 +67,7 @@ namespace eokas::rose
         return nullptr;
     }
 
-    bool Schema::addMember(const String &name, Schema *schema, const String &label, u32_t color)
+    bool Schema::addMember(const String &name, Schema *schema)
     {
         if (mType != SchemaType::Struct)
             return false;
@@ -77,12 +77,10 @@ namespace eokas::rose
         Member &mem = mBody.structBody->members.emplace_back();
         mem.name = name;
         mem.schema = schema;
-        mem.label = label;
-        mem.color = color;
         return true;
     }
 
-    bool Schema::setMember(const String &name, Schema *schema, const String &label, u32_t color)
+    bool Schema::setMember(const String &name, Schema *schema)
     {
         if (mType != SchemaType::Struct)
             return false;
@@ -93,11 +91,9 @@ namespace eokas::rose
         if (exists != nullptr)
         {
             exists->schema = schema;
-            exists->label = label;
-            exists->color = color;
             return true;
         }
-        return this->addMember(name, schema, label, color);
+        return this->addMember(name, schema);
     }
 
     void Schema::delMember(const String &name)
@@ -159,7 +155,7 @@ namespace eokas::rose
         return -1;
     }
 
-    bool Schema::addOption(const String &name, const String &label, u32_t color)
+    bool Schema::addOption(const String &name, u32_t color)
     {
         if (mType != SchemaType::Options)
             return false;
@@ -168,12 +164,11 @@ namespace eokas::rose
 
         Option &opt = mBody.optionsBody->options.emplace_back();
         opt.name = name;
-        opt.label = label;
         opt.color = color;
         return true;
     }
 
-    bool Schema::setOption(const String &name, const String &label, u32_t color)
+    bool Schema::setOption(const String &name, u32_t color)
     {
         if (mType != SchemaType::Options)
             return false;
@@ -183,11 +178,10 @@ namespace eokas::rose
         Option *exists = this->getOption(name);
         if (exists != nullptr)
         {
-            exists->label = label;
             exists->color = color;
             return true;
         }
-        return this->addOption(name, label, color);
+        return this->addOption(name, color);
     }
 
     void Schema::delOption(const String &name)

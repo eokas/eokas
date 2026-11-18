@@ -115,7 +115,10 @@ namespace eokas::rose {
         {
             auto found = members.find(name);
             if (found == members.end())
-                return false;
+            {
+                members.emplace(name, value);
+                return true;
+            }
             found->second = value;
             return true;
         }

@@ -23,14 +23,11 @@ namespace eokas::rose
         {
             String name;
             Schema* schema = nullptr;
-            String label;
-            u32_t color = 0; // R8G8B8A8: R|G<<8|B<<16|A<<24 (little-endian byte order)
         };
 
         struct Option
         {
             String name;
-            String label;
             u32_t color = 0; // R8G8B8A8: R|G<<8|B<<16|A<<24 (little-endian byte order)
         };
 
@@ -63,16 +60,16 @@ namespace eokas::rose
         void setElementSchema(Schema* schema);
         Schema* getElementSchema() const;
 
-        bool addMember(const String& name, Schema* schema, const String& label = String::empty, u32_t color = 0);
-        bool setMember(const String& name, Schema* schema, const String& label = String::empty, u32_t color = 0);
+        bool addMember(const String& name, Schema* schema);
+        bool setMember(const String& name, Schema* schema);
         void delMember(const String& name);
         Member* getMember(const String& name);
         Member* getMember(u32_t index);
         u32_t getMemberCount();
         u32_t getMemberIndex(const String& name);
 
-        bool addOption(const String& name, const String& label = String::empty, u32_t color = 0);
-        bool setOption(const String& name, const String& label = String::empty, u32_t color = 0);
+        bool addOption(const String& name, u32_t color = 0);
+        bool setOption(const String& name, u32_t color = 0);
         void delOption(const String& name);
         Option* getOption(const String& name);
         Option* getOption(u32_t index);

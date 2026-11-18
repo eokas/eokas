@@ -9,7 +9,7 @@ namespace eokas::rose
     class Library
     {
     public:
-        static constexpr i32_t version = 4;
+        static constexpr i32_t version = 5;
 
         Library(const String& name);
         virtual ~Library();
@@ -32,6 +32,8 @@ namespace eokas::rose
         bool hasValueDependOnSchema(const Schema* schema) const;
 
         void getRootNames(std::vector<String>& names) const;
+        bool removeRoot(const String& name);
+        bool renameRoot(const String& from, const String& to);
 
         Value* make(Schema* schema);
         Value* make(i32_t val);
